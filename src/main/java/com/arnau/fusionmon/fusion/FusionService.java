@@ -3,6 +3,7 @@ package com.arnau.fusionmon.fusion;
 import com.arnau.fusionmon.Fusionmon;
 import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.CobblemonNetwork;
+import com.cobblemon.mod.common.api.Priority;
 import com.cobblemon.mod.common.api.pokemon.stats.Stat;
 import com.cobblemon.mod.common.api.pokemon.stats.Stats;
 import com.cobblemon.mod.common.api.storage.party.PartyPosition;
@@ -23,13 +24,15 @@ import java.util.List;
  */
 public final class FusionService {
 
-    private static final List<Stat> PERMANENT_STATS = List.of(
+    /** PS, Ataque, Defensa, At. Esp., Def. Esp., Velocidad (también es el orden de la vista previa). */
+    static final List<Stat> PERMANENT_STATS = List.of(
             Stats.HP, Stats.ATTACK, Stats.DEFENCE, Stats.SPECIAL_ATTACK, Stats.SPECIAL_DEFENCE, Stats.SPEED);
 
     private FusionService() {
     }
 
-    public static void fuse(ServerPlayer player, Pokemon head, Pokemon body) {
+    public static void fuse(ServerPlayer player, Pokemon head, Pokemon body,
+                            boolean natureFromBody, boolean abilityFromBody) {
         // Primero quitamos los objetos: así no quedan dentro de las copias guardadas y no se duplican al desfusionar
         returnHeldItem(player, head);
         returnHeldItem(player, body);
@@ -43,6 +46,14 @@ public final class FusionService {
         FusionData.write(head, head, body, registryAccess);
 
         applyAverages(head, body);
+
+        if (natureFromBody) {
+            head.setNature(body.getNature());
+        }
+        if (abilityFromBody) {
+            // Forzada: si no, Cobblemon la cambiaría por una de la especie de la cabeza en cuanto pudiera
+            head.updateAbility(body.getAbility().getTemplate().create(true, Priority.NORMAL));
+        }
 
         // Los PS máximos han cambiado: mantenemos el mismo porcentaje de vida
         int maxHealth = head.getMaxHealth();

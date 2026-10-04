@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import com.arnau.fusionmon.command.FusionCommands;
 import com.arnau.fusionmon.fusion.FusionStatProvider;
 import com.arnau.fusionmon.item.ModItems;
+import com.arnau.fusionmon.network.ModNetworking;
 import com.cobblemon.mod.common.Cobblemon;
 
 public class Fusionmon implements ModInitializer {
@@ -23,6 +24,7 @@ public class Fusionmon implements ModInitializer {
 	public void onInitialize() {
 		ModItems.initialize();
 		FusionCommands.register();
+		ModNetworking.initialize();
 		// Envuelve la calculadora de stats de Cobblemon para que las fusiones usen sus propios stats base
 		Cobblemon.INSTANCE.setStatProvider(new FusionStatProvider(Cobblemon.INSTANCE.getStatProvider()));
 

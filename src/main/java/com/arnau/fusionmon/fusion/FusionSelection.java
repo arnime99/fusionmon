@@ -1,25 +1,41 @@
 package com.arnau.fusionmon.fusion;
 
+import com.arnau.fusionmon.network.FusionChoicePayload;
+import com.arnau.fusionmon.network.FusionPreview;
+import com.arnau.fusionmon.network.OpenFusionScreenPayload;
 import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.api.callback.PartySelectCallbacks;
+import com.cobblemon.mod.common.api.pokemon.stats.Stat;
 import com.cobblemon.mod.common.api.storage.party.PlayerPartyStore;
+import com.cobblemon.mod.common.api.types.ElementalType;
 import com.cobblemon.mod.common.battles.BattleRegistry;
+import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import kotlin.Unit;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * Flujo de selección (solo servidor):
- * 1. selector de equipo de Cobblemon → Pokémon A (cabeza)
- * 2. segundo selector, sin A → Pokémon B (cuerpo)
- * 3. se comprueba que ambos siguen en el equipo y se fusionan (FusionService)
+ * 1. selector de equipo de Cobblemon → Pokémon A
+ * 2. segundo selector, sin A → Pokémon B
+ * 3. pantalla de confirmación en el cliente: orden (intercambiar), naturaleza, habilidad
+ * 4. el cliente responde; se vuelve a comprobar todo y se fusiona (FusionService)
  */
 public final class FusionSelection {
+
+    /** Selección esperando respuesta de la pantalla de confirmación, por jugador. */
+    private record PendingFusion(UUID firstId, UUID secondId) {
+    }
+
+    private static final Map<UUID, PendingFusion> PENDING = new HashMap<>();
 
     private FusionSelection() {
     }
@@ -43,42 +59,107 @@ public final class FusionSelection {
                 party,
                 pokemon -> !FusionData.isFusion(pokemon),
                 cancelledBy -> Unit.INSTANCE,
-                head -> {
-                    selectBody(player, head.getUuid());
+                first -> {
+                    selectSecond(player, first.getUuid());
                     return Unit.INSTANCE;
                 }
         );
     }
 
-    private static void selectBody(ServerPlayer player, UUID headId) {
+    private static void selectSecond(ServerPlayer player, UUID firstId) {
         PartySelectCallbacks.INSTANCE.createFromPokemon(
                 player,
                 Component.translatable("gui.fusionmon.select_body"),
                 partyOf(player),
-                pokemon -> !pokemon.getUuid().equals(headId) && !FusionData.isFusion(pokemon),
+                pokemon -> !pokemon.getUuid().equals(firstId) && !FusionData.isFusion(pokemon),
                 cancelledBy -> Unit.INSTANCE,
-                body -> {
-                    finish(player, headId, body.getUuid());
+                second -> {
+                    openConfirmation(player, firstId, second.getUuid());
                     return Unit.INSTANCE;
                 }
         );
     }
 
-    private static void finish(ServerPlayer player, UUID headId, UUID bodyId) {
-        // Entre un selector y otro el jugador podría haber movido Pokémon al PC: volvemos a buscarlos en el equipo
-        PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
-        Pokemon head = party.get(headId);
-        Pokemon body = party.get(bodyId);
-        if (head == null || body == null || FusionData.isFusion(head) || FusionData.isFusion(body)) {
+    private static void openConfirmation(ServerPlayer player, UUID firstId, UUID secondId) {
+        Pokemon first = findValid(player, firstId);
+        Pokemon second = findValid(player, secondId);
+        if (first == null || second == null) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
             return;
         }
 
-        // Los nombres se leen antes de fusionar: después B ya no está en el equipo
+        PENDING.put(player.getUUID(), new PendingFusion(firstId, secondId));
+        ServerPlayNetworking.send(player, new OpenFusionScreenPayload(
+                first.getDisplayName(false), second.getDisplayName(false),
+                preview(first, second), preview(second, first),
+                Component.translatable(first.getNature().getDisplayName()),
+                Component.translatable(second.getNature().getDisplayName()),
+                Component.translatable(first.getAbility().getDisplayName()),
+                Component.translatable(second.getAbility().getDisplayName())));
+    }
+
+    public static void handleChoice(ServerPlayer player, FusionChoicePayload choice) {
+        PendingFusion pending = PENDING.remove(player.getUUID());
+        // Sin selección pendiente (respuesta duplicada o de un cliente trucado): se ignora
+        if (pending == null || !choice.accepted()) {
+            return;
+        }
+
+        if (BattleRegistry.getBattleByParticipatingPlayer(player) != null) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.in_battle"));
+            return;
+        }
+
+        // Mientras la pantalla estaba abierta el equipo podría haber cambiado: se vuelve a comprobar
+        Pokemon first = findValid(player, pending.firstId());
+        Pokemon second = findValid(player, pending.secondId());
+        if (first == null || second == null) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
+            return;
+        }
+
+        Pokemon head = choice.swapped() ? second : first;
+        Pokemon body = choice.swapped() ? first : second;
+        Pokemon natureSource = choice.natureFromB() ? second : first;
+        Pokemon abilitySource = choice.abilityFromB() ? second : first;
+
+        // Los nombres se leen antes de fusionar: después el cuerpo ya no está en el equipo
         Component headName = head.getDisplayName(false);
         Component bodyName = body.getDisplayName(false);
-        FusionService.fuse(player, head, body);
+        FusionService.fuse(player, head, body, natureSource == body, abilitySource == body);
         player.sendSystemMessage(Component.translatable("message.fusionmon.fused", headName, bodyName));
+    }
+
+    public static void forget(ServerPlayer player) {
+        PENDING.remove(player.getUUID());
+    }
+
+    private static FusionPreview preview(Pokemon head, Pokemon body) {
+        FormData headForm = head.getForm();
+        FormData bodyForm = body.getForm();
+
+        List<Component> types = new ArrayList<>();
+        for (ElementalType type : FusionCalculator.types(headForm, bodyForm)) {
+            types.add(type.getDisplayName());
+        }
+
+        List<Integer> baseStats = new ArrayList<>();
+        for (Stat stat : FusionService.PERMANENT_STATS) {
+            baseStats.add(FusionCalculator.baseStat(headForm, bodyForm, stat));
+        }
+
+        return new FusionPreview(
+                Component.literal(FusionCalculator.name(head.getSpecies().getName(), body.getSpecies().getName())),
+                types,
+                (head.getLevel() + body.getLevel()) / 2,
+                baseStats);
+    }
+
+    /** El Pokémon con ese UUID si sigue en el equipo y no es una fusión; si no, null. */
+    private static Pokemon findValid(ServerPlayer player, UUID id) {
+        PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
+        Pokemon pokemon = party.get(id);
+        return pokemon != null && !FusionData.isFusion(pokemon) ? pokemon : null;
     }
 
     private static List<Pokemon> partyOf(ServerPlayer player) {
