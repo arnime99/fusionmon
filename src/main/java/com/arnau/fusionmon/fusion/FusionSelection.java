@@ -1,6 +1,5 @@
 package com.arnau.fusionmon.fusion;
 
-import com.arnau.fusionmon.Fusionmon;
 import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.api.callback.PartySelectCallbacks;
 import com.cobblemon.mod.common.api.storage.party.PlayerPartyStore;
@@ -18,7 +17,7 @@ import java.util.UUID;
  * Flujo de selección (solo servidor):
  * 1. selector de equipo de Cobblemon → Pokémon A (cabeza)
  * 2. segundo selector, sin A → Pokémon B (cuerpo)
- * 3. se comprueba que ambos siguen en el equipo y se fusionan
+ * 3. se comprueba que ambos siguen en el equipo y se fusionan (FusionService)
  */
 public final class FusionSelection {
 
@@ -32,16 +31,17 @@ public final class FusionSelection {
         }
 
         List<Pokemon> party = partyOf(player);
-        if (party.size() < 2) {
+        if (party.stream().filter(pokemon -> !FusionData.isFusion(pokemon)).count() < 2) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.not_enough_pokemon"));
             return;
         }
 
+        // Las fusiones salen bloqueadas en los selectores: de momento no hay fusión de fusiones
         PartySelectCallbacks.INSTANCE.createFromPokemon(
                 player,
                 Component.translatable("gui.fusionmon.select_head"),
                 party,
-                pokemon -> true,
+                pokemon -> !FusionData.isFusion(pokemon),
                 cancelledBy -> Unit.INSTANCE,
                 head -> {
                     selectBody(player, head.getUuid());
@@ -55,7 +55,7 @@ public final class FusionSelection {
                 player,
                 Component.translatable("gui.fusionmon.select_body"),
                 partyOf(player),
-                pokemon -> !pokemon.getUuid().equals(headId),
+                pokemon -> !pokemon.getUuid().equals(headId) && !FusionData.isFusion(pokemon),
                 cancelledBy -> Unit.INSTANCE,
                 body -> {
                     finish(player, headId, body.getUuid());
@@ -69,16 +69,16 @@ public final class FusionSelection {
         PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
         Pokemon head = party.get(headId);
         Pokemon body = party.get(bodyId);
-        if (head == null || body == null) {
+        if (head == null || body == null || FusionData.isFusion(head) || FusionData.isFusion(body)) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
             return;
         }
 
-        // Fase 1: solo confirmamos la selección. La fusión de datos llega en la fase 2.
-        Fusionmon.LOGGER.info("{} quiere fusionar {} (cabeza) + {} (cuerpo)",
-                player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
-        player.sendSystemMessage(Component.translatable("message.fusionmon.selected",
-                head.getDisplayName(false), body.getDisplayName(false)));
+        // Los nombres se leen antes de fusionar: después B ya no está en el equipo
+        Component headName = head.getDisplayName(false);
+        Component bodyName = body.getDisplayName(false);
+        FusionService.fuse(player, head, body);
+        player.sendSystemMessage(Component.translatable("message.fusionmon.fused", headName, bodyName));
     }
 
     private static List<Pokemon> partyOf(ServerPlayer player) {

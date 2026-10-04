@@ -23,6 +23,14 @@ loom {
 			sourceSet sourceSets.client
 		}
 	}
+
+	runs {
+		client {
+			// Sin esto Loom usa un nombre aleatorio (Player123) en cada arranque, y como Cobblemon
+			// guarda el equipo y el PC por jugador, cada arranque parecía un jugador nuevo
+			programArgs "--username", "Arnau"
+		}
+	}
 }
 
 dependencies {
