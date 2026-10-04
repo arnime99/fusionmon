@@ -3,6 +3,7 @@
 	"package": "com.arnau.fusionmon.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
+		"BattleRegistryMixin",
 		"PokemonMixin"
 	],
 	"injectors": {

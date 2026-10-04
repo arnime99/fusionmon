@@ -2,6 +2,7 @@ package com.arnau.fusionmon.mixin;
 
 import com.arnau.fusionmon.fusion.FusionCalculator;
 import com.arnau.fusionmon.fusion.FusionData;
+import com.arnau.fusionmon.fusion.FusionShowdown;
 import com.cobblemon.mod.common.api.types.ElementalType;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
@@ -60,6 +61,17 @@ public abstract class PokemonMixin {
         if (head != null && body != null) {
             cir.setReturnValue(Component.literal(
                     FusionCalculator.name(head.getSpecies().getName(), body.getSpecies().getName())));
+        }
+    }
+
+    /** La especie que se le dice a Showdown en combate: la de la fusión (registrada por FusionShowdown). */
+    @Inject(method = "showdownId", at = @At("HEAD"), cancellable = true)
+    private void fusionmon$showdownId(CallbackInfoReturnable<String> cir) {
+        Pokemon self = (Pokemon) (Object) this;
+        FormData head = FusionData.headForm(self);
+        FormData body = FusionData.bodyForm(self);
+        if (head != null && body != null) {
+            cir.setReturnValue(FusionShowdown.speciesId(head, body));
         }
     }
 
