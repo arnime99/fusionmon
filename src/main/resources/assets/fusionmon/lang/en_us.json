@@ -1,3 +1,9 @@
 {
-  "item.fusionmon.fusion_crystal": "Fusion Crystal"
+  "item.fusionmon.fusion_crystal": "Fusion Crystal",
+  "gui.fusionmon.select_head": "Choose the 1st Pokémon (head)",
+  "gui.fusionmon.select_body": "Choose the 2nd Pokémon (body)",
+  "message.fusionmon.in_battle": "You can't fuse Pokémon during a battle.",
+  "message.fusionmon.not_enough_pokemon": "You need at least 2 Pokémon in your party to fuse.",
+  "message.fusionmon.selection_changed": "Your party changed during selection. Try again.",
+  "message.fusionmon.selected": "Fusion ready: %s (head) + %s (body)"
 }

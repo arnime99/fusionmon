@@ -28,7 +28,7 @@ public class ModItems {
 
     public static final Item FUSION_CRYSTAL = register(
             ModItemIds.FUSION_CRYSTAL,
-            Item::new,
+            FusionCrystalItem::new,
             new Item.Properties()
     );
 

@@ -1,3 +1,9 @@
 {
-  "item.fusionmon.fusion_crystal": "Cristal de Fusión"
+  "item.fusionmon.fusion_crystal": "Cristal de Fusión",
+  "gui.fusionmon.select_head": "Elige el 1.º Pokémon (cabeza)",
+  "gui.fusionmon.select_body": "Elige el 2.º Pokémon (cuerpo)",
+  "message.fusionmon.in_battle": "No puedes fusionar Pokémon durante un combate.",
+  "message.fusionmon.not_enough_pokemon": "Necesitas al menos 2 Pokémon en tu equipo para fusionar.",
+  "message.fusionmon.selection_changed": "Tu equipo ha cambiado durante la selección. Vuelve a intentarlo.",
+  "message.fusionmon.selected": "Fusión preparada: %s (cabeza) + %s (cuerpo)"
 }
