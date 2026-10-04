@@ -13,11 +13,15 @@ public final class ModNetworking {
 
     public static void initialize() {
         PayloadTypeRegistry.playS2C().register(OpenFusionScreenPayload.TYPE, OpenFusionScreenPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(OpenUnfuseScreenPayload.TYPE, OpenUnfuseScreenPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(FusionChoicePayload.TYPE, FusionChoicePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(UnfuseChoicePayload.TYPE, UnfuseChoicePayload.CODEC);
 
-        // Fabric ejecuta este receptor en el hilo principal del servidor: se puede tocar el equipo directamente
+        // Fabric ejecuta estos receptores en el hilo principal del servidor: se puede tocar el equipo directamente
         ServerPlayNetworking.registerGlobalReceiver(FusionChoicePayload.TYPE,
                 (payload, context) -> FusionSelection.handleChoice(context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(UnfuseChoicePayload.TYPE,
+                (payload, context) -> FusionSelection.handleUnfuseChoice(context.player(), payload));
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 FusionSelection.forget(handler.getPlayer()));

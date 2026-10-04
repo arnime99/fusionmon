@@ -3,6 +3,8 @@ package com.arnau.fusionmon.fusion;
 import com.arnau.fusionmon.network.FusionChoicePayload;
 import com.arnau.fusionmon.network.FusionPreview;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
+import com.arnau.fusionmon.network.OpenUnfuseScreenPayload;
+import com.arnau.fusionmon.network.UnfuseChoicePayload;
 import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.api.callback.PartySelectCallbacks;
 import com.cobblemon.mod.common.api.pokemon.stats.Stat;
@@ -24,19 +26,21 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Flujo de selección (solo servidor):
- * 1. selector de equipo de Cobblemon → Pokémon A
- * 2. segundo selector, sin A → Pokémon B
- * 3. pantalla de confirmación en el cliente: orden (intercambiar), naturaleza, habilidad
- * 4. el cliente responde; se vuelve a comprobar todo y se fusiona (FusionService)
+ * Flujo del Cristal de Fusión (solo servidor):
+ * 1. selector de equipo de Cobblemon → un Pokémon normal o una fusión
+ * 2a. fusión → pantalla "¿Separar?" → se separa (FusionService.unfuse)
+ * 2b. normal → segundo selector → pantalla de confirmación (orden, naturaleza, habilidad) → se fusiona
+ * Antes de actuar se vuelve a comprobar todo: el cliente solo elige, el servidor decide.
  */
 public final class FusionSelection {
 
-    /** Selección esperando respuesta de la pantalla de confirmación, por jugador. */
+    /** Fusión esperando respuesta de la pantalla de confirmación, por jugador. */
     private record PendingFusion(UUID firstId, UUID secondId) {
     }
 
-    private static final Map<UUID, PendingFusion> PENDING = new HashMap<>();
+    private static final Map<UUID, PendingFusion> PENDING_FUSIONS = new HashMap<>();
+    /** Fusión esperando respuesta de la pantalla de separar, por jugador. */
+    private static final Map<UUID, UUID> PENDING_UNFUSES = new HashMap<>();
 
     private FusionSelection() {
     }
@@ -48,20 +52,27 @@ public final class FusionSelection {
         }
 
         List<Pokemon> party = partyOf(player);
-        if (party.stream().filter(pokemon -> !FusionData.isFusion(pokemon)).count() < 2) {
+        long unfused = party.stream().filter(pokemon -> !FusionData.isFusion(pokemon)).count();
+        boolean canFuse = unfused >= 2;
+        boolean canUnfuse = unfused < party.size();
+        if (!canFuse && !canUnfuse) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.not_enough_pokemon"));
             return;
         }
 
-        // Las fusiones salen bloqueadas en los selectores: de momento no hay fusión de fusiones
+        // Las fusiones siempre se pueden elegir (para separarlas); los normales, solo si hay con quién fusionarlos
         PartySelectCallbacks.INSTANCE.createFromPokemon(
                 player,
-                Component.translatable("gui.fusionmon.select_head"),
+                Component.translatable("gui.fusionmon.select_first"),
                 party,
-                pokemon -> !FusionData.isFusion(pokemon),
+                pokemon -> FusionData.isFusion(pokemon) || canFuse,
                 cancelledBy -> Unit.INSTANCE,
                 first -> {
-                    selectSecond(player, first.getUuid());
+                    if (FusionData.isFusion(first)) {
+                        openUnfuseConfirmation(player, first.getUuid());
+                    } else {
+                        selectSecond(player, first.getUuid());
+                    }
                     return Unit.INSTANCE;
                 }
         );
@@ -70,7 +81,7 @@ public final class FusionSelection {
     private static void selectSecond(ServerPlayer player, UUID firstId) {
         PartySelectCallbacks.INSTANCE.createFromPokemon(
                 player,
-                Component.translatable("gui.fusionmon.select_body"),
+                Component.translatable("gui.fusionmon.select_second"),
                 partyOf(player),
                 pokemon -> !pokemon.getUuid().equals(firstId) && !FusionData.isFusion(pokemon),
                 cancelledBy -> Unit.INSTANCE,
@@ -89,7 +100,7 @@ public final class FusionSelection {
             return;
         }
 
-        PENDING.put(player.getUUID(), new PendingFusion(firstId, secondId));
+        PENDING_FUSIONS.put(player.getUUID(), new PendingFusion(firstId, secondId));
         ServerPlayNetworking.send(player, new OpenFusionScreenPayload(
                 first.getDisplayName(false), second.getDisplayName(false),
                 preview(first, second), preview(second, first),
@@ -114,7 +125,7 @@ public final class FusionSelection {
     }
 
     public static void handleChoice(ServerPlayer player, FusionChoicePayload choice) {
-        PendingFusion pending = PENDING.remove(player.getUUID());
+        PendingFusion pending = PENDING_FUSIONS.remove(player.getUUID());
         // Sin selección pendiente (respuesta duplicada o de un cliente trucado): se ignora
         if (pending == null || !choice.accepted()) {
             return;
@@ -145,8 +156,48 @@ public final class FusionSelection {
         player.sendSystemMessage(Component.translatable("message.fusionmon.fused", headName, bodyName));
     }
 
+    private static void openUnfuseConfirmation(ServerPlayer player, UUID fusedId) {
+        Pokemon fused = findFusion(player, fusedId);
+        if (fused == null) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
+            return;
+        }
+
+        Pokemon head = FusionData.readHead(fused, player.registryAccess());
+        Pokemon body = FusionData.readBody(fused, player.registryAccess());
+        PENDING_UNFUSES.put(player.getUUID(), fusedId);
+        ServerPlayNetworking.send(player, new OpenUnfuseScreenPayload(
+                fused.getDisplayName(false),
+                head.getDisplayName(false), head.getLevel(),
+                body.getDisplayName(false), body.getLevel(),
+                FusionData.experienceGained(fused)));
+    }
+
+    public static void handleUnfuseChoice(ServerPlayer player, UnfuseChoicePayload choice) {
+        UUID fusedId = PENDING_UNFUSES.remove(player.getUUID());
+        if (fusedId == null || !choice.accepted()) {
+            return;
+        }
+
+        if (BattleRegistry.getBattleByParticipatingPlayer(player) != null) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.in_battle"));
+            return;
+        }
+
+        Pokemon fused = findFusion(player, fusedId);
+        if (fused == null) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
+            return;
+        }
+
+        Component fusedName = fused.getDisplayName(false);
+        FusionService.unfuse(player, fused);
+        player.sendSystemMessage(Component.translatable("message.fusionmon.unfused", fusedName));
+    }
+
     public static void forget(ServerPlayer player) {
-        PENDING.remove(player.getUUID());
+        PENDING_FUSIONS.remove(player.getUUID());
+        PENDING_UNFUSES.remove(player.getUUID());
     }
 
     private static FusionPreview preview(Pokemon head, Pokemon body) {
@@ -175,6 +226,12 @@ public final class FusionSelection {
         PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
         Pokemon pokemon = party.get(id);
         return pokemon != null && !FusionData.isFusion(pokemon) ? pokemon : null;
+    }
+
+    /** La fusión con ese UUID si sigue en el equipo; si no, null. */
+    private static Pokemon findFusion(ServerPlayer player, UUID id) {
+        Pokemon pokemon = Cobblemon.INSTANCE.getStorage().getParty(player).get(id);
+        return pokemon != null && FusionData.isFusion(pokemon) ? pokemon : null;
     }
 
     private static List<Pokemon> partyOf(ServerPlayer player) {

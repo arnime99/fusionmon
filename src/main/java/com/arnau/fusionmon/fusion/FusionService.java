@@ -7,6 +7,8 @@ import com.cobblemon.mod.common.api.Priority;
 import com.cobblemon.mod.common.api.moves.BenchedMove;
 import com.cobblemon.mod.common.api.moves.Move;
 import com.cobblemon.mod.common.api.moves.MoveTemplate;
+import com.cobblemon.mod.common.api.pokemon.experience.ExperienceSource;
+import com.cobblemon.mod.common.api.pokemon.experience.SidemodExperienceSource;
 import com.cobblemon.mod.common.api.pokemon.stats.Stat;
 import com.cobblemon.mod.common.api.pokemon.stats.Stats;
 import com.cobblemon.mod.common.api.storage.party.PartyPosition;
@@ -35,6 +37,8 @@ public final class FusionService {
     static final List<Stat> PERMANENT_STATS = List.of(
             Stats.HP, Stats.ATTACK, Stats.DEFENCE, Stats.SPECIAL_ATTACK, Stats.SPECIAL_DEFENCE, Stats.SPEED);
 
+    private static final ExperienceSource EXPERIENCE_SOURCE = new SidemodExperienceSource(Fusionmon.MOD_ID);
+
     private FusionService() {
     }
 
@@ -56,6 +60,7 @@ public final class FusionService {
         Set<MoveTemplate> headMovesBefore = head.getAllAccessibleMoves();
 
         applyAverages(head, body);
+        FusionData.markStartExperience(head);
         addMovesToBench(head, headMovesBefore, body);
 
         if (natureFromBody) {
@@ -67,9 +72,7 @@ public final class FusionService {
         }
 
         // Los PS máximos han cambiado: mantenemos el mismo porcentaje de vida
-        int maxHealth = head.getMaxHealth();
-        int health = healthRatio > 0 ? Math.max(1, (int) Math.round(healthRatio * maxHealth)) : 0;
-        head.setCurrentHealth(health);
+        applyHealthRatio(head, healthRatio);
 
         PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
         party.remove(body);
@@ -83,6 +86,12 @@ public final class FusionService {
         RegistryAccess registryAccess = player.registryAccess();
         Pokemon head = FusionData.readHead(fused, registryAccess);
         Pokemon body = FusionData.readBody(fused, registryAccess);
+        int experienceGained = FusionData.experienceGained(fused);
+
+        // Los dos salen con el % de vida de la fusión (si no, fusionar y separar curaría gratis)
+        double healthRatio = (double) fused.getCurrentHealth() / fused.getMaxHealth();
+        applyHealthRatio(head, healthRatio);
+        applyHealthRatio(body, healthRatio);
 
         // Cualquier objeto que se le haya dado a la fusión vuelve al jugador
         returnHeldItem(player, fused);
@@ -97,8 +106,21 @@ public final class FusionService {
             Cobblemon.INSTANCE.getStorage().getPC(player).add(body);
         }
 
+        // Cada parte recibe toda la experiencia ganada como fusión. Se da después de colocarlos para que
+        // Cobblemon haga lo normal al subir de nivel: avisar al jugador, aprender movimientos, evoluciones...
+        if (experienceGained > 0) {
+            head.addExperienceWithPlayer(player, EXPERIENCE_SOURCE, experienceGained);
+            body.addExperienceWithPlayer(player, EXPERIENCE_SOURCE, experienceGained);
+        }
+
         Fusionmon.LOGGER.info("{} ha desfusionado {} + {}",
                 player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
+    }
+
+    /** Pone los PS actuales al mismo porcentaje; un Pokémon con algo de vida nunca baja a 0 por redondeo. */
+    private static void applyHealthRatio(Pokemon pokemon, double ratio) {
+        int maxHealth = pokemon.getMaxHealth();
+        pokemon.setCurrentHealth(ratio > 0 ? Math.max(1, (int) Math.round(ratio * maxHealth)) : 0);
     }
 
     /** Nivel, IVs y EVs del Pokémon visible pasan a ser la media de A y B. */

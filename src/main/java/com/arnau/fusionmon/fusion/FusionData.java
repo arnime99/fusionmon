@@ -20,7 +20,8 @@ import net.minecraft.resources.ResourceLocation;
  *      ├─ "head": Pokémon A completo, tal como era antes de fusionar
  *      ├─ "body": Pokémon B completo, tal como era antes de fusionar
  *      ├─ "headSpecies" / "headForm": especie y forma de A (para calcular rápido, sin cargar A entero)
- *      └─ "bodySpecies" / "bodyForm": especie y forma de B
+ *      ├─ "bodySpecies" / "bodyForm": especie y forma de B
+ *      └─ "startExperience": experiencia de la fusión al crearse (la ganada después se reparte al separar)
  */
 public final class FusionData {
 
@@ -32,6 +33,7 @@ public final class FusionData {
     private static final String HEAD_FORM = "headForm";
     private static final String BODY_SPECIES = "bodySpecies";
     private static final String BODY_FORM = "bodyForm";
+    private static final String START_EXPERIENCE = "startExperience";
     private static final int CURRENT_VERSION = 2;
 
     private FusionData() {
@@ -73,6 +75,21 @@ public final class FusionData {
 
     public static FormData bodyForm(Pokemon visible) {
         return form(visible, BODY_SPECIES, BODY_FORM);
+    }
+
+    /** Guarda la experiencia con la que nace la fusión, para saber al separarla cuánta ha ganado. */
+    public static void markStartExperience(Pokemon visible) {
+        data(visible).putInt(START_EXPERIENCE, visible.getExperience());
+        visible.onChange(null);
+    }
+
+    /** Experiencia ganada como fusión (0 en fusiones antiguas que no guardaban el dato). */
+    public static int experienceGained(Pokemon visible) {
+        CompoundTag data = data(visible);
+        if (!data.contains(START_EXPERIENCE)) {
+            return 0;
+        }
+        return Math.max(0, visible.getExperience() - data.getInt(START_EXPERIENCE));
     }
 
     public static void clear(Pokemon visible) {
