@@ -2,11 +2,18 @@ package com.arnau.fusionmon.fusion;
 
 import com.arnau.fusionmon.Fusionmon;
 import com.cobblemon.mod.common.Cobblemon;
+import com.cobblemon.mod.common.CobblemonNetwork;
+import com.cobblemon.mod.common.api.pokemon.stats.Stat;
+import com.cobblemon.mod.common.api.pokemon.stats.Stats;
+import com.cobblemon.mod.common.api.storage.party.PartyPosition;
 import com.cobblemon.mod.common.api.storage.party.PlayerPartyStore;
+import com.cobblemon.mod.common.net.messages.client.storage.party.SetPartyPokemonPacket;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+
+import java.util.List;
 
 /**
  * Operaciones de fusión sobre el equipo del jugador (solo servidor).
@@ -15,6 +22,9 @@ import net.minecraft.world.item.ItemStack;
  * B sale del equipo y queda guardado dentro de A.
  */
 public final class FusionService {
+
+    private static final List<Stat> PERMANENT_STATS = List.of(
+            Stats.HP, Stats.ATTACK, Stats.DEFENCE, Stats.SPECIAL_ATTACK, Stats.SPECIAL_DEFENCE, Stats.SPEED);
 
     private FusionService() {
     }
@@ -26,10 +36,22 @@ public final class FusionService {
 
         body.recall();
 
+        double healthRatio = (double) head.getCurrentHealth() / head.getMaxHealth();
+
+        // Las copias se guardan antes de tocar nada: son los originales para desfusionar
         RegistryAccess registryAccess = player.registryAccess();
         FusionData.write(head, head, body, registryAccess);
 
-        Cobblemon.INSTANCE.getStorage().getParty(player).remove(body);
+        applyAverages(head, body);
+
+        // Los PS máximos han cambiado: mantenemos el mismo porcentaje de vida
+        int maxHealth = head.getMaxHealth();
+        int health = healthRatio > 0 ? Math.max(1, (int) Math.round(healthRatio * maxHealth)) : 0;
+        head.setCurrentHealth(health);
+
+        PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
+        party.remove(body);
+        resendToClient(player, party, head);
 
         Fusionmon.LOGGER.info("{} ha fusionado {} + {}",
                 player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
@@ -55,6 +77,27 @@ public final class FusionService {
 
         Fusionmon.LOGGER.info("{} ha desfusionado {} + {}",
                 player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
+    }
+
+    /** Nivel, IVs y EVs del Pokémon visible pasan a ser la media de A y B. */
+    private static void applyAverages(Pokemon visible, Pokemon other) {
+        visible.setLevel((visible.getLevel() + other.getLevel()) / 2);
+
+        for (Stat stat : PERMANENT_STATS) {
+            visible.getIvs().set(stat, (visible.getIvs().getOrDefault(stat) + other.getIvs().getOrDefault(stat)) / 2);
+            visible.getEvs().set(stat, (visible.getEvs().getOrDefault(stat) + other.getEvs().getOrDefault(stat)) / 2);
+        }
+    }
+
+    /**
+     * Cobblemon no avisa al cliente cuando cambia persistentData, así que le volvemos a mandar el Pokémon
+     * completo a su hueco (el mismo paquete que usa Cobblemon al colocar un Pokémon en el equipo).
+     * Ojo: no usar party.sendTo(), que envía el equipo como si fuera de otro jugador y desincroniza el cliente.
+     */
+    private static void resendToClient(ServerPlayer player, PlayerPartyStore party, Pokemon pokemon) {
+        PartyPosition position = new PartyPosition(slotOf(party, pokemon));
+        CobblemonNetwork.INSTANCE.sendPacket(player,
+                new SetPartyPokemonPacket(party.getUuid(), position, registryAccess -> pokemon));
     }
 
     private static void returnHeldItem(ServerPlayer player, Pokemon pokemon) {

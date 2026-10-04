@@ -7,7 +7,9 @@ import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.arnau.fusionmon.command.FusionCommands;
+import com.arnau.fusionmon.fusion.FusionStatProvider;
 import com.arnau.fusionmon.item.ModItems;
+import com.cobblemon.mod.common.Cobblemon;
 
 public class Fusionmon implements ModInitializer {
 	public static final String MOD_ID = "fusionmon";
@@ -21,6 +23,8 @@ public class Fusionmon implements ModInitializer {
 	public void onInitialize() {
 		ModItems.initialize();
 		FusionCommands.register();
+		// Envuelve la calculadora de stats de Cobblemon para que las fusiones usen sus propios stats base
+		Cobblemon.INSTANCE.setStatProvider(new FusionStatProvider(Cobblemon.INSTANCE.getStatProvider()));
 
 		LOGGER.info("Hello Fabric world!");
 	}
