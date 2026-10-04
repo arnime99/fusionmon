@@ -16,7 +16,9 @@ public record OpenFusionScreenPayload(
         Component nameA, Component nameB,
         FusionPreview preview, FusionPreview swappedPreview,
         Component natureA, Component natureB,
-        Component abilityA, Component abilityB
+        Component natureEffectA, Component natureEffectB,
+        Component abilityA, Component abilityB,
+        Component abilityDescriptionA, Component abilityDescriptionB
 ) implements CustomPacketPayload {
 
     public static final Type<OpenFusionScreenPayload> TYPE = new Type<>(Fusionmon.id("open_fusion_screen"));
@@ -24,26 +26,37 @@ public record OpenFusionScreenPayload(
             StreamCodec.ofMember(OpenFusionScreenPayload::write, OpenFusionScreenPayload::read);
 
     private void write(RegistryFriendlyByteBuf buf) {
-        ComponentSerialization.STREAM_CODEC.encode(buf, nameA);
-        ComponentSerialization.STREAM_CODEC.encode(buf, nameB);
+        writeComponent(buf, nameA);
+        writeComponent(buf, nameB);
         preview.write(buf);
         swappedPreview.write(buf);
-        ComponentSerialization.STREAM_CODEC.encode(buf, natureA);
-        ComponentSerialization.STREAM_CODEC.encode(buf, natureB);
-        ComponentSerialization.STREAM_CODEC.encode(buf, abilityA);
-        ComponentSerialization.STREAM_CODEC.encode(buf, abilityB);
+        writeComponent(buf, natureA);
+        writeComponent(buf, natureB);
+        writeComponent(buf, natureEffectA);
+        writeComponent(buf, natureEffectB);
+        writeComponent(buf, abilityA);
+        writeComponent(buf, abilityB);
+        writeComponent(buf, abilityDescriptionA);
+        writeComponent(buf, abilityDescriptionB);
     }
 
+    // Java evalúa los argumentos de izquierda a derecha, así que se leen en el mismo orden en que se escribieron
     private static OpenFusionScreenPayload read(RegistryFriendlyByteBuf buf) {
         return new OpenFusionScreenPayload(
-                ComponentSerialization.STREAM_CODEC.decode(buf),
-                ComponentSerialization.STREAM_CODEC.decode(buf),
-                FusionPreview.read(buf),
-                FusionPreview.read(buf),
-                ComponentSerialization.STREAM_CODEC.decode(buf),
-                ComponentSerialization.STREAM_CODEC.decode(buf),
-                ComponentSerialization.STREAM_CODEC.decode(buf),
-                ComponentSerialization.STREAM_CODEC.decode(buf));
+                readComponent(buf), readComponent(buf),
+                FusionPreview.read(buf), FusionPreview.read(buf),
+                readComponent(buf), readComponent(buf),
+                readComponent(buf), readComponent(buf),
+                readComponent(buf), readComponent(buf),
+                readComponent(buf), readComponent(buf));
+    }
+
+    private static void writeComponent(RegistryFriendlyByteBuf buf, Component component) {
+        ComponentSerialization.STREAM_CODEC.encode(buf, component);
+    }
+
+    private static Component readComponent(RegistryFriendlyByteBuf buf) {
+        return ComponentSerialization.STREAM_CODEC.decode(buf);
     }
 
     @Override

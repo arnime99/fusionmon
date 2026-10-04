@@ -6,9 +6,11 @@ import com.arnau.fusionmon.network.OpenFusionScreenPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.util.FormattedCharSequence;
 
 import java.util.List;
 
@@ -18,8 +20,10 @@ import java.util.List;
  */
 public class FusionConfirmScreen extends Screen {
 
-    private static final int PANEL_HEIGHT = 214;
+    private static final int PANEL_HEIGHT = 258;
     private static final int OPTION_WIDTH = 110;
+    private static final int DESCRIPTION_WIDTH = 2 * 110 + 8;
+    private static final int DESCRIPTION_MAX_LINES = 3;
     private static final int GAP = 8;
     private static final int WHITE = 0xFFFFFF;
     private static final int GRAY = 0xAAAAAA;
@@ -59,29 +63,30 @@ public class FusionConfirmScreen extends Screen {
         int leftX = centerX - OPTION_WIDTH - GAP / 2;
         int rightX = centerX + GAP / 2;
 
+        // Al pasar el ratón por encima de una opción se ve su efecto o descripción (Tooltip)
         natureAButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             natureFromB = false;
             refreshOptionLabels();
-        }).bounds(leftX, top + 124, OPTION_WIDTH, 20).build());
+        }).bounds(leftX, top + 126, OPTION_WIDTH, 20).tooltip(Tooltip.create(data.natureEffectA())).build());
         natureBButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             natureFromB = true;
             refreshOptionLabels();
-        }).bounds(rightX, top + 124, OPTION_WIDTH, 20).build());
+        }).bounds(rightX, top + 126, OPTION_WIDTH, 20).tooltip(Tooltip.create(data.natureEffectB())).build());
 
         abilityAButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             abilityFromB = false;
             refreshOptionLabels();
-        }).bounds(leftX, top + 160, OPTION_WIDTH, 20).build());
+        }).bounds(leftX, top + 178, OPTION_WIDTH, 20).tooltip(Tooltip.create(data.abilityDescriptionA())).build());
         abilityBButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             abilityFromB = true;
             refreshOptionLabels();
-        }).bounds(rightX, top + 160, OPTION_WIDTH, 20).build());
+        }).bounds(rightX, top + 178, OPTION_WIDTH, 20).tooltip(Tooltip.create(data.abilityDescriptionB())).build());
 
         addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.confirm.accept"), button -> answer(true))
-                .bounds(leftX, top + 192, OPTION_WIDTH, 20)
+                .bounds(leftX, top + 236, OPTION_WIDTH, 20)
                 .build());
         addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.confirm.cancel"), button -> answer(false))
-                .bounds(rightX, top + 192, OPTION_WIDTH, 20)
+                .bounds(rightX, top + 236, OPTION_WIDTH, 20)
                 .build());
 
         refreshOptionLabels();
@@ -107,8 +112,17 @@ public class FusionConfirmScreen extends Screen {
         graphics.drawCenteredString(font, statLine(preview.baseStats(), 0), centerX, top + 60, GRAY);
         graphics.drawCenteredString(font, statLine(preview.baseStats(), 3), centerX, top + 72, GRAY);
 
-        graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.confirm.nature"), centerX, top + 112, WHITE);
-        graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.confirm.ability"), centerX, top + 148, WHITE);
+        graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.confirm.nature"), centerX, top + 114, WHITE);
+        graphics.drawCenteredString(font, natureFromB ? data.natureEffectB() : data.natureEffectA(),
+                centerX, top + 150, GRAY);
+
+        graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.confirm.ability"), centerX, top + 166, WHITE);
+        // Las descripciones de habilidad pueden ser largas: se parten en varias líneas
+        List<FormattedCharSequence> lines = font.split(
+                abilityFromB ? data.abilityDescriptionB() : data.abilityDescriptionA(), DESCRIPTION_WIDTH);
+        for (int i = 0; i < Math.min(lines.size(), DESCRIPTION_MAX_LINES); i++) {
+            graphics.drawCenteredString(font, lines.get(i), centerX, top + 202 + i * 10, GRAY);
+        }
     }
 
     /** removed() se llama siempre que la pantalla se cierra (Esc, otra pantalla...): cuenta como Cancelar. */

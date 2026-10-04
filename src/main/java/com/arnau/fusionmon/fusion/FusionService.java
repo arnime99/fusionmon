@@ -4,6 +4,9 @@ import com.arnau.fusionmon.Fusionmon;
 import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.CobblemonNetwork;
 import com.cobblemon.mod.common.api.Priority;
+import com.cobblemon.mod.common.api.moves.BenchedMove;
+import com.cobblemon.mod.common.api.moves.Move;
+import com.cobblemon.mod.common.api.moves.MoveTemplate;
 import com.cobblemon.mod.common.api.pokemon.stats.Stat;
 import com.cobblemon.mod.common.api.pokemon.stats.Stats;
 import com.cobblemon.mod.common.api.storage.party.PartyPosition;
@@ -14,7 +17,11 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Operaciones de fusión sobre el equipo del jugador (solo servidor).
@@ -45,7 +52,11 @@ public final class FusionService {
         RegistryAccess registryAccess = player.registryAccess();
         FusionData.write(head, head, body, registryAccess);
 
+        // Lo que la cabeza podía recordar antes de cambiar de nivel: la media puede bajarle el nivel
+        Set<MoveTemplate> headMovesBefore = head.getAllAccessibleMoves();
+
         applyAverages(head, body);
+        addMovesToBench(head, headMovesBefore, body);
 
         if (natureFromBody) {
             head.setNature(body.getNature());
@@ -109,6 +120,40 @@ public final class FusionService {
         PartyPosition position = new PartyPosition(slotOf(party, pokemon));
         CobblemonNetwork.INSTANCE.sendPacket(player,
                 new SetPartyPokemonPacket(party.getUuid(), position, registryAccess -> pokemon));
+    }
+
+    /**
+     * La fusión mantiene los movimientos de la cabeza. Todo lo demás que cualquiera de las dos partes podía
+     * usar o recordar va a los "benched moves": así aparece en el panel de cambiar movimientos de Cobblemon,
+     * y su servidor acepta el cambio porque valida contra esa misma lista.
+     */
+    private static void addMovesToBench(Pokemon visible, Set<MoveTemplate> headMovesBefore, Pokemon body) {
+        Set<MoveTemplate> candidates = new LinkedHashSet<>(headMovesBefore);
+        candidates.addAll(body.getMoveSet().getMoveTemplates());
+        candidates.addAll(body.getAllAccessibleMoves());
+        // Movimientos por nivel del cuerpo hasta el nivel de la fusión (por si es mayor que el del cuerpo)
+        candidates.addAll(body.getForm().getMoves().getLevelUpMovesUpTo(visible.getLevel()));
+
+        Set<MoveTemplate> alreadyAvailable = new HashSet<>(visible.getAllAccessibleMoves());
+        alreadyAvailable.addAll(visible.getMoveSet().getMoveTemplates());
+
+        List<BenchedMove> toBench = new ArrayList<>();
+        for (MoveTemplate move : candidates) {
+            if (alreadyAvailable.add(move)) {
+                toBench.add(new BenchedMove(move, raisedPpStages(body, move)));
+            }
+        }
+        visible.getBenchedMoves().addAll(toBench);
+    }
+
+    /** Si el cuerpo ya conocía el movimiento con PP aumentados (Más PP), se conservan. */
+    private static int raisedPpStages(Pokemon body, MoveTemplate template) {
+        for (Move move : body.getMoveSet().getMoves()) {
+            if (move.getTemplate() == template) {
+                return move.getRaisedPpStages();
+            }
+        }
+        return 0;
     }
 
     private static void returnHeldItem(ServerPlayer player, Pokemon pokemon) {

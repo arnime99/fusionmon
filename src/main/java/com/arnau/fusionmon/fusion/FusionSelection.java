@@ -10,6 +10,7 @@ import com.cobblemon.mod.common.api.storage.party.PlayerPartyStore;
 import com.cobblemon.mod.common.api.types.ElementalType;
 import com.cobblemon.mod.common.battles.BattleRegistry;
 import com.cobblemon.mod.common.pokemon.FormData;
+import com.cobblemon.mod.common.pokemon.Nature;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import kotlin.Unit;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -94,8 +95,22 @@ public final class FusionSelection {
                 preview(first, second), preview(second, first),
                 Component.translatable(first.getNature().getDisplayName()),
                 Component.translatable(second.getNature().getDisplayName()),
+                natureEffect(first.getNature()),
+                natureEffect(second.getNature()),
                 Component.translatable(first.getAbility().getDisplayName()),
-                Component.translatable(second.getAbility().getDisplayName())));
+                Component.translatable(second.getAbility().getDisplayName()),
+                Component.translatable(first.getAbility().getDescription()),
+                Component.translatable(second.getAbility().getDescription())));
+    }
+
+    /** "+Ataque  −At. Esp." o "Neutra" si la naturaleza no cambia ningún stat. */
+    private static Component natureEffect(Nature nature) {
+        Stat increased = nature.getIncreasedStat();
+        Stat decreased = nature.getDecreasedStat();
+        if (increased == null || decreased == null) {
+            return Component.translatable("gui.fusionmon.nature.neutral");
+        }
+        return Component.translatable("gui.fusionmon.nature.effect", increased.getDisplayName(), decreased.getDisplayName());
     }
 
     public static void handleChoice(ServerPlayer player, FusionChoicePayload choice) {

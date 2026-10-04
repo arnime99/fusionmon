@@ -10,6 +10,8 @@
   "gui.fusionmon.confirm.ability": "Ability",
   "gui.fusionmon.confirm.accept": "Accept",
   "gui.fusionmon.confirm.cancel": "Cancel",
+  "gui.fusionmon.nature.effect": "+%s   −%s",
+  "gui.fusionmon.nature.neutral": "Neutral: no stat changes",
   "gui.fusionmon.stat.hp": "HP",
   "gui.fusionmon.stat.attack": "Atk",
   "gui.fusionmon.stat.defence": "Def",
