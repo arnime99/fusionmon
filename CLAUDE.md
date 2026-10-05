@@ -60,6 +60,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - Mixins sobre clases de Cobblemon: `@Mixin(value = ..., remap = false)`.
 - Los paquetes de actualización de Cobblemon (`BenchedMovesUpdatePacket`, `MoveSet`...) llevan la colección **viva** y se serializan más tarde en el hilo de red: modificarla varias veces seguidas → `ConcurrentModificationException` y desconexión. Agrupar cambios con `doWithoutEmitting` y sincronizar una vez al final.
 - Cobblemon comprueba evoluciones cada segundo (`PlayerPartyStore.onSecondPassed` → `getLockedEvolutions()`); `setSpecies`/`setForm` vacían las pendientes. El envío completo del Pokémon (`SetPartyPokemonPacket`) incluye las evoluciones pendientes.
+- `setForm` (también al evolucionar) llama a `updateMovesOnFormChange`, que borra los benched moves que la nueva especie no aprende; en fusiones se lo impide `PokemonMixin` con `@WrapOperation` (MixinExtras viene con Fabric Loader).
+- `runServer`: hay que forzar Java 21 (como `runClient`) y añadirle ICU4J 71.1 a mano, porque Loom quita la 73.2 del cliente y Showdown se queda sin ella (en un servidor real va dentro del jar de Cobblemon). En modo offline, `op` antes de haber entrado nunca da op a la cuenta de Mojang real con ese nombre: corregir `run/server/ops.json`.
 - Escribir JSON desde PowerShell 5.1 con `Set-Content -Encoding utf8` mete BOM; usar las herramientas de edición o UTF-8 sin BOM.
 
 ## Estado
@@ -67,6 +69,6 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 Hecho y probado: entorno, fase 1 (cristal + selector), fase 2 (fusión de datos, pantalla con vista previa/intercambiar/naturaleza/habilidad y descripciones, movimientos), fase 3 (separar con el cristal), fase 4 (combates en Showdown), fase 5 (evolución de cabeza y cuerpo desde el menú de Cobblemon; movimientos del cuerpo al subir de nivel, también en combate).
 
 Pendiente:
-- **Fase 6 — pulido y publicación:** ~~gastar el cristal~~ (hecho: 1 al confirmar fusión o separación, no en creativo), ~~receta~~ (hecho: redstone–lapis–material en diagonal, materiales en la etiqueta `fusionmon:fusion_crystal_materials`), ~~`fabric.mod.json`~~ (hecho: autor `Rupikola`, licencia **MPL-2.0** como Cobblemon, README; faltan los enlaces `contact` cuando exista el repo de GitHub), ~~quitar `ExampleClientMixin`~~ (hecho), publicar el repo en GitHub, probar en servidor dedicado, publicar en CurseForge (y Modrinth).
+- **Fase 6 — pulido y publicación:** ~~gastar el cristal~~ (hecho: 1 al confirmar fusión o separación, no en creativo), ~~receta~~ (hecho: redstone–lapis–material en diagonal, materiales en la etiqueta `fusionmon:fusion_crystal_materials`), ~~`fabric.mod.json`~~ (hecho: autor `Rupikola`, licencia **MPL-2.0** como Cobblemon, README; faltan los enlaces `contact` cuando exista el repo de GitHub), ~~quitar `ExampleClientMixin`~~ (hecho), ~~publicar el repo en GitHub~~ (https://github.com/arnime99/fusionmon), ~~probar en servidor dedicado~~ (hecho: `runServer`, datos en `run/server`), publicar en CurseForge (y Modrinth).
 - No se puede cobrar por el mod (EULA de Mojang + propiedad de Pokémon): se publica gratis.
 - Futuro: modelos visuales de fusiones.
