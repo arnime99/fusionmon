@@ -4,6 +4,7 @@ import com.cobblemon.mod.common.api.pokemon.PokemonProperties;
 import com.cobblemon.mod.common.api.pokemon.aspect.AspectProvider;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
+import com.cobblemon.mod.common.pokemon.Species;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -33,18 +34,25 @@ public final class FusionAspects implements AspectProvider {
     public Set<String> provide(Pokemon pokemon) {
         // Cobblemon llama a esto cada vez que recalcula los aspects de cualquier Pokémon: tiene que ser barato.
         // isFusion ya comprueba que persistentData no sea null (lo es mientras se construye el Pokémon).
-        Set<String> aspects = new HashSet<>();
         if (!FusionData.isFusion(pokemon)) {
-            return aspects;
+            return new HashSet<>();
         }
-
-        aspects.add(FUSION);
         FormData bodyForm = FusionData.bodyForm(pokemon);
-        if (bodyForm != null) {
+        return fusionAspects(bodyForm == null ? null : bodyForm.getSpecies(), FusionData.bodyAspects(pokemon));
+    }
+
+    /**
+     * Los aspects que añade Fusionmon a una fusión con ese cuerpo. También los usa la vista previa de la pantalla
+     * de fusión, para pintar una fusión que todavía no existe.
+     */
+    public static Set<String> fusionAspects(Species bodySpecies, Set<String> bodyAspects) {
+        Set<String> aspects = new HashSet<>();
+        aspects.add(FUSION);
+        if (bodySpecies != null) {
             // Solo la ruta ("charizard", no "cobblemon:charizard"): es lo cómodo de escribir en un resource pack
-            aspects.add(BODY_SPECIES_PREFIX + bodyForm.getSpecies().getResourceIdentifier().getPath());
+            aspects.add(BODY_SPECIES_PREFIX + bodySpecies.getResourceIdentifier().getPath());
         }
-        for (String aspect : FusionData.bodyAspects(pokemon)) {
+        for (String aspect : bodyAspects) {
             aspects.add(BODY_ASPECT_PREFIX + aspect);
         }
         return aspects;

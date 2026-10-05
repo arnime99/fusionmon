@@ -15,6 +15,8 @@
   "gui.fusionmon.confirm.ability": "Ability",
   "gui.fusionmon.confirm.accept": "Accept",
   "gui.fusionmon.confirm.cancel": "Cancel",
+  "gui.fusionmon.confirm.graft_yes": "✔ Head on body",
+  "gui.fusionmon.confirm.graft_no": "✘ Colours only (no head found)",
   "gui.fusionmon.nature.effect": "+%s   −%s",
   "gui.fusionmon.nature.neutral": "Neutral: no stat changes",
   "gui.fusionmon.stat.hp": "HP",
@@ -33,5 +35,7 @@
   "command.fusionmon.not_fusion": "%s is not a fusion.",
   "command.fusionmon.info": "%s is a fusion → head: %s (lv. %s), body: %s (lv. %s)",
   "command.fusionmon.aspects": "Aspects: %s",
+  "command.fusionmon.visual.colors": "Fusions: head with the body's colours",
+  "command.fusionmon.visual.graft": "Fusions: head on body (experimental)",
   "command.fusionmon.unfused": "Fusion undone."
 }

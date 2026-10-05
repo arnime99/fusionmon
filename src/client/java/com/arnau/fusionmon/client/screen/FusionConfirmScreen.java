@@ -1,8 +1,16 @@
 package com.arnau.fusionmon.client.screen;
 
+import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.network.FusionChoicePayload;
 import com.arnau.fusionmon.network.FusionPreview;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
+import com.cobblemon.mod.common.client.gui.PokemonGuiUtilsKt;
+import com.cobblemon.mod.common.client.gui.ProfileTransformType;
+import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState;
+import com.cobblemon.mod.common.entity.PoseType;
+import com.cobblemon.mod.common.pokemon.RenderablePokemon;
+import com.cobblemon.mod.common.util.math.QuaternionUtilsKt;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -11,6 +19,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.FormattedCharSequence;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.List;
 
@@ -28,6 +38,14 @@ public class FusionConfirmScreen extends Screen {
     private static final int WHITE = 0xFFFFFF;
     private static final int GRAY = 0xAAAAAA;
     private static final int YELLOW = 0xFFFF55;
+    private static final int GREEN = 0x55FF55;
+
+    // Visor 3D (mismos valores que el modelo de la pantalla de resumen de Cobblemon, algo más grande)
+    private static final int MODEL_BOX = 110;
+    private static final float MODEL_SCALE = 2.4F;
+    private static final double MODEL_OFFSET_Y = -10;
+    private static final long MODEL_TURN_MILLIS = 8000;
+    private static final int MODEL_LIGHT = 15;
 
     private static final String[] STAT_KEYS = {
             "gui.fusionmon.stat.hp", "gui.fusionmon.stat.attack", "gui.fusionmon.stat.defence",
@@ -40,6 +58,8 @@ public class FusionConfirmScreen extends Screen {
     private boolean abilityFromB;
     /** true cuando ya se ha mandado la respuesta (Aceptar o Cancelar), para no mandarla dos veces. */
     private boolean answered;
+    /** Estado de animación del visor 3D (como los de los menús de Cobblemon: sin entidad detrás). */
+    private final FloatingState previewState = new FloatingState();
 
     private Button natureAButton;
     private Button natureBButton;
@@ -122,6 +142,44 @@ public class FusionConfirmScreen extends Screen {
                 abilityFromB ? data.abilityDescriptionB() : data.abilityDescriptionA(), DESCRIPTION_WIDTH);
         for (int i = 0; i < Math.min(lines.size(), DESCRIPTION_MAX_LINES); i++) {
             graphics.drawCenteredString(font, lines.get(i), centerX, top + 202 + i * 10, GRAY);
+        }
+
+        // A la izquierda del panel (sin salirse de la pantalla si es estrecha)
+        renderModel(graphics, preview, Math.max(4, centerX - DESCRIPTION_WIDTH / 2 - GAP - MODEL_BOX), top + 16,
+                partialTick);
+    }
+
+    /**
+     * Visor 3D de la fusión, a la izquierda del panel, girando despacio. Se pinta como cualquier Pokémon de un menú
+     * de Cobblemon (mismos valores que su pantalla de resumen), así que sale como se verá en el juego según el modo
+     * de /fusionvisual. Debajo, si el prototipo cabeza sobre cuerpo encuentra la cabeza de los dos modelos.
+     */
+    private void renderModel(GuiGraphics graphics, FusionPreview preview, int x, int y, float partialTick) {
+        RenderablePokemon model = preview.model();
+        previewState.setCurrentAspects(model.getAspects());
+
+        graphics.fill(x - 1, y - 1, x + MODEL_BOX + 1, y + MODEL_BOX + 1, 0xFF555555);
+        graphics.fill(x, y, x + MODEL_BOX, y + MODEL_BOX, 0xFF1E1E1E);
+
+        // Lo que se salga de la caja no se pinta
+        graphics.enableScissor(x, y, x + MODEL_BOX, y + MODEL_BOX);
+        PoseStack pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(x + MODEL_BOX / 2.0, y + MODEL_OFFSET_Y, 0);
+        pose.scale(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
+        float yaw = (System.currentTimeMillis() % MODEL_TURN_MILLIS) * 360F / MODEL_TURN_MILLIS;
+        Quaternionf rotation = QuaternionUtilsKt.fromEulerXYZDegrees(new Quaternionf(), new Vector3f(13F, yaw, 0F));
+        PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, previewState, partialTick,
+                20F, ProfileTransformType.SUMMARY, false, 1F, 1F, 1F, 1F, 0F, 0F, MODEL_LIGHT);
+        pose.popPose();
+        graphics.disableScissor();
+
+        boolean graft = FusionGraft.canGraft(model.getSpecies().getResourceIdentifier(), previewState);
+        Component label = Component.translatable(graft ? "gui.fusionmon.confirm.graft_yes" : "gui.fusionmon.confirm.graft_no");
+        List<FormattedCharSequence> labelLines = font.split(label, MODEL_BOX + 16);
+        for (int i = 0; i < labelLines.size(); i++) {
+            graphics.drawCenteredString(font, labelLines.get(i), x + MODEL_BOX / 2, y + MODEL_BOX + 4 + i * 10,
+                    graft ? GREEN : GRAY);
         }
     }
 

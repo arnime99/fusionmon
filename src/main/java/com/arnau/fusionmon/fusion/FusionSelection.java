@@ -15,15 +15,19 @@ import com.cobblemon.mod.common.battles.BattleRegistry;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Nature;
 import com.cobblemon.mod.common.pokemon.Pokemon;
+import com.cobblemon.mod.common.pokemon.RenderablePokemon;
 import kotlin.Unit;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -226,11 +230,17 @@ public final class FusionSelection {
             baseStats.add(FusionCalculator.baseStat(headForm, bodyForm, stat));
         }
 
+        // Para el visor 3D: la cabeza con los aspects que tendrá como fusión (sin objeto: al fusionar vuelve al jugador)
+        Set<String> aspects = new HashSet<>(head.getAspects());
+        aspects.addAll(FusionAspects.fusionAspects(body.getSpecies(), body.getAspects()));
+        RenderablePokemon model = new RenderablePokemon(head.getSpecies(), aspects, ItemStack.EMPTY);
+
         return new FusionPreview(
                 Component.literal(FusionCalculator.name(head.getSpecies().getName(), body.getSpecies().getName())),
                 types,
                 (head.getLevel() + body.getLevel()) / 2,
-                baseStats);
+                baseStats,
+                model);
     }
 
     /** El Pokémon con ese UUID si sigue en el equipo y no es una fusión; si no, null. */
