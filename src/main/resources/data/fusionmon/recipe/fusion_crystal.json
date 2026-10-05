@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "  M",
+    " L ",
+    "R  "
+  ],
+  "key": {
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "L": {
+      "item": "minecraft:lapis_lazuli"
+    },
+    "M": {
+      "tag": "fusionmon:fusion_crystal_materials"
+    }
+  },
+  "result": {
+    "id": "fusionmon:fusion_crystal",
+    "count": 1
+  }
+}
