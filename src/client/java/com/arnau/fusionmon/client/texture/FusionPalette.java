@@ -15,7 +15,8 @@ import java.util.Map;
  * el tono más oscuro de Pikachu pasa a ser el más oscuro de Charizard, el más común el más común, etc.
  * Así se conserva el sombreado de la cabeza (sigue habiendo luces y sombras en el mismo sitio).
  *
- * Los grises, negros y blancos de la cabeza (contornos, ojos, dientes) no se tocan.
+ * Los grises, negros y blancos (contornos, ojos, dientes) no se tocan... salvo que el Pokémon sea gris o negro de
+ * por sí (ver NEUTRAL_BODY_FRACTION).
  *
  * Trabaja con píxeles ARGB (0xAARRGGBB) y no usa clases de Minecraft, para poder probarlo fuera del juego.
  */
@@ -23,14 +24,31 @@ public final class FusionPalette {
 
     /** Por debajo de esta saturación un color se considera gris (no se recolorea). */
     private static final double MIN_SATURATION = 0.2;
-    /** Casi negros (contornos) y casi blancos (brillos de los ojos) tampoco. */
+    /** Casi negros (contornos) y casi blancos (brillos de los ojos) no se tocan nunca. */
     private static final double MIN_LIGHTNESS = 0.1;
     private static final double MAX_LIGHTNESS = 0.92;
     /**
-     * Si el cuerpo apenas tiene colores (p. ej. un Pokémon gris como Onix), su paleta son todos sus píxeles:
-     * así la fusión sale gris en vez de quedarse con los cuatro píxeles de color que tenga.
+     * Si menos de esta parte de una textura tiene color, sus grises no son detalles sino el color del Pokémon:
+     * cuentan como colores, tanto para recolorearla como para usarla de paleta. Charizard shiny es un 84 % gris
+     * oscuro (y Umbreon, Gengar shiny, Luxray...): sin esto su cuerpo se quedaba negro y, como paleta, solo
+     * aportaba el 15 % de color de las alas y la barriga. Pikachu (3 % de grises) o Cinderace (blanco, 58 % de
+     * color) no cambian.
+     */
+    private static final double NEUTRAL_BODY_FRACTION = 0.5;
+    /**
+     * Si aun así el cuerpo apenas tiene colores (casi todo contornos y brillos), su paleta son todos sus píxeles:
+     * así la fusión sale de sus tonos en vez de quedarse con los cuatro píxeles de color que tenga.
      */
     private static final double MIN_COLORED_FRACTION = 0.1;
+
+    /** Qué es cada color para el cambio de paleta. */
+    private enum Kind {
+        /** Casi negro o casi blanco: no se toca nunca. */
+        EXTREME,
+        /** Gris: se toca solo si el Pokémon es gris (ver NEUTRAL_BODY_FRACTION). */
+        NEUTRAL,
+        COLORED
+    }
 
     private FusionPalette() {
     }
@@ -70,13 +88,15 @@ public final class FusionPalette {
     }
 
     /**
-     * Colores de la textura ordenados de oscuro a claro, con su tramo de la barra.
+     * Colores de la textura que entran en el cambio de paleta, ordenados de oscuro a claro, con su tramo de la barra.
      * Con fallbackToAll, si casi no hay colores se usan todos los píxeles (ver MIN_COLORED_FRACTION).
      */
     private static List<Shade> shades(int[] pixels, boolean fallbackToAll) {
         Map<Integer, Integer> colored = new HashMap<>();
+        Map<Integer, Integer> neutral = new HashMap<>();
         Map<Integer, Integer> all = new HashMap<>();
         int coloredCount = 0;
+        int neutralCount = 0;
         int opaqueCount = 0;
         for (int pixel : pixels) {
             if (pixel >>> 24 == 0) {
@@ -86,15 +106,29 @@ public final class FusionPalette {
             int rgb = pixel & 0xFFFFFF;
             all.merge(rgb, 1, Integer::sum);
             opaqueCount++;
-            if (isColored(rgb)) {
-                colored.merge(rgb, 1, Integer::sum);
-                coloredCount++;
+            switch (kind(rgb)) {
+                case COLORED -> {
+                    colored.merge(rgb, 1, Integer::sum);
+                    coloredCount++;
+                }
+                case NEUTRAL -> {
+                    neutral.merge(rgb, 1, Integer::sum);
+                    neutralCount++;
+                }
+                case EXTREME -> {
+                }
             }
         }
 
         Map<Integer, Integer> counts = colored;
         int total = coloredCount;
-        if (fallbackToAll && coloredCount < opaqueCount * MIN_COLORED_FRACTION) {
+        if (coloredCount < opaqueCount * NEUTRAL_BODY_FRACTION) {
+            // Pokémon gris o negro: sus grises son su color
+            counts = new HashMap<>(colored);
+            counts.putAll(neutral);
+            total = coloredCount + neutralCount;
+        }
+        if (fallbackToAll && total < opaqueCount * MIN_COLORED_FRACTION) {
             counts = all;
             total = opaqueCount;
         }
@@ -125,7 +159,7 @@ public final class FusionPalette {
         return shades.get(shades.size() - 1).rgb;
     }
 
-    private static boolean isColored(int rgb) {
+    private static Kind kind(int rgb) {
         double r = ((rgb >> 16) & 0xFF) / 255.0;
         double g = ((rgb >> 8) & 0xFF) / 255.0;
         double b = (rgb & 0xFF) / 255.0;
@@ -134,10 +168,10 @@ public final class FusionPalette {
         // Luminosidad y saturación de HSL
         double lightness = (max + min) / 2;
         if (lightness < MIN_LIGHTNESS || lightness > MAX_LIGHTNESS) {
-            return false;
+            return Kind.EXTREME;
         }
         double saturation = (max - min) / (1 - Math.abs(2 * lightness - 1));
-        return saturation >= MIN_SATURATION;
+        return saturation >= MIN_SATURATION ? Kind.COLORED : Kind.NEUTRAL;
     }
 
     /** Claridad tal como la percibe el ojo (el verde pesa más que el azul). */
