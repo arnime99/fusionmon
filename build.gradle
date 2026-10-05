@@ -30,7 +30,20 @@ loom {
 			// guarda el equipo y el PC por jugador, cada arranque parecía un jugador nuevo
 			programArgs "--username", "Arnau"
 		}
+		server {
+			// Carpeta propia: cliente y servidor se lanzan a la vez y si no compartirían
+			// logs, configuración y mundo en run/
+			runDir "run/server"
+		}
 	}
+}
+
+// Showdown (GraalJS, dentro de Cobblemon) necesita ICU4J. Cobblemon pide la 71.1, pero Gradle la sube a la 73.2
+// del cliente de Minecraft, y runServer quita las librerías solo de cliente: el servidor de pruebas se quedaba sin
+// ICU4J (NoClassDefFoundError com/ibm/icu/text/DateFormat). En un servidor real no pasa, porque Cobblemon la lleva
+// dentro de su jar; aquí se añade esa misma versión solo al servidor de pruebas (no va al jar del mod).
+tasks.named("runServer") {
+	classpath(project.configurations.detachedConfiguration(project.dependencies.create("com.ibm.icu:icu4j:71.1")))
 }
 
 dependencies {
@@ -97,8 +110,11 @@ publishing {
 		// retrieving dependencies.
 	}
 }
-tasks.named("runClient") {
-	javaLauncher = javaToolchains.launcherFor {
-		languageVersion = JavaLanguageVersion.of(21)
+// Gradle corre con Java 26, pero Cobblemon exige Java 21 para arrancar: el juego (cliente y servidor) se lanza con 21
+["runClient", "runServer"].each { runTask ->
+	tasks.named(runTask) {
+		javaLauncher = javaToolchains.launcherFor {
+			languageVersion = JavaLanguageVersion.of(21)
+		}
 	}
 }
