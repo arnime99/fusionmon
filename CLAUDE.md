@@ -29,7 +29,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - `item/FusionCrystalItem` — clic derecho → `FusionSelection.start` (solo servidor).
 - `fusion/FusionSelection` — flujo: selector de equipo de Cobblemon (`PartySelectCallbacks`). Elegir una fusión → pantalla de separar; elegir un normal → 2.º selector → pantalla de fusión. Guarda la selección pendiente por jugador y **revalida todo** al recibir la respuesta del cliente.
 - `fusion/FusionService` — `fuse` / `unfuse`: objetos al inventario, medias de nivel/IV/EV, naturaleza y habilidad elegidas (habilidad del cuerpo como *forced*), movimientos de ambos a *benched moves*, % de PS, reparto de EXP al separar.
-- `fusion/FusionData` — datos en `pokemon.persistentData["fusionmon"]`: `version` (2), `head`/`body` (NBT completo de los originales), `headSpecies`/`headForm`/`bodySpecies`/`bodyForm`, `startExperience`.
+- `fusion/FusionData` — datos en `pokemon.persistentData["fusionmon"]`: `version` (2), `head`/`body` (NBT completo de los originales), `headSpecies`/`headForm`/`bodySpecies`/`bodyForm`, `bodyAspects`, `startExperience`. Al cambiarlos llama a `updateAspects()`.
+- `fusion/FusionAspects` — `AspectProvider` de Cobblemon: las fusiones llevan los aspects `fusionmon-fusion`, `fusionmon-body-<especie>` y `fusionmon-bodyaspect-<aspect del cuerpo>`. Cobblemon los sincroniza solo al cliente (entidad, equipo, PC) y los resolvers los usan para elegir modelo/textura (también sirven para resource packs).
 - `fusion/FusionCalculator` — fórmulas puras (stats base ponderados 2/3, regla de tipos, nombre partido). Aquí se retoca el algoritmo.
 - `fusion/FusionStatProvider` — envuelve `Cobblemon.statProvider` para los stats de fusiones.
 - `fusion/FusionShowdown` + `mixin/BattleRegistryMixin` — antes de cada combate registra en Showdown la especie de fusión (`fusionmon<cabeza>x<cuerpo>`).
@@ -62,6 +63,7 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - Cobblemon comprueba evoluciones cada segundo (`PlayerPartyStore.onSecondPassed` → `getLockedEvolutions()`); `setSpecies`/`setForm` vacían las pendientes. El envío completo del Pokémon (`SetPartyPokemonPacket`) incluye las evoluciones pendientes.
 - `setForm` (también al evolucionar) llama a `updateMovesOnFormChange`, que borra los benched moves que la nueva especie no aprende; en fusiones se lo impide `PokemonMixin` con `@WrapOperation` (MixinExtras viene con Fabric Loader).
 - `runServer`: hay que forzar Java 21 (como `runClient`) y añadirle ICU4J 71.1 a mano, porque Loom quita la 73.2 del cliente y Showdown se queda sin ella (en un servidor real va dentro del jar de Cobblemon). En modo offline, `op` antes de haber entrado nunca da op a la cuenta de Mojang real con ese nombre: corregir `run/server/ops.json`.
+- Render: cada especie tiene en `assets/cobblemon/bedrock/pokemon/` `models` (huesos), `animations`, `posers` y `resolvers`. El resolver recorre sus variaciones **de la última a la primera** y, por propiedad (modelo, textura, capas), usa la primera cuyos aspects tenga el Pokémon. Los aspects se calculan solo en el servidor (`updateAspects`, que al cargar un Pokémon va después de leer `persistentData`).
 - Escribir JSON desde PowerShell 5.1 con `Set-Content -Encoding utf8` mete BOM; usar las herramientas de edición o UTF-8 sin BOM.
 
 ## Estado
@@ -70,5 +72,6 @@ Hecho y probado: entorno, fase 1 (cristal + selector), fase 2 (fusión de datos,
 
 Pendiente:
 - **Fase 6 — pulido y publicación:** ~~gastar el cristal~~ (hecho: 1 al confirmar fusión o separación, no en creativo), ~~receta~~ (hecho: redstone–lapis–material en diagonal, materiales en la etiqueta `fusionmon:fusion_crystal_materials`), ~~`fabric.mod.json`~~ (hecho: autor `Rupikola`, licencia **MPL-2.0** como Cobblemon, README; faltan los enlaces `contact` cuando exista el repo de GitHub), ~~quitar `ExampleClientMixin`~~ (hecho), ~~publicar el repo en GitHub~~ (https://github.com/arnime99/fusionmon), ~~probar en servidor dedicado~~ (hecho: `runServer`, datos en `run/server`), publicar en CurseForge (y Modrinth).
+- **Fase 7 — visuales (antes de publicar la Beta):** ~~aspects de fusión~~ (hecho: `FusionAspects`), cambio de paleta en el cliente (textura de la cabeza con los colores del cuerpo, generada en memoria; mixin en `VaryingRenderableResolver.getTexture`), mejorar el objeto. Después de publicar: prototipo cabeza+cuerpo (ocultar hueso `head` del cuerpo y pintar el `head` de la cabeza; ~79 % de modelos tienen ese hueso).
+- Ideas para más adelante: propiedad `fusion_body=<especie>` (`CustomPokemonProperty`) para comandos, NPC y apariciones salvajes; entrenadores/líderes con fusiones (mirar Cobbleverse); cristales por niveles de material.
 - No se puede cobrar por el mod (EULA de Mojang + propiedad de Pokémon): se publica gratis.
-- Futuro: modelos visuales de fusiones.

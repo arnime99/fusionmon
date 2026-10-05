@@ -32,5 +32,6 @@
   "command.fusionmon.empty_slot": "No hay ningún Pokémon en el hueco %s.",
   "command.fusionmon.not_fusion": "%s no es una fusión.",
   "command.fusionmon.info": "%s es una fusión → cabeza: %s (nv. %s), cuerpo: %s (nv. %s)",
+  "command.fusionmon.aspects": "Aspects: %s",
   "command.fusionmon.unfused": "Fusión deshecha."
 }

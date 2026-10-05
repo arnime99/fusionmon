@@ -7,11 +7,13 @@ import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.arnau.fusionmon.command.FusionCommands;
+import com.arnau.fusionmon.fusion.FusionAspects;
 import com.arnau.fusionmon.fusion.FusionLevelUp;
 import com.arnau.fusionmon.fusion.FusionStatProvider;
 import com.arnau.fusionmon.item.ModItems;
 import com.arnau.fusionmon.network.ModNetworking;
 import com.cobblemon.mod.common.Cobblemon;
+import com.cobblemon.mod.common.api.pokemon.aspect.AspectProvider;
 
 public class Fusionmon implements ModInitializer {
 	public static final String MOD_ID = "fusionmon";
@@ -30,6 +32,8 @@ public class Fusionmon implements ModInitializer {
 		Cobblemon.INSTANCE.setStatProvider(new FusionStatProvider(Cobblemon.INSTANCE.getStatProvider()));
 		// Al subir de nivel, la fusión también aprende los movimientos del cuerpo
 		FusionLevelUp.register();
+		// Etiquetas (aspects) que dicen al cliente que un Pokémon es una fusión y quién es su cuerpo
+		AspectProvider.Companion.register(new FusionAspects());
 
 		LOGGER.info("Hello Fabric world!");
 	}

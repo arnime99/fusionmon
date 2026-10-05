@@ -32,5 +32,6 @@
   "command.fusionmon.empty_slot": "There is no Pokémon in slot %s.",
   "command.fusionmon.not_fusion": "%s is not a fusion.",
   "command.fusionmon.info": "%s is a fusion → head: %s (lv. %s), body: %s (lv. %s)",
+  "command.fusionmon.aspects": "Aspects: %s",
   "command.fusionmon.unfused": "Fusion undone."
 }

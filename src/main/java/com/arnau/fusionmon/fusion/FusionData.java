@@ -6,7 +6,13 @@ import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.cobblemon.mod.common.pokemon.Species;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
+
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Lee y escribe los datos de fusión dentro del Pokémon visible.
@@ -21,7 +27,12 @@ import net.minecraft.resources.ResourceLocation;
  *      ├─ "body": Pokémon B completo, ídem
  *      ├─ "headSpecies" / "headForm": especie y forma de A (para calcular rápido, sin cargar A entero)
  *      ├─ "bodySpecies" / "bodyForm": especie y forma de B
+ *      ├─ "bodyAspects": aspects de B (shiny, female, alolan...), para pintar la fusión con los colores
+ *      │                 del cuerpo sin tener que cargarlo entero (ver FusionAspects)
  *      └─ "startExperience": experiencia de la fusión al crearse (la ganada después se reparte al separar)
+ *
+ * Cada vez que cambian estos datos se llama a updateAspects(): Cobblemon vuelve a preguntar a FusionAspects
+ * y envía los aspects nuevos al cliente.
  */
 public final class FusionData {
 
@@ -33,6 +44,7 @@ public final class FusionData {
     private static final String HEAD_FORM = "headForm";
     private static final String BODY_SPECIES = "bodySpecies";
     private static final String BODY_FORM = "bodyForm";
+    private static final String BODY_ASPECTS = "bodyAspects";
     private static final String START_EXPERIENCE = "startExperience";
     private static final int CURRENT_VERSION = 2;
 
@@ -54,12 +66,14 @@ public final class FusionData {
         visible.getPersistentData().put(KEY, data);
         // Avisa a Cobblemon de que el Pokémon ha cambiado para que lo guarde
         visible.onChange(null);
+        visible.updateAspects();
     }
 
     /** Sustituye una de las partes guardadas (p. ej. después de evolucionarla). */
     public static void writePart(Pokemon visible, FusionPart part, Pokemon pokemon, RegistryAccess registryAccess) {
         putPart(data(visible), part, pokemon, registryAccess);
         visible.onChange(null);
+        visible.updateAspects();
     }
 
     private static void putPart(CompoundTag data, FusionPart part, Pokemon pokemon, RegistryAccess registryAccess) {
@@ -67,6 +81,14 @@ public final class FusionData {
         data.put(head ? HEAD : BODY, pokemon.saveToNBT(registryAccess, new CompoundTag()));
         data.putString(head ? HEAD_SPECIES : BODY_SPECIES, pokemon.getSpecies().getResourceIdentifier().toString());
         data.putString(head ? HEAD_FORM : BODY_FORM, pokemon.getForm().getName());
+        if (!head) {
+            // Los de la cabeza no hacen falta: el Pokémon visible ya es la cabeza y lleva los suyos
+            ListTag aspects = new ListTag();
+            for (String aspect : pokemon.getAspects()) {
+                aspects.add(StringTag.valueOf(aspect));
+            }
+            data.put(BODY_ASPECTS, aspects);
+        }
     }
 
     public static Pokemon readHead(Pokemon visible, RegistryAccess registryAccess) {
@@ -101,9 +123,19 @@ public final class FusionData {
         return Math.max(0, visible.getExperience() - data.getInt(START_EXPERIENCE));
     }
 
+    /** Aspects del cuerpo (vacío en fusiones creadas antes de guardarlos). */
+    public static Set<String> bodyAspects(Pokemon visible) {
+        Set<String> aspects = new HashSet<>();
+        for (Tag tag : data(visible).getList(BODY_ASPECTS, Tag.TAG_STRING)) {
+            aspects.add(tag.getAsString());
+        }
+        return aspects;
+    }
+
     public static void clear(Pokemon visible) {
         visible.getPersistentData().remove(KEY);
         visible.onChange(null);
+        visible.updateAspects();
     }
 
     private static FormData form(Pokemon visible, String speciesKey, String formKey) {

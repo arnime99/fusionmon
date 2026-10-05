@@ -14,9 +14,11 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.TreeSet;
+
 /**
  * Comandos de prueba (requieren trucos activados):
- * /fusionmon info <hueco>    muestra si el Pokémon del hueco 1-6 es una fusión y qué guarda dentro
+ * /fusionmon info <hueco>    muestra si el Pokémon del hueco 1-6 es una fusión, qué guarda dentro y sus aspects
  * /fusionmon unfuse <hueco>  desfusiona el Pokémon de ese hueco
  */
 public final class FusionCommands {
@@ -45,19 +47,23 @@ public final class FusionCommands {
             return 0;
         }
 
-        if (!FusionData.isFusion(pokemon)) {
+        if (FusionData.isFusion(pokemon)) {
+            RegistryAccess registryAccess = player.registryAccess();
+            Pokemon head = FusionData.readHead(pokemon, registryAccess);
+            Pokemon body = FusionData.readBody(pokemon, registryAccess);
+            context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.info",
+                    pokemon.getDisplayName(false),
+                    head.getDisplayName(false), head.getLevel(),
+                    body.getDisplayName(false), body.getLevel()), false);
+        } else {
             context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.not_fusion",
                     pokemon.getDisplayName(false)), false);
-            return 1;
         }
 
-        RegistryAccess registryAccess = player.registryAccess();
-        Pokemon head = FusionData.readHead(pokemon, registryAccess);
-        Pokemon body = FusionData.readBody(pokemon, registryAccess);
-        context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.info",
-                pokemon.getDisplayName(false),
-                head.getDisplayName(false), head.getLevel(),
-                body.getDisplayName(false), body.getLevel()), false);
+        // Los aspects son lo que usa el cliente para elegir modelo y textura (ver FusionAspects).
+        // También en los que no son fusión, para comprobar que al separar no se quedan los de Fusionmon.
+        String aspects = String.join(", ", new TreeSet<>(pokemon.getAspects()));
+        context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.aspects", aspects), false);
         return 1;
     }
 
