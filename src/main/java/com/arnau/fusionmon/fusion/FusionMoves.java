@@ -27,10 +27,12 @@ final class FusionMoves {
     /**
      * Como hace Cobblemon con un movimiento nuevo: si hay hueco en los 4 movimientos lo aprende y avisa;
      * si no, queda para recordar (benched moves). No hace nada si la fusión ya lo tiene a mano.
+     *
+     * @return si ha cambiado algo (para saber si hay que avisar al cliente)
      */
-    static void learn(Pokemon fusion, MoveTemplate move, ServerPlayer player) {
+    static boolean learn(Pokemon fusion, MoveTemplate move, ServerPlayer player) {
         if (isAvailable(fusion, move)) {
-            return;
+            return false;
         }
 
         if (fusion.getMoveSet().hasSpace()) {
@@ -46,6 +48,7 @@ final class FusionMoves {
         } else {
             bench(fusion, List.of(move));
         }
+        return true;
     }
 
     /** Deja los movimientos como recordables (sin aviso) si la fusión aún no los tiene a mano. */

@@ -35,7 +35,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - `fusion/FusionShowdown` + `mixin/BattleRegistryMixin` — antes de cada combate registra en Showdown la especie de fusión (`fusionmon<cabeza>x<cuerpo>`).
 - `mixin/PokemonMixin` — tipos, nombre visible, `showdownId()` y `getEvolutions()` de las fusiones.
 - `fusion/FusionEvolutions` — evoluciones de una fusión = las de cabeza y cuerpo guardados, envueltas en `FusionLevelUpEvolution` / `FusionItemEvolution` (heredan de las de Cobblemon; id `fusionmon_<parte>_<id>`). Cobblemon las comprueba y muestra solo; al aceptar, `evolvePart` evoluciona la parte guardada (`FusionData.writePart`), y si es la cabeza también la especie visible. `mixin/ServerEvolutionControllerMixin` bloquea cualquier evolución no envuelta en una fusión.
-- `fusion/FusionMoves` — dar movimientos a la fusión después de crearla (sin emitir paquetes; el llamador reenvía el Pokémon).
+- `fusion/FusionMoves` — dar movimientos a la fusión después de crearla (sin emitir paquetes; el llamador sincroniza: Pokémon completo o `MoveSet/BenchedMoves.update()`).
+- `fusion/FusionLevelUp` — `EXPERIENCE_GAINED_EVENT_POST`: Cobblemon solo enseña los movimientos por nivel de la cabeza; aquí se añaden los del cuerpo entre el nivel anterior y el nuevo.
 - `network/*` — payloads de Fabric (servidor↔cliente) de las pantallas de fusionar/separar.
 - `command/FusionCommands` — comandos de prueba.
 - Cliente (`src/client/java/.../client`): `FusionmonClient` (receptores) y `screen/FusionConfirmScreen`, `screen/UnfuseConfirmScreen`.
@@ -63,9 +64,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 
 ## Estado
 
-Hecho y probado: entorno, fase 1 (cristal + selector), fase 2 (fusión de datos, pantalla con vista previa/intercambiar/naturaleza/habilidad y descripciones, movimientos), fase 3 (separar con el cristal), fase 4 (combates en Showdown), fase 5a (evolución de cabeza y cuerpo desde el menú de Cobblemon).
+Hecho y probado: entorno, fase 1 (cristal + selector), fase 2 (fusión de datos, pantalla con vista previa/intercambiar/naturaleza/habilidad y descripciones, movimientos), fase 3 (separar con el cristal), fase 4 (combates en Showdown), fase 5 (evolución de cabeza y cuerpo desde el menú de Cobblemon; movimientos del cuerpo al subir de nivel, también en combate).
 
 Pendiente:
-- **Fase 5b — movimientos al subir de nivel:** Cobblemon solo enseña a la fusión los de la cabeza (su `form`); añadir los del cuerpo entre el nivel anterior y el nuevo (`CobblemonEvents.EXPERIENCE_GAINED_EVENT_POST`, con `FusionMoves.learn`).
 - **Fase 6 — pulido y publicación:** gastar el cristal, receta de crafteo, `fabric.mod.json` (descripción, autor, dependencia), quitar `ExampleClientMixin`, probar en servidor dedicado, publicar en CurseForge.
 - Futuro: modelos visuales de fusiones.

@@ -7,6 +7,7 @@ import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.arnau.fusionmon.command.FusionCommands;
+import com.arnau.fusionmon.fusion.FusionLevelUp;
 import com.arnau.fusionmon.fusion.FusionStatProvider;
 import com.arnau.fusionmon.item.ModItems;
 import com.arnau.fusionmon.network.ModNetworking;
@@ -27,6 +28,8 @@ public class Fusionmon implements ModInitializer {
 		ModNetworking.initialize();
 		// Envuelve la calculadora de stats de Cobblemon para que las fusiones usen sus propios stats base
 		Cobblemon.INSTANCE.setStatProvider(new FusionStatProvider(Cobblemon.INSTANCE.getStatProvider()));
+		// Al subir de nivel, la fusión también aprende los movimientos del cuerpo
+		FusionLevelUp.register();
 
 		LOGGER.info("Hello Fabric world!");
 	}
