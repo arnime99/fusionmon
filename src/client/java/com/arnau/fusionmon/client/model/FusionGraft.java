@@ -49,6 +49,10 @@ import java.util.function.Predicate;
  *     La cabeza pegada se anima con SUS animaciones (reposo, parpadeo, mirar): así se orienta como en su modelo
  *     y las piezas que sus animaciones ocultan (boca abierta/cerrada, párpados...) no salen duplicadas.
  *
+ *  3. Si las dos especies tienen cola, la del cuerpo se cambia por la de la especie de la cabeza, del mismo modo
+ *     que la cabeza: en el sitio de la del cuerpo, orientada como en su modelo y del largo de la que sustituye
+ *     (/fusionvisual tail on|off). Es la primera "pieza" que se cambia; luego vendrán otros adornos.
+ *
  * Si la especie de la cabeza es "todo cabeza" (sin hueso de cabeza, o cuya "cabeza" es casi todo el modelo:
  * Magikarp, Voltorb, Koffing...), se pega su modelo entero, como en Infinite Fusion, apoyado donde acababa la
  * cabeza del cuerpo. Si es el cuerpo el que no tiene cabeza, o son la misma especie, se pinta como siempre
@@ -78,6 +82,8 @@ public final class FusionGraft {
 
     /** Modo de ver las fusiones: cabeza sobre cuerpo (por defecto) o colores (/fusionvisual colors). */
     private static boolean enabled = true;
+    /** Si se cambia la cola del cuerpo por la de la especie de la cabeza (/fusionvisual tail on|off). */
+    private static boolean tails = true;
 
     /** Estado (entidad o menú) → especie de la cabeza; se apunta cuando Cobblemon pide el modelo. */
     private static final Map<PosableState, ResourceLocation> HEADS = new WeakHashMap<>();
@@ -98,23 +104,26 @@ public final class FusionGraft {
     // Lo que hay que deshacer al terminar de pintar el modelo del cuerpo
     private static Graft active;
     private static boolean[] hiddenWereVisible = new boolean[0];
+    private static boolean bodyTailWasVisible;
 
     /**
-     * @param head   la cabeza que se pega (la principal del modelo de la cabeza)
-     * @param whole  si lo que se pega es el modelo entero de la cabeza ("todo cabeza")
-     * @param limbs  extremidades que no se pintan al pegar el modelo entero (ver ModelHeads)
-     * @param bodies las cabezas del cuerpo que se sustituyen (varias en Doduo, Dodrio...)
+     * @param head     la cabeza que se pega (la principal del modelo de la cabeza)
+     * @param whole    si lo que se pega es el modelo entero de la cabeza ("todo cabeza")
+     * @param limbs    extremidades que no se pintan al pegar el modelo entero (ver ModelHeads)
+     * @param bodies   las cabezas del cuerpo que se sustituyen (varias en Doduo, Dodrio...)
+     * @param headTail la cola de la especie de la cabeza que se pega, y bodyTail la del cuerpo que sustituye;
+     *                 null las dos si no se cambia la cola
      */
     private record Graft(FusionBody body, VaryingRenderableResolver headResolver, VaryingRenderableResolver bodyResolver,
                          PosableModel headModel, PosableModel bodyModel, HeadBone head, boolean whole,
-                         Map<ModelPart, String> limbs, List<HeadBone> bodies) {
+                         Map<ModelPart, String> limbs, List<HeadBone> bodies, HeadBone headTail, HeadBone bodyTail) {
     }
 
     /**
-     * Una cabeza de un modelo.
+     * Un hueso de un modelo (una cabeza o una cola) con todo lo que lleva colgando.
      *
-     * @param part el hueso de la cabeza
-     * @param path huesos desde la raíz hasta la cabeza, incluidos los dos
+     * @param part el hueso
+     * @param path huesos desde la raíz hasta él, incluidos los dos
      */
     private record HeadBone(ModelPart part, List<ModelPart> path) {
     }
@@ -128,8 +137,9 @@ public final class FusionGraft {
      * @param limbs al pegar el modelo entero, extremidades para moverse que quedan fuera de su "cabeza" y no se
      *              pintan (los tentáculos de Tentacool, la cola de Haunter): el cuerpo ya pone las suyas.
      *              Hueso → su ruta tal como la da ModelPart.visit ("/tentacool/body/tentacle_left")
+     * @param tail  la cola del modelo (ver findTail), o null
      */
-    private record ModelHeads(List<HeadBone> heads, boolean whole, Map<ModelPart, String> limbs) {
+    private record ModelHeads(List<HeadBone> heads, boolean whole, Map<ModelPart, String> limbs, HeadBone tail) {
     }
 
     private FusionGraft() {
@@ -141,6 +151,10 @@ public final class FusionGraft {
 
     public static void setEnabled(boolean value) {
         enabled = value;
+    }
+
+    public static void setTails(boolean value) {
+        tails = value;
     }
 
     /**
@@ -218,7 +232,8 @@ public final class FusionGraft {
             return null;
         }
         ModelHeads heads = HEAD_BONES.computeIfAbsent(headModel, FusionGraft::findHeads);
-        List<HeadBone> bodies = HEAD_BONES.computeIfAbsent(bodyModel, FusionGraft::findHeads).heads();
+        ModelHeads bodyHeads = HEAD_BONES.computeIfAbsent(bodyModel, FusionGraft::findHeads);
+        List<HeadBone> bodies = bodyHeads.heads();
         // Un cuerpo sin cabeza no tiene dónde pegar nada: modo colores
         if (bodies.isEmpty()) {
             return null;
@@ -229,7 +244,10 @@ public final class FusionGraft {
         if (head == null) {
             return null;
         }
-        return new Graft(body, headResolver, bodyResolver, headModel, bodyModel, head, whole, heads.limbs(), bodies);
+        // La cola solo se cambia si hay una en cada lado: si falta la del cuerpo no hay sitio donde engancharla
+        boolean tail = tails && heads.tail() != null && bodyHeads.tail() != null;
+        return new Graft(body, headResolver, bodyResolver, headModel, bodyModel, head, whole, heads.limbs(), bodies,
+                tail ? heads.tail() : null, tail ? bodyHeads.tail() : null);
     }
 
     /** El modelo entero como si fuera una cabeza (su raíz, con todos sus huesos). */
@@ -275,6 +293,10 @@ public final class FusionGraft {
             hiddenWereVisible[i] = bodyHead.visible;
             bodyHead.visible = false;
         }
+        if (graft.bodyTail != null) {
+            bodyTailWasVisible = graft.bodyTail.part.visible;
+            graft.bodyTail.part.visible = false;
+        }
         active = graft;
     }
 
@@ -287,6 +309,9 @@ public final class FusionGraft {
         active = null;
         for (int i = 0; i < graft.bodies.size(); i++) {
             graft.bodies.get(i).part.visible = hiddenWereVisible[i];
+        }
+        if (graft.bodyTail != null) {
+            graft.bodyTail.part.visible = bodyTailWasVisible;
         }
 
         MultiBufferSource buffers = model.getBufferProvider();
@@ -361,6 +386,55 @@ public final class FusionGraft {
                 poseStack.popPose();
             }
         }
+
+        if (graft.headTail != null) {
+            renderTail(graft, consumer, poseStack, light, overlay, color);
+        }
+    }
+
+    /**
+     * Pinta la cola de la especie de la cabeza en el sitio de la del cuerpo, como las cabezas: mismo pivote, girada
+     * como en su modelo (que ya está animado: se mueve con su animación de reposo) y escalada al largo de la cola que
+     * sustituye, para que una cola de Pikachu en un Charizard no quede diminuta.
+     */
+    private static void renderTail(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light, int overlay,
+                                   int color) {
+        ModelPart tail = graft.headTail.part;
+        float headLength = length(tail);
+        float bodyLength = length(graft.bodyTail.part);
+        // Si alguna no tiene cubos (solo hijos vacíos), no hay con qué comparar: tamaño original
+        float scale = (headLength <= 0 || bodyLength <= 0 ? 1F
+                : Math.clamp(bodyLength / headLength, MIN_SCALE, MAX_SCALE)) * INFLATE;
+        Quaternionf correction = rotationAlong(graft.bodyTail.path).conjugate().mul(rotationAlong(graft.headTail.path));
+
+        PartPose saved = tail.storePose();
+        boolean visible = tail.visible;
+        poseStack.pushPose();
+        try {
+            for (ModelPart part : graft.bodyTail.path) {
+                part.translateAndRotate(poseStack);
+            }
+            poseStack.mulPose(correction);
+            poseStack.scale(scale, scale, scale);
+            tail.setPos(0, 0, 0);
+            tail.setRotation(0, 0, 0);
+            // Al pegar un modelo entero su cola se oculta como extremidad mientras se pinta; aquí se pinta suelta
+            tail.visible = true;
+            tail.render(poseStack, consumer, light, overlay, color);
+        } finally {
+            tail.loadPose(saved);
+            tail.visible = visible;
+            poseStack.popPose();
+        }
+    }
+
+    /** Largo de una cola: el lado más largo de su caja (con sus hijos), en bloques; 0 si no tiene cubos. */
+    private static float length(ModelPart part) {
+        float[] box = localBox(part, Map.of());
+        if (box[0] > box[3]) {
+            return 0;
+        }
+        return Math.max(box[3] - box[0], Math.max(box[4] - box[1], box[5] - box[2]));
     }
 
     /**
@@ -484,7 +558,7 @@ public final class FusionGraft {
      */
     private static ModelHeads findHeads(PosableModel model) {
         if (!((Object) model.getRootPart() instanceof ModelPart root)) {
-            return new ModelHeads(List.of(), true, Map.of());
+            return new ModelHeads(List.of(), true, Map.of(), null);
         }
 
         boolean whole = false;
@@ -505,7 +579,7 @@ public final class FusionGraft {
                 ModelPart part = primary.get(primary.size() - 1);
                 whole = volume(part) >= WHOLE_MODEL_SHARE * volume(root);
                 if (cubes(part) == cubes(root)) {
-                    return new ModelHeads(List.of(), true, Map.of());
+                    return new ModelHeads(List.of(), true, Map.of(), null);
                 }
                 if (whole) {
                     limbs = new LinkedHashMap<>();
@@ -529,7 +603,36 @@ public final class FusionGraft {
             }
             heads.add(new HeadBone(part, path));
         }
-        return new ModelHeads(heads, whole || heads.isEmpty(), limbs);
+        return new ModelHeads(heads, whole || heads.isEmpty(), limbs, findTail(root, heads));
+    }
+
+    /**
+     * La cola de un modelo: el primer hueso cuyo nombre empieza por "tail" ("tail", "tail1", "tail_base"...), con
+     * toda su cadena ("tail2", "tail3"... cuelgan de él). En Cobblemon 1.8.1 la tienen 692 de 1142 modelos, casi
+     * siempre colgando del tronco. No cuentan las de dentro de una cabeza (pelos: ya van con la cabeza).
+     * Si hay varias colas separadas (Ninetales, Vulpix...) devuelve null: no sabríamos cuál poner en qué sitio.
+     */
+    private static HeadBone findTail(ModelPart root, List<HeadBone> heads) {
+        List<List<ModelPart>> paths = new ArrayList<>();
+        List<ModelPart> current = new ArrayList<>();
+        current.add(root);
+        collectPaths(root, name -> name.startsWith("tail"), current, paths);
+
+        HeadBone tail = null;
+        // collectPaths recorre de arriba abajo: el principio de cada cola sale antes que los huesos de su cadena
+        for (List<ModelPart> path : paths) {
+            if (tail != null && path.contains(tail.part)) {
+                continue;
+            }
+            if (path.size() < 2 || insideAnother(path, heads)) {
+                continue;
+            }
+            if (tail != null) {
+                return null;
+            }
+            tail = new HeadBone(path.get(path.size() - 1), path);
+        }
+        return tail;
     }
 
     /**

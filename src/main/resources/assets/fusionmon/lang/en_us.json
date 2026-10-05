@@ -37,5 +37,7 @@
   "command.fusionmon.aspects": "Aspects: %s",
   "command.fusionmon.visual.colors": "Fusions: head with the body's colours",
   "command.fusionmon.visual.graft": "Fusions: head on body (experimental)",
+  "command.fusionmon.visual.tail.on": "Fusions: with the head species' tail",
+  "command.fusionmon.visual.tail.off": "Fusions: with the body's tail",
   "command.fusionmon.unfused": "Fusion undone."
 }

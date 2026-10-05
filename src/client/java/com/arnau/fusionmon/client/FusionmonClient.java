@@ -28,7 +28,8 @@ public class FusionmonClient implements ClientModInitializer {
 				(payload, context) -> context.client().setScreen(new UnfuseConfirmScreen(payload)));
 
 		// /fusionvisual colors|graft: elige cómo se ven las fusiones en este cliente (graft = prototipo cabeza
-		// sobre cuerpo, ver FusionGraft). Es un comando de cliente: no pasa por el servidor ni necesita trucos.
+		// sobre cuerpo, ver FusionGraft); /fusionvisual tail on|off: si se cambia también la cola.
+		// Es un comando de cliente: no pasa por el servidor ni necesita trucos.
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
 				dispatcher.register(ClientCommandManager.literal("fusionvisual")
 						.then(ClientCommandManager.literal("colors").executes(context -> {
@@ -40,7 +41,18 @@ public class FusionmonClient implements ClientModInitializer {
 							FusionGraft.setEnabled(true);
 							context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.graft"));
 							return 1;
-						}))));
+						}))
+						.then(ClientCommandManager.literal("tail")
+								.then(ClientCommandManager.literal("on").executes(context -> {
+									FusionGraft.setTails(true);
+									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.tail.on"));
+									return 1;
+								}))
+								.then(ClientCommandManager.literal("off").executes(context -> {
+									FusionGraft.setTails(false);
+									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.tail.off"));
+									return 1;
+								})))));
 
 		// Las texturas de fusión se generan a partir de las de Cobblemon: si se recargan los recursos
 		// (F3+T, otro resource pack), hay que volver a generarlas
