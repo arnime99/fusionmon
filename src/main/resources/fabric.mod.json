@@ -3,15 +3,11 @@
 	"id": "fusionmon",
 	"version": "${version}",
 	"name": "Fusionmon",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "Fuse your Cobblemon Pokémon, Infinite Fusion style: combined names, types and stats, battles, evolution and splitting back apart with the Fusion Crystal.",
 	"authors": [
-		"Me!"
+		"Rupikola"
 	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
-	"license": "CC0-1.0",
+	"license": "MPL-2.0",
 	"icon": "assets/fusionmon/icon.png",
 	"environment": "*",
 	"entrypoints": {
@@ -23,11 +19,7 @@
 		]
 	},
 	"mixins": [
-		"fusionmon.mixins.json",
-		{
-			"config": "fusionmon.client.mixins.json",
-			"environment": "client"
-		}
+		"fusionmon.mixins.json"
 	],
 	"depends": {
 		"fabricloader": ">=0.19.5",
