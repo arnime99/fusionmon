@@ -47,8 +47,9 @@ import java.util.function.Predicate;
  *     La cabeza pegada se anima con SUS animaciones (reposo, parpadeo, mirar): así se orienta como en su modelo
  *     y las piezas que sus animaciones ocultan (boca abierta/cerrada, párpados...) no salen duplicadas.
  *
- * Si a alguno de los dos no se le encuentra la cabeza, o son la misma especie, se pinta como siempre
- * (modelo de la cabeza con los colores del cuerpo).
+ * Si la especie de la cabeza es "todo cabeza" (sin hueso de cabeza: Magikarp, Voltorb...), se pega su modelo
+ * entero, como en Infinite Fusion. Si es el cuerpo el que no tiene cabeza, o son la misma especie, se pinta como
+ * siempre (modelo de la cabeza con los colores del cuerpo).
  *
  * Todo ocurre en el hilo de render, de uno en uno: por eso basta con campos estáticos.
  */
@@ -168,10 +169,21 @@ public final class FusionGraft {
         }
         List<HeadBone> heads = HEAD_BONES.computeIfAbsent(headModel, FusionGraft::findHeads);
         List<HeadBone> bodies = HEAD_BONES.computeIfAbsent(bodyModel, FusionGraft::findHeads);
-        if (heads.isEmpty() || bodies.isEmpty()) {
+        // Un cuerpo sin cabeza no tiene dónde pegar nada: modo colores
+        if (bodies.isEmpty()) {
             return null;
         }
-        return new Graft(body, headResolver, bodyResolver, headModel, bodyModel, heads.get(0), bodies);
+        // Una cabeza "todo cabeza" (Magikarp, Voltorb, Glalie...): se pega el modelo entero, como en Infinite Fusion
+        HeadBone head = heads.isEmpty() ? wholeModel(headModel) : heads.get(0);
+        if (head == null) {
+            return null;
+        }
+        return new Graft(body, headResolver, bodyResolver, headModel, bodyModel, head, bodies);
+    }
+
+    /** El modelo entero como si fuera una cabeza (su raíz, con todos sus huesos). */
+    private static HeadBone wholeModel(PosableModel model) {
+        return (Object) model.getRootPart() instanceof ModelPart root ? new HeadBone(root, List.of(root)) : null;
     }
 
     /**
@@ -406,33 +418,69 @@ public final class FusionGraft {
         return rotation;
     }
 
-    /** Tamaño medio (ancho, alto, fondo) de un hueso con todos sus hijos, en bloques. */
+    /**
+     * Tamaño del "cráneo" de una cabeza, en bloques: la media de ancho, alto y fondo de su cubo más grande.
+     * Así no cuentan orejas, cuernos, pelos o bigotes (que inflarían la caja de la cabeza entera): los planos de
+     * grosor cero no tienen volumen y las piezas finas tienen poco. Si no hay ningún cubo con volumen, se usa la
+     * caja de todos los cubos.
+     */
     private static float size(ModelPart part) {
         Float cached = SIZES.get(part);
         if (cached != null) {
             return cached;
         }
-        float[] min = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE};
-        float[] max = {-Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
+        float[] all = emptyBox();
+        float[] biggest = new float[1];
+        float[] skull = {0, 0, 0};
         part.visit(new PoseStack(), (pose, path, index, cube) -> {
+            float[] box = emptyBox();
             // Las medidas de los cubos van en píxeles de modelo (1/16 de bloque)
             for (int corner = 0; corner < 8; corner++) {
                 Vector3f point = pose.pose().transformPosition(new Vector3f(
                         ((corner & 1) == 0 ? cube.minX : cube.maxX) / 16F,
                         ((corner & 2) == 0 ? cube.minY : cube.maxY) / 16F,
                         ((corner & 4) == 0 ? cube.minZ : cube.maxZ) / 16F));
-                min[0] = Math.min(min[0], point.x);
-                min[1] = Math.min(min[1], point.y);
-                min[2] = Math.min(min[2], point.z);
-                max[0] = Math.max(max[0], point.x);
-                max[1] = Math.max(max[1], point.y);
-                max[2] = Math.max(max[2], point.z);
+                include(box, point);
+                include(all, point);
+            }
+            float width = box[3] - box[0];
+            float height = box[4] - box[1];
+            float depth = box[5] - box[2];
+            float volume = width * height * depth;
+            if (volume > biggest[0]) {
+                biggest[0] = volume;
+                skull[0] = width;
+                skull[1] = height;
+                skull[2] = depth;
             }
         });
-        // Sin cubos (hueso vacío): tamaño neutro, la cabeza se queda a escala 1
-        float size = min[0] > max[0] ? 1F : ((max[0] - min[0]) + (max[1] - min[1]) + (max[2] - min[2])) / 3F;
+
+        float size;
+        if (biggest[0] > 0) {
+            size = (skull[0] + skull[1] + skull[2]) / 3F;
+        } else if (all[0] <= all[3]) {
+            size = ((all[3] - all[0]) + (all[4] - all[1]) + (all[5] - all[2])) / 3F;
+        } else {
+            // Sin cubos (hueso vacío): tamaño neutro, la cabeza se queda a escala 1
+            size = 1F;
+        }
         size = Math.max(size, 0.01F);
         SIZES.put(part, size);
         return size;
+    }
+
+    /** Caja vacía {minX, minY, minZ, maxX, maxY, maxZ}, lista para ir ampliándola con include. */
+    private static float[] emptyBox() {
+        return new float[]{Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE,
+                -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
+    }
+
+    private static void include(float[] box, Vector3f point) {
+        box[0] = Math.min(box[0], point.x);
+        box[1] = Math.min(box[1], point.y);
+        box[2] = Math.min(box[2], point.z);
+        box[3] = Math.max(box[3], point.x);
+        box[4] = Math.max(box[4], point.y);
+        box[5] = Math.max(box[5], point.z);
     }
 }
