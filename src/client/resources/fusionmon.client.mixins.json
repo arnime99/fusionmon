@@ -1,0 +1,15 @@
+{
+	"required": true,
+	"package": "com.arnau.fusionmon.client.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"VaryingModelRepositoryMixin",
+		"VaryingRenderableResolverMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

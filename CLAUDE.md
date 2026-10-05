@@ -40,11 +40,14 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - `fusion/FusionLevelUp` — `EXPERIENCE_GAINED_EVENT_POST`: Cobblemon solo enseña los movimientos por nivel de la cabeza; aquí se añaden los del cuerpo entre el nivel anterior y el nuevo.
 - `network/*` — payloads de Fabric (servidor↔cliente) de las pantallas de fusionar/separar.
 - `command/FusionCommands` — comandos de prueba.
-- Cliente (`src/client/java/.../client`): `FusionmonClient` (receptores) y `screen/FusionConfirmScreen`, `screen/UnfuseConfirmScreen`.
+- Cliente (`src/client/java/.../client`): `FusionmonClient` (receptores, recarga de recursos) y `screen/FusionConfirmScreen`, `screen/UnfuseConfirmScreen`.
+- `client/texture/FusionPalette` — cambio de paleta puro (píxeles ARGB, sin clases de Minecraft; se puede probar fuera del juego): colores con color de cabeza y cuerpo ordenados por claridad y ponderados por nº de píxeles; cada color de la cabeza toma el del cuerpo en la misma posición. Grises/negros/blancos no se tocan. Aquí se retoca el aspecto.
+- `client/texture/FusionTextures` — genera la textura de la fusión (cabeza recoloreada con la textura del cuerpo, que se pide al resolver del cuerpo con sus aspects) como `DynamicTexture` (`fusionmon:fusion_textures/N`), con caché; se vacía al recargar recursos.
+- `client/mixin/VaryingRenderableResolverMixin` (`getTexture`: mundo, combate, hombro, menús) y `VaryingModelRepositoryMixin` (`getTextureNoSubstitute`, que rechazaría texturas que no existen como archivo). Config `fusionmon.client.mixins.json` (solo cliente).
 
 ## Decisiones de diseño acordadas
 
-- Pokémon visible = la cabeza (mantiene su modelo y shiny). Sin cambios visuales por ahora.
+- Pokémon visible = la cabeza (mantiene su modelo), pintada con los colores del cuerpo. Se ve shiny si lo es cualquiera de las dos partes (usa los colores shiny del cuerpo).
 - Fórmulas de Infinite Fusion. Nivel, IVs y EVs = media. Naturaleza y habilidad: el jugador elige entre las dos.
 - Mantiene los movimientos de la cabeza; el resto, recordables (benched moves).
 - No hay fusión de fusiones. El mismo cristal fusiona y separa.
@@ -72,6 +75,6 @@ Hecho y probado: entorno, fase 1 (cristal + selector), fase 2 (fusión de datos,
 
 Pendiente:
 - **Fase 6 — pulido y publicación:** ~~gastar el cristal~~ (hecho: 1 al confirmar fusión o separación, no en creativo), ~~receta~~ (hecho: redstone–lapis–material en diagonal, materiales en la etiqueta `fusionmon:fusion_crystal_materials`), ~~`fabric.mod.json`~~ (hecho: autor `Rupikola`, licencia **MPL-2.0** como Cobblemon, README; faltan los enlaces `contact` cuando exista el repo de GitHub), ~~quitar `ExampleClientMixin`~~ (hecho), ~~publicar el repo en GitHub~~ (https://github.com/arnime99/fusionmon), ~~probar en servidor dedicado~~ (hecho: `runServer`, datos en `run/server`), publicar en CurseForge (y Modrinth).
-- **Fase 7 — visuales (antes de publicar la Beta):** ~~aspects de fusión~~ (hecho: `FusionAspects`), cambio de paleta en el cliente (textura de la cabeza con los colores del cuerpo, generada en memoria; mixin en `VaryingRenderableResolver.getTexture`), mejorar el objeto. Después de publicar: prototipo cabeza+cuerpo (ocultar hueso `head` del cuerpo y pintar el `head` de la cabeza; ~79 % de modelos tienen ese hueso).
+- **Fase 7 — visuales (antes de publicar la Beta):** ~~aspects de fusión~~ (hecho: `FusionAspects`), ~~cambio de paleta en el cliente~~ (hecho: `FusionPalette`/`FusionTextures`), mejorar el objeto. Después de publicar: prototipo cabeza+cuerpo (ocultar hueso `head` del cuerpo y pintar el `head` de la cabeza; ~79 % de modelos tienen ese hueso).
 - Ideas para más adelante: propiedad `fusion_body=<especie>` (`CustomPokemonProperty`) para comandos, NPC y apariciones salvajes; entrenadores/líderes con fusiones (mirar Cobbleverse); cristales por niveles de material.
 - No se puede cobrar por el mod (EULA de Mojang + propiedad de Pokémon): se publica gratis.

@@ -24,7 +24,11 @@
 		]
 	},
 	"mixins": [
-		"fusionmon.mixins.json"
+		"fusionmon.mixins.json",
+		{
+			"config": "fusionmon.client.mixins.json",
+			"environment": "client"
+		}
 	],
 	"depends": {
 		"fabricloader": ">=0.19.5",
