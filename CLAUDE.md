@@ -67,5 +67,5 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 Hecho y probado: entorno, fase 1 (cristal + selector), fase 2 (fusión de datos, pantalla con vista previa/intercambiar/naturaleza/habilidad y descripciones, movimientos), fase 3 (separar con el cristal), fase 4 (combates en Showdown), fase 5 (evolución de cabeza y cuerpo desde el menú de Cobblemon; movimientos del cuerpo al subir de nivel, también en combate).
 
 Pendiente:
-- **Fase 6 — pulido y publicación:** gastar el cristal, receta de crafteo, `fabric.mod.json` (descripción, autor, dependencia), quitar `ExampleClientMixin`, probar en servidor dedicado, publicar en CurseForge.
+- **Fase 6 — pulido y publicación:** ~~gastar el cristal~~ (hecho: 1 al confirmar fusión o separación, no en creativo), ~~receta~~ (hecho: redstone–lapis–material en diagonal, materiales en la etiqueta `fusionmon:fusion_crystal_materials`), `fabric.mod.json` (descripción, autor, dependencia), quitar `ExampleClientMixin`, probar en servidor dedicado, publicar en CurseForge.
 - Futuro: modelos visuales de fusiones.
