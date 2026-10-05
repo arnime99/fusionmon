@@ -4,10 +4,15 @@ import com.arnau.fusionmon.fusion.FusionCalculator;
 import com.arnau.fusionmon.fusion.FusionData;
 import com.arnau.fusionmon.fusion.FusionEvolutions;
 import com.arnau.fusionmon.fusion.FusionShowdown;
+import com.cobblemon.mod.common.api.moves.MoveTemplate;
 import com.cobblemon.mod.common.api.pokemon.evolution.Evolution;
+import com.cobblemon.mod.common.api.pokemon.moves.Learnset;
+import com.cobblemon.mod.common.api.pokemon.moves.LearnsetQuery;
 import com.cobblemon.mod.common.api.types.ElementalType;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,6 +25,7 @@ import java.util.List;
 /**
  * Inyecta código al principio de varios métodos de Pokemon de Cobblemon: si el Pokémon es una fusión,
  * devolvemos nuestro valor y el método original no llega a ejecutarse. Si no lo es, no tocamos nada.
+ * (@WrapOperation, de MixinExtras, que viene con Fabric Loader: envuelve una sola llamada dentro de un método.)
  *
  * remap = false: Pokemon es una clase de Cobblemon, no de Minecraft, así que sus nombres no se traducen.
  */
@@ -84,6 +90,21 @@ public abstract class PokemonMixin {
         if (evolutions != null) {
             cir.setReturnValue(evolutions);
         }
+    }
+
+    /**
+     * Al cambiar de forma (setForm, también al evolucionar), Cobblemon borra los movimientos recordables que la
+     * nueva especie no puede aprender. En una fusión eso se llevaba los del cuerpo al evolucionar la cabeza:
+     * aquí, si es una fusión, todo recordable cuenta como aprendible y no se borra ninguno.
+     */
+    @WrapOperation(method = "updateMovesOnFormChange", at = @At(value = "INVOKE",
+            target = "Lcom/cobblemon/mod/common/api/pokemon/moves/LearnsetQuery;canLearn(Lcom/cobblemon/mod/common/api/moves/MoveTemplate;Lcom/cobblemon/mod/common/api/pokemon/moves/Learnset;)Z"))
+    private boolean fusionmon$keepBenchedMoves(LearnsetQuery query, MoveTemplate move, Learnset learnset,
+                                               Operation<Boolean> original) {
+        if (FusionData.isFusion((Pokemon) (Object) this)) {
+            return true;
+        }
+        return original.call(query, move, learnset);
     }
 
     private List<ElementalType> fusionmon$fusedTypes() {
