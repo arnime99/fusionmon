@@ -33,7 +33,9 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - `fusion/FusionCalculator` — fórmulas puras (stats base ponderados 2/3, regla de tipos, nombre partido). Aquí se retoca el algoritmo.
 - `fusion/FusionStatProvider` — envuelve `Cobblemon.statProvider` para los stats de fusiones.
 - `fusion/FusionShowdown` + `mixin/BattleRegistryMixin` — antes de cada combate registra en Showdown la especie de fusión (`fusionmon<cabeza>x<cuerpo>`).
-- `mixin/PokemonMixin` — tipos, nombre visible y `showdownId()` de las fusiones.
+- `mixin/PokemonMixin` — tipos, nombre visible, `showdownId()` y `getEvolutions()` de las fusiones.
+- `fusion/FusionEvolutions` — evoluciones de una fusión = las de cabeza y cuerpo guardados, envueltas en `FusionLevelUpEvolution` / `FusionItemEvolution` (heredan de las de Cobblemon; id `fusionmon_<parte>_<id>`). Cobblemon las comprueba y muestra solo; al aceptar, `evolvePart` evoluciona la parte guardada (`FusionData.writePart`), y si es la cabeza también la especie visible. `mixin/ServerEvolutionControllerMixin` bloquea cualquier evolución no envuelta en una fusión.
+- `fusion/FusionMoves` — dar movimientos a la fusión después de crearla (sin emitir paquetes; el llamador reenvía el Pokémon).
 - `network/*` — payloads de Fabric (servidor↔cliente) de las pantallas de fusionar/separar.
 - `command/FusionCommands` — comandos de prueba.
 - Cliente (`src/client/java/.../client`): `FusionmonClient` (receptores) y `screen/FusionConfirmScreen`, `screen/UnfuseConfirmScreen`.
@@ -45,7 +47,7 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - Mantiene los movimientos de la cabeza; el resto, recordables (benched moves).
 - No hay fusión de fusiones. El mismo cristal fusiona y separa.
 - Al separar: cada parte recibe toda la EXP ganada como fusión y el % de PS de la fusión.
-- Evolución: cuando ambas partes pueden evolucionar, una y en el siguiente nivel la otra (ver fase 5).
+- Evolución: el menú de Cobblemon ofrece las evoluciones de ambas partes; al elegir una, la otra sigue pendiente. Sin animación en el mundo (sonido + mensaje con el nombre de fusión). Evoluciones por intercambio y clic en bloque no se ofrecen a fusiones.
 - Objetivo: multijugador/servidores y publicar en CurseForge.
 
 ## Trampas de Cobblemon ya encontradas
@@ -55,13 +57,15 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - `persistentData` solo llega al cliente en sincronizaciones completas del Pokémon; no hay paquete de actualización propio.
 - El `receiveEntry` de Showdown (detrás de `ShowdownService.sendRegistryEntry`) está roto en el JS; usar `sendRegistryData(map, "species")`.
 - Mixins sobre clases de Cobblemon: `@Mixin(value = ..., remap = false)`.
+- Los paquetes de actualización de Cobblemon (`BenchedMovesUpdatePacket`, `MoveSet`...) llevan la colección **viva** y se serializan más tarde en el hilo de red: modificarla varias veces seguidas → `ConcurrentModificationException` y desconexión. Agrupar cambios con `doWithoutEmitting` y sincronizar una vez al final.
+- Cobblemon comprueba evoluciones cada segundo (`PlayerPartyStore.onSecondPassed` → `getLockedEvolutions()`); `setSpecies`/`setForm` vacían las pendientes. El envío completo del Pokémon (`SetPartyPokemonPacket`) incluye las evoluciones pendientes.
 - Escribir JSON desde PowerShell 5.1 con `Set-Content -Encoding utf8` mete BOM; usar las herramientas de edición o UTF-8 sin BOM.
 
 ## Estado
 
-Hecho y probado: entorno, fase 1 (cristal + selector), fase 2 (fusión de datos, pantalla con vista previa/intercambiar/naturaleza/habilidad y descripciones, movimientos), fase 3 (separar con el cristal), fase 4 (combates en Showdown).
+Hecho y probado: entorno, fase 1 (cristal + selector), fase 2 (fusión de datos, pantalla con vista previa/intercambiar/naturaleza/habilidad y descripciones, movimientos), fase 3 (separar con el cristal), fase 4 (combates en Showdown), fase 5a (evolución de cabeza y cuerpo desde el menú de Cobblemon).
 
 Pendiente:
-- **Fase 5 — evolución y niveles.** Problema conocido: Cobblemon ofrecerá la evolución de la especie visible (la cabeza) por su cuenta, y aceptarla desincroniza `FusionData`. Diseño del usuario: detectar si la cabeza o el cuerpo guardados pueden evolucionar → icono de evolución → menú de evolución de Cobblemon (con modelos) que ofrezca las evoluciones disponibles de ambas partes; al elegir una, evoluciona esa parte guardada, se recalcula la fusión y la otra sigue pendiente. Además: al subir de nivel, aprender/añadir los movimientos nuevos del cuerpo (evento de subida de nivel de Cobblemon).
+- **Fase 5b — movimientos al subir de nivel:** Cobblemon solo enseña a la fusión los de la cabeza (su `form`); añadir los del cuerpo entre el nivel anterior y el nuevo (`CobblemonEvents.EXPERIENCE_GAINED_EVENT_POST`, con `FusionMoves.learn`).
 - **Fase 6 — pulido y publicación:** gastar el cristal, receta de crafteo, `fabric.mod.json` (descripción, autor, dependencia), quitar `ExampleClientMixin`, probar en servidor dedicado, publicar en CurseForge.
 - Futuro: modelos visuales de fusiones.

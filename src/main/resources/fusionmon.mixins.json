@@ -4,7 +4,8 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"BattleRegistryMixin",
-		"PokemonMixin"
+		"PokemonMixin",
+		"ServerEvolutionControllerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

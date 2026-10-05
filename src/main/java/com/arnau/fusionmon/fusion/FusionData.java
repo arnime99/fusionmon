@@ -17,8 +17,8 @@ import net.minecraft.resources.ResourceLocation;
  * persistentData
  *  └─ "fusionmon"
  *      ├─ "version": 2
- *      ├─ "head": Pokémon A completo, tal como era antes de fusionar
- *      ├─ "body": Pokémon B completo, tal como era antes de fusionar
+ *      ├─ "head": Pokémon A completo, tal como era antes de fusionar (salvo si ha evolucionado como fusión)
+ *      ├─ "body": Pokémon B completo, ídem
  *      ├─ "headSpecies" / "headForm": especie y forma de A (para calcular rápido, sin cargar A entero)
  *      ├─ "bodySpecies" / "bodyForm": especie y forma de B
  *      └─ "startExperience": experiencia de la fusión al crearse (la ganada después se reparte al separar)
@@ -48,16 +48,25 @@ public final class FusionData {
     public static void write(Pokemon visible, Pokemon head, Pokemon body, RegistryAccess registryAccess) {
         CompoundTag data = new CompoundTag();
         data.putInt(VERSION, CURRENT_VERSION);
-        data.put(HEAD, head.saveToNBT(registryAccess, new CompoundTag()));
-        data.put(BODY, body.saveToNBT(registryAccess, new CompoundTag()));
-        data.putString(HEAD_SPECIES, head.getSpecies().getResourceIdentifier().toString());
-        data.putString(HEAD_FORM, head.getForm().getName());
-        data.putString(BODY_SPECIES, body.getSpecies().getResourceIdentifier().toString());
-        data.putString(BODY_FORM, body.getForm().getName());
+        putPart(data, FusionPart.HEAD, head, registryAccess);
+        putPart(data, FusionPart.BODY, body, registryAccess);
 
         visible.getPersistentData().put(KEY, data);
         // Avisa a Cobblemon de que el Pokémon ha cambiado para que lo guarde
         visible.onChange(null);
+    }
+
+    /** Sustituye una de las partes guardadas (p. ej. después de evolucionarla). */
+    public static void writePart(Pokemon visible, FusionPart part, Pokemon pokemon, RegistryAccess registryAccess) {
+        putPart(data(visible), part, pokemon, registryAccess);
+        visible.onChange(null);
+    }
+
+    private static void putPart(CompoundTag data, FusionPart part, Pokemon pokemon, RegistryAccess registryAccess) {
+        boolean head = part == FusionPart.HEAD;
+        data.put(head ? HEAD : BODY, pokemon.saveToNBT(registryAccess, new CompoundTag()));
+        data.putString(head ? HEAD_SPECIES : BODY_SPECIES, pokemon.getSpecies().getResourceIdentifier().toString());
+        data.putString(head ? HEAD_FORM : BODY_FORM, pokemon.getForm().getName());
     }
 
     public static Pokemon readHead(Pokemon visible, RegistryAccess registryAccess) {

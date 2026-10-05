@@ -2,7 +2,9 @@ package com.arnau.fusionmon.mixin;
 
 import com.arnau.fusionmon.fusion.FusionCalculator;
 import com.arnau.fusionmon.fusion.FusionData;
+import com.arnau.fusionmon.fusion.FusionEvolutions;
 import com.arnau.fusionmon.fusion.FusionShowdown;
+import com.cobblemon.mod.common.api.pokemon.evolution.Evolution;
 import com.cobblemon.mod.common.api.types.ElementalType;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
@@ -72,6 +74,15 @@ public abstract class PokemonMixin {
         FormData body = FusionData.bodyForm(self);
         if (head != null && body != null) {
             cir.setReturnValue(FusionShowdown.speciesId(head, body));
+        }
+    }
+
+    /** Las evoluciones de una fusión son las de su cabeza y su cuerpo guardados (ver FusionEvolutions). */
+    @Inject(method = "getEvolutions", at = @At("HEAD"), cancellable = true)
+    private void fusionmon$getEvolutions(CallbackInfoReturnable<Iterable<Evolution>> cir) {
+        List<Evolution> evolutions = FusionEvolutions.evolutionsOf((Pokemon) (Object) this);
+        if (evolutions != null) {
+            cir.setReturnValue(evolutions);
         }
     }
 

@@ -55,6 +55,9 @@ public final class FusionService {
         // Las copias se guardan antes de tocar nada: son los originales para desfusionar
         RegistryAccess registryAccess = player.registryAccess();
         FusionData.write(head, head, body, registryAccess);
+        // Si la cabeza tenía una evolución pendiente, era de su especie: a partir de ahora las evoluciones
+        // de la fusión son las de sus dos partes (FusionEvolutions) y Cobblemon las volverá a comprobar
+        head.getEvolutionProxy().server().clear();
 
         // Lo que la cabeza podía recordar antes de cambiar de nivel: la media puede bajarle el nivel
         Set<MoveTemplate> headMovesBefore = head.getAllAccessibleMoves();
@@ -118,7 +121,7 @@ public final class FusionService {
     }
 
     /** Pone los PS actuales al mismo porcentaje; un Pokémon con algo de vida nunca baja a 0 por redondeo. */
-    private static void applyHealthRatio(Pokemon pokemon, double ratio) {
+    static void applyHealthRatio(Pokemon pokemon, double ratio) {
         int maxHealth = pokemon.getMaxHealth();
         pokemon.setCurrentHealth(ratio > 0 ? Math.max(1, (int) Math.round(ratio * maxHealth)) : 0);
     }
@@ -142,6 +145,14 @@ public final class FusionService {
         PartyPosition position = new PartyPosition(slotOf(party, pokemon));
         CobblemonNetwork.INSTANCE.sendPacket(player,
                 new SetPartyPokemonPacket(party.getUuid(), position, registryAccess -> pokemon));
+    }
+
+    /** Lo mismo, para un Pokémon que esté en el equipo del jugador (si no está ahí, no hace nada). */
+    static void resendToClient(ServerPlayer player, Pokemon pokemon) {
+        PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
+        if (party.get(pokemon.getUuid()) != null) {
+            resendToClient(player, party, pokemon);
+        }
     }
 
     /**
