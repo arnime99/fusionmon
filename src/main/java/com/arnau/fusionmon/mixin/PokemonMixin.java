@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.mixin;
 
+import com.arnau.fusionmon.fusion.FusionBodyForm;
 import com.arnau.fusionmon.fusion.FusionCalculator;
 import com.arnau.fusionmon.fusion.FusionData;
 import com.arnau.fusionmon.fusion.FusionEvolutions;
@@ -8,6 +9,7 @@ import com.cobblemon.mod.common.api.moves.MoveTemplate;
 import com.cobblemon.mod.common.api.pokemon.evolution.Evolution;
 import com.cobblemon.mod.common.api.pokemon.moves.Learnset;
 import com.cobblemon.mod.common.api.pokemon.moves.LearnsetQuery;
+import com.cobblemon.mod.common.api.riding.RidingProperties;
 import com.cobblemon.mod.common.api.types.ElementalType;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
@@ -105,6 +107,18 @@ public abstract class PokemonMixin {
             return true;
         }
         return original.call(query, move, learnset);
+    }
+
+    /**
+     * Montura y estadísticas de montura: las del cuerpo (ver FusionBodyForm.riding). Cobblemon las lee de la forma
+     * (form.riding), que en una fusión es la de la cabeza.
+     */
+    @WrapOperation(method = {"getRiding", "getBaseRideStat", "getMaxRideBoost", "getRideStat"},
+            at = @At(value = "INVOKE",
+                    target = "Lcom/cobblemon/mod/common/pokemon/FormData;getRiding()Lcom/cobblemon/mod/common/api/riding/RidingProperties;"))
+    private RidingProperties fusionmon$bodyRiding(FormData form, Operation<RidingProperties> original) {
+        // Sin comprobar isFusion antes: en el cliente puede no tener persistentData, pero sí los aspects
+        return FusionBodyForm.riding(FusionBodyForm.of((Pokemon) (Object) this), original.call(form));
     }
 
     private List<ElementalType> fusionmon$fusedTypes() {

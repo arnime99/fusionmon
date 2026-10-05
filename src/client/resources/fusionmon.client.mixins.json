@@ -3,7 +3,10 @@
 	"package": "com.arnau.fusionmon.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"ClientboundSeatAssignmentPacketHandlerMixin",
+		"PokemonRendererMixin",
 		"PosableModelMixin",
+		"StatWidgetMixin",
 		"VaryingModelRepositoryMixin",
 		"VaryingRenderableResolverMixin"
 	],
