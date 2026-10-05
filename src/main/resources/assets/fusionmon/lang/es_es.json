@@ -27,6 +27,7 @@
   "message.fusionmon.not_enough_pokemon": "Necesitas 2 Pokémon sin fusionar, o una fusión para separarla.",
   "message.fusionmon.unfused": "¡%s se ha separado!",
   "message.fusionmon.selection_changed": "Tu equipo ha cambiado durante la selección. Vuelve a intentarlo.",
+  "message.fusionmon.no_crystal": "Necesitas un Cristal de Fusión en el inventario.",
   "message.fusionmon.fused": "¡%s (cabeza) y %s (cuerpo) se han fusionado!",
   "command.fusionmon.empty_slot": "No hay ningún Pokémon en el hueco %s.",
   "command.fusionmon.not_fusion": "%s no es una fusión.",

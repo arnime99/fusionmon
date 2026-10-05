@@ -27,6 +27,7 @@
   "message.fusionmon.not_enough_pokemon": "You need 2 unfused Pokémon, or a fusion to split.",
   "message.fusionmon.unfused": "%s has been split!",
   "message.fusionmon.selection_changed": "Your party changed during selection. Try again.",
+  "message.fusionmon.no_crystal": "You need a Fusion Crystal in your inventory.",
   "message.fusionmon.fused": "%s (head) and %s (body) have fused!",
   "command.fusionmon.empty_slot": "There is no Pokémon in slot %s.",
   "command.fusionmon.not_fusion": "%s is not a fusion.",

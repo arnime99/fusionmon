@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.fusion;
 
+import com.arnau.fusionmon.item.FusionCrystalItem;
 import com.arnau.fusionmon.network.FusionChoicePayload;
 import com.arnau.fusionmon.network.FusionPreview;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
@@ -144,6 +145,12 @@ public final class FusionSelection {
             return;
         }
 
+        // El cristal se gasta al confirmar, no al abrir el selector (se puede cancelar)
+        if (!FusionCrystalItem.consumeOne(player)) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.no_crystal"));
+            return;
+        }
+
         Pokemon head = choice.swapped() ? second : first;
         Pokemon body = choice.swapped() ? first : second;
         Pokemon natureSource = choice.natureFromB() ? second : first;
@@ -187,6 +194,11 @@ public final class FusionSelection {
         Pokemon fused = findFusion(player, fusedId);
         if (fused == null) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
+            return;
+        }
+
+        if (!FusionCrystalItem.consumeOne(player)) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.no_crystal"));
             return;
         }
 
