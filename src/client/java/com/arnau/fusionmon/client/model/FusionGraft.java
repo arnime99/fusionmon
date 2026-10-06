@@ -327,7 +327,10 @@ public final class FusionGraft {
             return null;
         }
         PosableModel headModel = headResolver.getPoser(state);
-        PosableModel bodyModel = bodyResolver.getPoser(state);
+        // El modelo del cuerpo, con los aspects del CUERPO (como su textura): con los de la fusión (los de la cabeza)
+        // una Pyroar hembra con cabeza de macho salía con el modelo de macho y la textura de hembra, que tiene otro
+        // reparto: partes del cuerpo caían en zonas vacías de la textura y se veían transparentes
+        PosableModel bodyModel = bodyResolver.getPoser(body.state());
         if (headModel == bodyModel) {
             return null;
         }
@@ -1093,7 +1096,7 @@ public final class FusionGraft {
             if (primary != null) {
                 // Quitamos el localizador: la cabeza es su padre
                 primary.remove(primary.size() - 1);
-                primary = withFace(root, primary);
+                primary = withSkull(withFace(root, primary));
                 // En los modelos sin hueso "head" ese padre casi siempre es casi todo el cuerpo ("torso", "body").
                 // Como cabeza: se pega el modelo entero (bien apoyado, ver groundOffset), sin sus extremidades
                 // para moverse (las manos de Haunter sí se quedan).
@@ -1434,6 +1437,31 @@ public final class FusionGraft {
             common = common.subList(0, shared);
         }
         return new ArrayList<>(common);
+    }
+
+    /**
+     * Si la cabeza es un grupo sin cubos propios (solo junta las piezas de la cara), la sube hasta el primer hueso del
+     * camino que sí tenga cubos: el "cráneo" sobre el que va pegada la cara. Darmanitan: "torso_rotation" lleva ojos,
+     * boca y cejas, pero su cabeza es "upper_torso"; sin esto, como cabeza se pegaba solo la cara (sin nada detrás) y
+     * como cuerpo seguía entero, con la cabeza nueva metida dentro. Simulado en todos los modelos (Cobblemon y
+     * AllTheMons): solo cambian los Darmanitan; si ningún hueso por encima tiene cubos (Wigglytuff), se queda igual.
+     */
+    private static List<ModelPart> withSkull(List<ModelPart> head) {
+        if (hasOwnCubes(head.get(head.size() - 1))) {
+            return head;
+        }
+        // La raíz no: ocultarla ocultaría el Pokémon entero
+        for (int i = head.size() - 2; i >= 1; i--) {
+            if (hasOwnCubes(head.get(i))) {
+                return new ArrayList<>(head.subList(0, i + 1));
+            }
+        }
+        return head;
+    }
+
+    private static boolean hasOwnCubes(ModelPart part) {
+        float[] box = ownBox(part);
+        return box[0] <= box[3];
     }
 
     private static boolean isFace(String name) {
