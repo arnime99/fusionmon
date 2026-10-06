@@ -87,6 +87,16 @@ public final class FusionGraft {
      * lo que mide su tronco. La de Groudon es tan larga como todo su cuerpo: en proporción salía gigante.
      */
     private static final float TAIL_GROWTH = 1.5F;
+
+    /** Clase de adorno de las colas puestas en un cuerpo sin cola. */
+    private static final String TAIL = "tail";
+    /**
+     * Clase de adorno de las cabezas que no son la principal, con su cuello (Dodrio: dos de sus tres cabezas). Un
+     * nombre de hueso no puede dar esta clase ("+"): así nunca quita nada del cuerpo.
+     */
+    private static final String EXTRA_HEAD = "+head";
+    /** Trozos de nombre que hacen adorno a un hueso aunque lleve anatomía en el nombre: la cría de Kangaskhan ("torso_kid"). */
+    private static final Set<String> ALWAYS_DECORATION = Set.of("kid", "baby", "child");
     /**
      * La cabeza nueva se pinta un poco más grande: donde sus caras coinciden con las del cuello del cuerpo
      * (mismo plano), así gana siempre la cabeza en vez de parpadear las dos (z-fighting).
@@ -331,13 +341,17 @@ public final class FusionGraft {
         if (!whole) {
             if (decorations) {
                 for (Decoration decoration : heads.decorations()) {
+                    // Si el cuerpo ya tiene varias cabezas, cada una lleva la principal: más serían demasiadas
+                    if (decoration.category.equals(EXTRA_HEAD) && bodies.size() > 1) {
+                        continue;
+                    }
                     (decoration.neck ? neckDecorations : trunkDecorations).add(decoration);
                 }
             }
             // Si el cuerpo no tiene cola no hay una donde engancharla: se coloca sobre su tronco como un adorno
             if (tails && heads.tail() != null && bodyHeads.tail() == null) {
                 for (HeadBone root : heads.tail().roots()) {
-                    trunkDecorations.add(new Decoration("tail", root, false));
+                    trunkDecorations.add(new Decoration(TAIL, root, false));
                 }
             }
             // Sin tronco en algún lado no hay dónde colocarlos
@@ -365,7 +379,8 @@ public final class FusionGraft {
             replaced.add(decoration.category);
         }
         for (Decoration decoration : bodyHeads.decorations()) {
-            if (replaced.contains(decoration.category)) {
+            // Las cabezas extra del cuerpo no se ocultan: llevan pegada la cabeza principal de la otra especie
+            if (!decoration.category.equals(EXTRA_HEAD) && replaced.contains(decoration.category)) {
                 hidden.add(decoration.bone.part);
             }
         }
@@ -582,29 +597,25 @@ public final class FusionGraft {
      * Venusaur y el caparazón de Lapras acababan sobre la cabeza). Por eso todo se mide con los ejes de la columna
      * de cada Pokémon (ver spineFrame): a lo ancho, a lo largo de la columna (hacia la cabeza) y espalda-barriga.
      * Así el caparazón va en la espalda de los dos: encima de un cuadrúpedo, detrás de un bípedo. El giro de cada
-     * adorno se pasa igual, de los ejes de un Pokémon a los del otro.
+     * adorno se pasa igual, de los ejes de un Pokémon a los del otro; menos las colas (las de un cuerpo sin cola),
+     * que conservan su giro respecto al Pokémon entero, como cuando sustituyen a otra: hacia atrás en los dos (con
+     * el giro de los ejes, la de un cuadrúpedo acababa apuntando al suelo en un bípedo).
      * Se escala por lo que mide un tronco respecto al otro. Las animaciones de su especie (ya aplicadas, ver
      * animateHead) los mueven y deciden cuáles se ven (alas abiertas o cerradas...): uno oculto no se pinta.
      */
     private static void renderDecorations(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light,
                                           int overlay, int color) {
-        Matrix4f headTrunk = matrixAlong(graft.headTrunk.path);
-        Matrix4f bodyTrunk = matrixAlong(graft.bodyTrunk.path);
-        Matrix3f headFrame = spineFrame(headTrunk, matrixAlong(graft.headSpine.path));
-        Matrix3f bodyFrame = spineFrame(bodyTrunk, matrixAlong(graft.bodySpine.path));
-        float[] headBox = frameBox(ownBox(graft.headTrunk.part), headTrunk, headFrame);
-        float[] bodyBox = frameBox(ownBox(graft.bodyTrunk.part), bodyTrunk, bodyFrame);
-        if (headBox[0] > headBox[3] || bodyBox[0] > bodyBox[3]) {
+        TrunkSpace head = trunkSpace(graft.headTrunk, graft.headSpine);
+        TrunkSpace body = trunkSpace(graft.bodyTrunk, graft.bodySpine);
+        if (head.box[0] > head.box[3] || body.box[0] > body.box[3]) {
             return;
         }
-        float trunkScale = trunkScale(graft);
-        float[] bodyOwn = ownBox(graft.bodyTrunk.part);
-        float bodyTrunkLength = Math.max(bodyOwn[3] - bodyOwn[0], Math.max(bodyOwn[4] - bodyOwn[1], bodyOwn[5] - bodyOwn[2]));
-        Vector3f headOrigin = headTrunk.getTranslation(new Vector3f());
-        Vector3f bodyOrigin = bodyTrunk.getTranslation(new Vector3f());
+        float trunkScale = trunkScale(head, body);
+        float bodyTrunkLength = longestSide(body.box);
         // De los ejes del Pokémon de la cabeza a los del cuerpo (un giro a lo ancho: el eje X es el mismo)
         Quaternionf frameChange = new Quaternionf().setFromNormalized(
-                new Matrix3f(bodyFrame).mul(new Matrix3f(headFrame).transpose()));
+                new Matrix3f(body.frame).mul(new Matrix3f(head.frame).transpose()));
+        Matrix3f toHeadFrame = new Matrix3f(head.frame).transpose();
 
         for (Decoration decoration : graft.trunkDecorations) {
             ModelPart part = decoration.bone.part;
@@ -613,14 +624,17 @@ public final class FusionGraft {
             }
             // Pivote del adorno respecto al pivote de su tronco, en los ejes de la columna de su modelo
             Matrix4f matrix = matrixAlong(decoration.bone.path);
-            Vector3f pivot = new Matrix3f(headFrame).transpose()
-                    .transform(matrix.getTranslation(new Vector3f()).sub(headOrigin));
+            Vector3f pivot = toHeadFrame.transform(matrix.getTranslation(new Vector3f()).sub(head.origin));
             // El mismo sitio proporcional en el tronco del cuerpo, y de vuelta a los ejes del modelo
-            Vector3f placed = bodyFrame.transform(new Vector3f(remap(pivot.x, headBox, bodyBox, 0),
-                    remap(pivot.y, headBox, bodyBox, 1), remap(pivot.z, headBox, bodyBox, 2))).add(bodyOrigin);
-            Quaternionf rotation = new Quaternionf(frameChange).mul(matrix.getNormalizedRotation(new Quaternionf()));
+            Vector3f placed = new Matrix3f(body.frame).transform(new Vector3f(remap(pivot.x, head.box, body.box, 0),
+                    remap(pivot.y, head.box, body.box, 1), remap(pivot.z, head.box, body.box, 2))).add(body.origin);
+            boolean tail = decoration.category.equals(TAIL);
+            Quaternionf rotation = matrix.getNormalizedRotation(new Quaternionf());
+            if (!tail) {
+                rotation = new Quaternionf(frameChange).mul(rotation);
+            }
             float scale = trunkScale;
-            if (decoration.category.equals("tail")) {
+            if (tail) {
                 // Una cola puesta en un cuerpo que no tenía: como mucho tan larga como su tronco
                 float tailLength = length(part);
                 if (tailLength > 0) {
@@ -680,40 +694,66 @@ public final class FusionGraft {
     }
 
     /**
-     * Caja de los cubos propios de un tronco (ownBox, en su marco) vista desde su pivote con los ejes de su columna:
-     * se llevan sus 8 esquinas al modelo con la transformación del tronco y de ahí a esos ejes.
+     * El cuerpo de un Pokémon (sin cabeza, cuello ni extremidades) para colocar y escalar lo que se pega en él.
+     *
+     * @param origin pivote del tronco, en el modelo
+     * @param frame  ejes de su columna (ver spineFrame)
+     * @param box    caja de todo el cuerpo vista desde origin con esos ejes
      */
-    private static float[] frameBox(float[] local, Matrix4f trunk, Matrix3f frame) {
-        if (local[0] > local[3]) {
-            return local;
-        }
-        Vector3f origin = trunk.getTranslation(new Vector3f());
-        Matrix3f toFrame = new Matrix3f(frame).transpose();
-        float[] box = emptyBox();
-        for (int corner = 0; corner < 8; corner++) {
-            include(box, toFrame.transform(trunk.transformPosition(new Vector3f(
-                    local[(corner & 1) == 0 ? 0 : 3],
-                    local[(corner & 2) == 0 ? 1 : 4],
-                    local[(corner & 4) == 0 ? 2 : 5])).sub(origin)));
-        }
-        return box;
+    private record TrunkSpace(Vector3f origin, Matrix3f frame, float[] box) {
     }
 
     /**
-     * Escala de lo que se pega del cuerpo de la especie de la cabeza (cola, adornos): lo que mide el tronco del
-     * cuerpo respecto al suyo. Así cada pieza conserva su tamaño en proporción: la cola pequeña de Lapras sigue
-     * siendo pequeña en otro Pokémon (al igualar largos de cola salía enorme). 0 si falta algún tronco.
+     * El espacio del tronco de un modelo, con su postura de ahora. La caja es la de los cubos propios de TODOS los
+     * huesos del camino hasta el cuello ("torso" + "torso2" + "chest"..., o los segmentos de Gyarados), no solo los
+     * del tronco: el tronco es el hueso más grande, pero en Vaporeon es el trozo de atrás y en Dragonite la parte de
+     * abajo, y el caparazón de Lapras acababa en el culo o colgando como una cola.
      */
+    private static TrunkSpace trunkSpace(HeadBone trunk, HeadBone spineEnd) {
+        Matrix4f trunkMatrix = matrixAlong(trunk.path);
+        Vector3f origin = trunkMatrix.getTranslation(new Vector3f());
+        Matrix3f frame = spineFrame(trunkMatrix, matrixAlong(spineEnd.path));
+        Matrix3f toFrame = new Matrix3f(frame).transpose();
+        float[] box = emptyBox();
+        List<ModelPart> bones = parentPath(spineEnd);
+        for (int i = 0; i < bones.size(); i++) {
+            float[] own = ownBox(bones.get(i));
+            if (own[0] > own[3]) {
+                continue;
+            }
+            Matrix4f bone = matrixAlong(bones.subList(0, i + 1));
+            for (int corner = 0; corner < 8; corner++) {
+                include(box, toFrame.transform(bone.transformPosition(new Vector3f(
+                        own[(corner & 1) == 0 ? 0 : 3],
+                        own[(corner & 2) == 0 ? 1 : 4],
+                        own[(corner & 4) == 0 ? 2 : 5])).sub(origin)));
+            }
+        }
+        return new TrunkSpace(origin, frame, box);
+    }
+
+    /**
+     * Escala de lo que se pega del cuerpo de la especie de la cabeza (cola, adornos): lo que mide el cuerpo del otro
+     * respecto al suyo. Así cada pieza conserva su tamaño en proporción: la cola pequeña de Lapras sigue siendo
+     * pequeña en otro Pokémon (al igualar largos de cola salía enorme). 0 si falta alguna caja.
+     */
+    private static float trunkScale(TrunkSpace head, TrunkSpace body) {
+        if (head.box[0] > head.box[3] || body.box[0] > body.box[3]) {
+            return 0;
+        }
+        return Math.clamp(meanSide(body.box) / Math.max(meanSide(head.box), 0.01F), MIN_PIECE_SCALE, MAX_PIECE_SCALE);
+    }
+
+    /** trunkScale de una fusión, o 0 si a algún modelo le falta tronco o cuello con los que medirlo. */
     private static float trunkScale(Graft graft) {
-        if (graft.headTrunk == null || graft.bodyTrunk == null) {
+        if (graft.headTrunk == null || graft.bodyTrunk == null || graft.headSpine == null || graft.bodySpine == null) {
             return 0;
         }
-        float[] head = ownBox(graft.headTrunk.part);
-        float[] body = ownBox(graft.bodyTrunk.part);
-        if (head[0] > head[3] || body[0] > body[3]) {
-            return 0;
-        }
-        return Math.clamp(meanSide(body) / Math.max(meanSide(head), 0.01F), MIN_PIECE_SCALE, MAX_PIECE_SCALE);
+        return trunkScale(trunkSpace(graft.headTrunk, graft.headSpine), trunkSpace(graft.bodyTrunk, graft.bodySpine));
+    }
+
+    private static float longestSide(float[] box) {
+        return Math.max(box[3] - box[0], Math.max(box[4] - box[1], box[5] - box[2]));
     }
 
     /** Transformación acumulada a lo largo de un camino de huesos (de la raíz al último), en bloques. */
@@ -1029,7 +1069,8 @@ public final class FusionGraft {
      * Adornos: los huesos que cuelgan de algún hueso del camino de la raíz a la cabeza principal (el tronco y lo que
      * lo rodea), con algún cubo, y cuyo nombre no es anatomía común (ver category): "bulb_master" y "vines" en
      * Ivysaur, "mushrooms" en Paras, "wing_left"/"wing_right" en Butterfree, "shell" en Lapras...
-     * Ni las cabezas ni la cola cuentan, ni nada que las lleve dentro.
+     * Ni la cabeza principal ni la cola cuentan, ni nada que las lleve dentro. Lo que lleve dentro otra cabeza (los
+     * cuellos con las otras dos cabezas de Dodrio) es un adorno de clase EXTRA_HEAD, se llame como se llame.
      * Con esta regla, 526 de los 904 modelos con cabeza de Cobblemon 1.8.1 tienen algún adorno.
      * Los que cuelgan de un hueso del cuello ("neck", "neck2", "lowernecc"...: el pelo de Eevee) se marcan como del cuello. Por
      * el nombre y no por estar más arriba que el tronco: las alas de Charizard cuelgan de "torso2", encima del
@@ -1045,8 +1086,11 @@ public final class FusionGraft {
                 if (!((Object) child.getValue() instanceof ModelPart part) || headPath.contains(part)) {
                     continue;
                 }
-                String category = category(child.getKey());
-                if (category == null || cubes(part) == 0 || holdsHeadOrTail(part, heads, tail)) {
+                if (cubes(part) == 0 || holds(part, heads.get(0).part) || holdsTail(part, tail)) {
+                    continue;
+                }
+                String category = holdsHead(part, heads) ? EXTRA_HEAD : category(child.getKey());
+                if (category == null) {
                     continue;
                 }
                 List<ModelPart> path = new ArrayList<>(headPath.subList(0, i + 1));
@@ -1080,6 +1124,11 @@ public final class FusionGraft {
         // internos. El cubo girado del torso de Groudon se pegaba como si fuera un adorno
         if (name.startsWith("%") || name.startsWith("internal_locator")) {
             return null;
+        }
+        for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
+            if (ALWAYS_DECORATION.contains(token.replaceAll("\\d+$", ""))) {
+                return "kid";
+            }
         }
         String category = null;
         for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
@@ -1127,8 +1176,8 @@ public final class FusionGraft {
         return false;
     }
 
-    /** ¿Lleva dentro (o es) alguna de las cabezas o piezas de la cola? */
-    private static boolean holdsHeadOrTail(ModelPart part, List<HeadBone> heads, Tail tail) {
+    /** ¿Lleva dentro (o es) alguna pieza de la cola? */
+    private static boolean holdsTail(ModelPart part, Tail tail) {
         if (tail != null) {
             for (HeadBone root : tail.roots) {
                 if (holds(part, root.part)) {
@@ -1136,6 +1185,11 @@ public final class FusionGraft {
                 }
             }
         }
+        return false;
+    }
+
+    /** ¿Lleva dentro (o es) alguna de las cabezas? */
+    private static boolean holdsHead(ModelPart part, List<HeadBone> heads) {
         for (HeadBone head : heads) {
             if (holds(part, head.part)) {
                 return true;
