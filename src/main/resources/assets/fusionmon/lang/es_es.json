@@ -39,5 +39,7 @@
   "command.fusionmon.visual.graft": "Fusiones: cabeza sobre el cuerpo (experimental)",
   "command.fusionmon.visual.tail.on": "Fusiones: con la cola de la especie de la cabeza",
   "command.fusionmon.visual.tail.off": "Fusiones: con la cola del cuerpo",
+  "command.fusionmon.visual.decor.on": "Fusiones: con los adornos de la especie de la cabeza",
+  "command.fusionmon.visual.decor.off": "Fusiones: sin adornos de la especie de la cabeza",
   "command.fusionmon.unfused": "Fusión deshecha."
 }

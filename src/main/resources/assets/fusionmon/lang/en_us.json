@@ -39,5 +39,7 @@
   "command.fusionmon.visual.graft": "Fusions: head on body (experimental)",
   "command.fusionmon.visual.tail.on": "Fusions: with the head species' tail",
   "command.fusionmon.visual.tail.off": "Fusions: with the body's tail",
+  "command.fusionmon.visual.decor.on": "Fusions: with the head species' decorations",
+  "command.fusionmon.visual.decor.off": "Fusions: without the head species' decorations",
   "command.fusionmon.unfused": "Fusion undone."
 }

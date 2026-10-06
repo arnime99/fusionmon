@@ -28,7 +28,8 @@ public class FusionmonClient implements ClientModInitializer {
 				(payload, context) -> context.client().setScreen(new UnfuseConfirmScreen(payload)));
 
 		// /fusionvisual colors|graft: elige cómo se ven las fusiones en este cliente (graft = prototipo cabeza
-		// sobre cuerpo, ver FusionGraft); /fusionvisual tail on|off: si se cambia también la cola.
+		// sobre cuerpo, ver FusionGraft); /fusionvisual tail|decor on|off: si se cambia también la cola / se pegan
+		// los adornos de la especie de la cabeza.
 		// Es un comando de cliente: no pasa por el servidor ni necesita trucos.
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
 				dispatcher.register(ClientCommandManager.literal("fusionvisual")
@@ -51,6 +52,17 @@ public class FusionmonClient implements ClientModInitializer {
 								.then(ClientCommandManager.literal("off").executes(context -> {
 									FusionGraft.setTails(false);
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.tail.off"));
+									return 1;
+								})))
+						.then(ClientCommandManager.literal("decor")
+								.then(ClientCommandManager.literal("on").executes(context -> {
+									FusionGraft.setDecorations(true);
+									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.decor.on"));
+									return 1;
+								}))
+								.then(ClientCommandManager.literal("off").executes(context -> {
+									FusionGraft.setDecorations(false);
+									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.decor.off"));
 									return 1;
 								})))));
 

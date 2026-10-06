@@ -19,11 +19,15 @@ import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FastColor;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,6 +35,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -51,7 +56,12 @@ import java.util.function.Predicate;
  *
  *  3. Si las dos especies tienen cola, la del cuerpo se cambia por la de la especie de la cabeza, del mismo modo
  *     que la cabeza: en el sitio de la del cuerpo, orientada como en su modelo y del largo de la que sustituye
- *     (/fusionvisual tail on|off). Es la primera "pieza" que se cambia; luego vendrán otros adornos.
+ *     (/fusionvisual tail on|off). Si el cuerpo no tiene cola, se coloca sobre su tronco como un adorno.
+ *  4. Los adornos del tronco de la especie de la cabeza (la planta de Ivysaur, las setas de Paras, alas, concha...)
+ *     se pegan en el tronco del cuerpo, en el mismo sitio proporcional; los del cuello (el pelo de Eevee) van con la
+ *     cabeza pegada. Si el cuerpo tiene adornos de la misma clase (alas por alas), se quitan los suyos
+ *     (/fusionvisual decor on|off). Ver findDecorations.
+ *  Todo lo pegado se pinta también con las capas de su especie (la llama de Charmander, ojos que brillan...).
  *
  * Si la especie de la cabeza es "todo cabeza" (sin hueso de cabeza, o cuya "cabeza" es casi todo el modelo:
  * Magikarp, Voltorb, Koffing...), se pega su modelo entero, como en Infinite Fusion, apoyado donde acababa la
@@ -66,6 +76,17 @@ public final class FusionGraft {
     /** Para que una cabeza enorme o diminuta no quede absurda del todo. */
     private static final float MIN_SCALE = 0.4F;
     private static final float MAX_SCALE = 2.5F;
+    /**
+     * Límites de escala de colas y adornos, más amplios que los de las cabezas: entre Pokémon tan dispares como
+     * Groudon y Deoxys hace falta bajar a 0,35 (con el mínimo de las cabezas la cola de Groudon salía enorme).
+     */
+    private static final float MIN_PIECE_SCALE = 0.1F;
+    private static final float MAX_PIECE_SCALE = 4F;
+    /**
+     * Topes de largo de una cola pegada: como mucho TAIL_GROWTH veces la que sustituye o, si el cuerpo no tiene cola,
+     * lo que mide su tronco. La de Groudon es tan larga como todo su cuerpo: en proporción salía gigante.
+     */
+    private static final float TAIL_GROWTH = 1.5F;
     /**
      * La cabeza nueva se pinta un poco más grande: donde sus caras coinciden con las del cuello del cuerpo
      * (mismo plano), así gana siempre la cabeza en vez de parpadear las dos (z-fighting).
@@ -84,6 +105,25 @@ public final class FusionGraft {
     private static boolean enabled = true;
     /** Si se cambia la cola del cuerpo por la de la especie de la cabeza (/fusionvisual tail on|off). */
     private static boolean tails = true;
+    /** Si se pegan al cuerpo los adornos de la especie de la cabeza (/fusionvisual decor on|off). */
+    private static boolean decorations = true;
+
+    /**
+     * Trozos de nombre de hueso que no dicen qué pieza es, solo dónde está o en qué estado ("wing_left",
+     * "closed_wings", "leaf_front2"...): no cuentan para saber la clase de un adorno.
+     */
+    private static final Set<String> NAME_MODIFIERS = Set.of("left", "right", "l", "r", "front", "back", "top",
+            "bottom", "upper", "lower", "base", "master", "mid", "middle", "inner", "outer", "open", "closed", "side",
+            "flying", "big", "small");
+    /**
+     * Anatomía común a casi todos los modelos (contado en los 1142 de Cobblemon 1.8.1): un hueso con alguno de estos
+     * trozos en el nombre no es un adorno. "ftorso"/"fleg"/"fbody" son grupos de brazos y patas delanteras;
+     * "bone", "cube", "group"... son nombres sin significado que deja Blockbench.
+     */
+    private static final Set<String> ANATOMY = Set.of("head", "neck", "torso", "ftorso", "body", "fbody", "chest",
+            "belly", "abdomen", "thorax", "waist", "hip", "pelvis", "butt", "spine", "segment", "leg", "fleg", "thigh",
+            "knee", "foot", "feet", "toe", "arm", "shoulder", "hand", "finger", "tail", "tentacle", "jaw", "mouth",
+            "eye", "face", "tongue", "locator", "bone", "cube", "group", "root", "main", "seat", "shadow");
 
     /** Estado (entidad o menú) → especie de la cabeza; se apunta cuando Cobblemon pide el modelo. */
     private static final Map<PosableState, ResourceLocation> HEADS = new WeakHashMap<>();
@@ -95,6 +135,8 @@ public final class FusionGraft {
     private static final Map<ModelPart, Float> SIZES = new WeakHashMap<>();
     /** Caja de cada hueso con sus hijos, en su propio marco (para apoyar los modelos enteros, ver groundOffset). */
     private static final Map<ModelPart, float[]> BOXES = new WeakHashMap<>();
+    /** Caja de los cubos propios de cada tronco (sin sus hijos), en su propio marco: para colocar los adornos. */
+    private static final Map<ModelPart, float[]> OWN_BOXES = new WeakHashMap<>();
     /** Modelos de cabeza que ya han fallado al pintarse (para avisar en el log una sola vez). */
     private static final Set<PosableModel> WARNED = Collections.newSetFromMap(new WeakHashMap<>());
 
@@ -103,20 +145,49 @@ public final class FusionGraft {
 
     // Lo que hay que deshacer al terminar de pintar el modelo del cuerpo
     private static Graft active;
-    private static boolean[] hiddenWereVisible = new boolean[0];
-    private static boolean bodyTailWasVisible;
+    private static final List<Boolean> hiddenWereVisible = new ArrayList<>();
 
     /**
-     * @param head     la cabeza que se pega (la principal del modelo de la cabeza)
-     * @param whole    si lo que se pega es el modelo entero de la cabeza ("todo cabeza")
-     * @param limbs    extremidades que no se pintan al pegar el modelo entero (ver ModelHeads)
-     * @param bodies   las cabezas del cuerpo que se sustituyen (varias en Doduo, Dodrio...)
-     * @param headTail la cola de la especie de la cabeza que se pega, y bodyTail la del cuerpo que sustituye;
-     *                 null las dos si no se cambia la cola
+     * @param head        la cabeza que se pega (la principal del modelo de la cabeza)
+     * @param whole       si lo que se pega es el modelo entero de la cabeza ("todo cabeza")
+     * @param limbs       extremidades que no se pintan al pegar el modelo entero (ver ModelHeads)
+     * @param bodies      las cabezas del cuerpo que se sustituyen (varias en Doduo, Dodrio...)
+     * @param headTail    la cola de la especie de la cabeza que sustituye a la del cuerpo, bodyTail; null las dos
+     *                    si no se cambia la cola
+     * @param trunkDecorations adornos de la especie de la cabeza que se colocan sobre el tronco del cuerpo
+     *                    (incluida su cola si el cuerpo no tiene), del tronco headTrunk de su modelo al bodyTrunk
+     * @param neckDecorations adornos del cuello de la especie de la cabeza, que van con la cabeza pegada
+     * @param headSpine   principio del cuello (o la cabeza) de cada modelo, para sus ejes (ver spineFrame);
+     *                    bodySpine el del cuerpo
+     * @param hidden      huesos del cuerpo que no se pintan: sus cabezas, su cola y sus adornos sustituidos
      */
     private record Graft(FusionBody body, VaryingRenderableResolver headResolver, VaryingRenderableResolver bodyResolver,
                          PosableModel headModel, PosableModel bodyModel, HeadBone head, boolean whole,
-                         Map<ModelPart, String> limbs, List<HeadBone> bodies, HeadBone headTail, HeadBone bodyTail) {
+                         Map<ModelPart, String> limbs, List<HeadBone> bodies, Tail headTail, Tail bodyTail,
+                         List<Decoration> trunkDecorations, List<Decoration> neckDecorations, HeadBone headTrunk,
+                         HeadBone bodyTrunk, HeadBone headSpine, HeadBone bodySpine, List<ModelPart> hidden) {
+    }
+
+    /**
+     * Un adorno de un modelo: un hueso que cuelga del camino hasta la cabeza y no es anatomía común (ver
+     * findDecorations).
+     *
+     * @param category su clase, sacada del nombre ("wing" para "wing_left" y "closed_wings"): un adorno del cuerpo
+     *                 se quita si la especie de la cabeza trae uno de la misma clase
+     * @param neck     si cuelga del cuello (entre el tronco y la cabeza: el pelo del cuello de Eevee). Esos van con
+     *                 la cabeza pegada; los demás se colocan sobre el tronco
+     */
+    private record Decoration(String category, HeadBone bone, boolean neck) {
+    }
+
+    /**
+     * La cola de un modelo: una o varias piezas "tail*" que cuelgan del mismo hueso (Luxray: la cadena "tail_1"... y
+     * cinco mechones "tail_fluff_*"; Ninetales: sus nueve colas).
+     *
+     * @param roots  las piezas, cada una con lo que lleva colgando
+     * @param anchor la principal (la que tiene más cubos): marca dónde va y cuánto mide la cola
+     */
+    private record Tail(List<HeadBone> roots, HeadBone anchor) {
     }
 
     /**
@@ -138,8 +209,12 @@ public final class FusionGraft {
      *              pintan (los tentáculos de Tentacool, la cola de Haunter): el cuerpo ya pone las suyas.
      *              Hueso → su ruta tal como la da ModelPart.visit ("/tentacool/body/tentacle_left")
      * @param tail  la cola del modelo (ver findTail), o null
+     * @param trunk el tronco del modelo (ver findTrunk), o null
+     * @param decorations los adornos que cuelgan del camino hasta la cabeza principal (ver findDecorations)
+     * @param spineEnd el principio del cuello (ver findSpineEnd), o null
      */
-    private record ModelHeads(List<HeadBone> heads, boolean whole, Map<ModelPart, String> limbs, HeadBone tail) {
+    private record ModelHeads(List<HeadBone> heads, boolean whole, Map<ModelPart, String> limbs, Tail tail,
+                              HeadBone trunk, List<Decoration> decorations, HeadBone spineEnd) {
     }
 
     private FusionGraft() {
@@ -155,6 +230,10 @@ public final class FusionGraft {
 
     public static void setTails(boolean value) {
         tails = value;
+    }
+
+    public static void setDecorations(boolean value) {
+        decorations = value;
     }
 
     /**
@@ -244,10 +323,55 @@ public final class FusionGraft {
         if (head == null) {
             return null;
         }
-        // La cola solo se cambia si hay una en cada lado: si falta la del cuerpo no hay sitio donde engancharla
-        boolean tail = tails && heads.tail() != null && bodyHeads.tail() != null;
+        // Cola por cola si hay en los dos lados
+        boolean swapTail = tails && heads.tail() != null && bodyHeads.tail() != null;
+        List<Decoration> trunkDecorations = new ArrayList<>();
+        List<Decoration> neckDecorations = new ArrayList<>();
+        // Al pegar un modelo entero, sus adornos ya van con él
+        if (!whole) {
+            if (decorations) {
+                for (Decoration decoration : heads.decorations()) {
+                    (decoration.neck ? neckDecorations : trunkDecorations).add(decoration);
+                }
+            }
+            // Si el cuerpo no tiene cola no hay una donde engancharla: se coloca sobre su tronco como un adorno
+            if (tails && heads.tail() != null && bodyHeads.tail() == null) {
+                for (HeadBone root : heads.tail().roots()) {
+                    trunkDecorations.add(new Decoration("tail", root, false));
+                }
+            }
+            // Sin tronco en algún lado no hay dónde colocarlos
+            if (heads.trunk() == null || bodyHeads.trunk() == null || heads.spineEnd() == null
+                    || bodyHeads.spineEnd() == null) {
+                trunkDecorations.clear();
+            }
+        }
+
+        List<ModelPart> hidden = new ArrayList<>();
+        for (HeadBone bodyHead : bodies) {
+            hidden.add(bodyHead.part);
+        }
+        if (swapTail) {
+            for (HeadBone root : bodyHeads.tail().roots()) {
+                hidden.add(root.part);
+            }
+        }
+        // Alas por alas, aletas por aletas...: el cuerpo pierde sus adornos de las clases que trae la cabeza
+        Set<String> replaced = new HashSet<>();
+        for (Decoration decoration : trunkDecorations) {
+            replaced.add(decoration.category);
+        }
+        for (Decoration decoration : neckDecorations) {
+            replaced.add(decoration.category);
+        }
+        for (Decoration decoration : bodyHeads.decorations()) {
+            if (replaced.contains(decoration.category)) {
+                hidden.add(decoration.bone.part);
+            }
+        }
         return new Graft(body, headResolver, bodyResolver, headModel, bodyModel, head, whole, heads.limbs(), bodies,
-                tail ? heads.tail() : null, tail ? bodyHeads.tail() : null);
+                swapTail ? heads.tail() : null, swapTail ? bodyHeads.tail() : null, trunkDecorations,
+                neckDecorations, heads.trunk(), bodyHeads.trunk(), heads.spineEnd(), bodyHeads.spineEnd(), hidden);
     }
 
     /** El modelo entero como si fuera una cabeza (su raíz, con todos sus huesos). */
@@ -273,7 +397,7 @@ public final class FusionGraft {
 
     // ---- 2. Pintar (desde PosableModelMixin) ----
 
-    /** Antes de pintar el modelo del cuerpo: ocultar sus cabezas. */
+    /** Antes de pintar el modelo del cuerpo: ocultar sus cabezas (y su cola y adornos sustituidos). */
     public static void beforeRender(PosableModel model) {
         active = null;
         PosableState state = model.getCurrentState();
@@ -287,32 +411,19 @@ public final class FusionGraft {
             return;
         }
 
-        hiddenWereVisible = new boolean[graft.bodies.size()];
-        for (int i = 0; i < graft.bodies.size(); i++) {
-            ModelPart bodyHead = graft.bodies.get(i).part;
-            hiddenWereVisible[i] = bodyHead.visible;
-            bodyHead.visible = false;
-        }
-        if (graft.bodyTail != null) {
-            bodyTailWasVisible = graft.bodyTail.part.visible;
-            graft.bodyTail.part.visible = false;
-        }
+        hiddenWereVisible.clear();
+        setVisible(graft.hidden, hiddenWereVisible, false);
         active = graft;
     }
 
-    /** Después: volver a mostrar sus cabezas y pintar en su sitio la de la otra especie. */
+    /** Después: volver a mostrar lo oculto y pintar en su sitio la cabeza (cola, adornos) de la otra especie. */
     public static void afterRender(PosableModel model, PoseStack poseStack, int light, int overlay, int color) {
         Graft graft = active;
         if (graft == null || graft.bodyModel != model) {
             return;
         }
         active = null;
-        for (int i = 0; i < graft.bodies.size(); i++) {
-            graft.bodies.get(i).part.visible = hiddenWereVisible[i];
-        }
-        if (graft.bodyTail != null) {
-            graft.bodyTail.part.visible = bodyTailWasVisible;
-        }
+        restoreVisible(graft.hidden, hiddenWereVisible);
 
         MultiBufferSource buffers = model.getBufferProvider();
         PosableState state = model.getCurrentState();
@@ -330,6 +441,10 @@ public final class FusionGraft {
         }
     }
 
+    /** Una pasada de pintado de las piezas pegadas: con qué textura y tipo de render, y con qué color. */
+    private record Paint(RenderType type, int color) {
+    }
+
     private static void renderHeads(PosableModel model, Graft graft, PosableState state, MultiBufferSource buffers,
                                     PoseStack poseStack, int light, int overlay, int color) {
         // El modelo de la cabeza es compartido con los demás Pokémon de su especie: lo ponemos en la postura de
@@ -337,15 +452,64 @@ public final class FusionGraft {
         // Sus animaciones leen el contexto de render, que solo tiene si ya se ha pintado alguna vez por sí mismo:
         // le prestamos el del cuerpo, que se está pintando ahora
         graft.headModel.setContext(model.getContext());
-        animateHead(graft, state);
-        ModelPart head = graft.head.part;
-        // Orientación de la cabeza en su propio modelo, ya animado (respecto a la raíz)
-        Quaternionf headRotation = rotationAlong(graft.head.path);
+        FloatingState headState = animateHead(graft, state);
 
         // Como Cobblemon: entityCutout descarta la cara de atrás. Sin eso, los planos de grosor cero (orejas,
         // bocas...) pintan sus dos caras en el mismo sitio y parpadean (z-fighting)
-        ResourceLocation texture = headTexture(graft, state);
-        VertexConsumer consumer = buffers.getBuffer(RenderType.entityCutout(texture));
+        List<Paint> paints = new ArrayList<>();
+        paints.add(new Paint(RenderType.entityCutout(headTexture(graft, state)), color));
+        // Y las capas de la especie de la cabeza (la llama de Charmander, ojos que brillan...): como hace Cobblemon
+        // en PosableModel.render, se vuelve a pintar todo con la textura y el tipo de render de cada capa.
+        // textureState ya lleva los aspects de la cabeza (headTexture), con el shiny del cuerpo si hace falta
+        for (ModelLayer layer : graft.headResolver.getLayers(textureState)) {
+            RenderType type = layerType(graft.headModel, layer, headState);
+            if (type != null) {
+                paints.add(new Paint(type, tinted(color, layer.getTint())));
+            }
+        }
+        // Una pasada detrás de otra: pedir el búfer de otro tipo de render puede cerrar el anterior
+        for (Paint paint : paints) {
+            renderPieces(graft, buffers.getBuffer(paint.type), poseStack, light, overlay, paint.color);
+        }
+    }
+
+    /** Tipo de render de una capa, como lo elige Cobblemon (sin la interpolación entre fotogramas); null si no se pinta. */
+    private static RenderType layerType(PosableModel model, ModelLayer layer, PosableState state) {
+        if (!layer.getEnabled() || layer.getTexture() == null) {
+            return null;
+        }
+        // Las texturas animadas (la llama) eligen el fotograma con el tiempo del estado
+        ResourceLocation texture = layer.getTexture().invoke(state);
+        if (texture == null) {
+            return null;
+        }
+        if (layer.getScrolling() != null) {
+            return model.getScrollingLayer(texture, layer.getScrolling(), layer);
+        }
+        return model.getLayer(texture, layer.getEmissive(), layer.getTranslucent(), layer.getTranslucent_cull());
+    }
+
+    /** El color con el tinte de una capa (componentes de 0 a 1) aplicado. */
+    private static int tinted(int color, Vector4f tint) {
+        if (tint == null) {
+            return color;
+        }
+        return FastColor.ARGB32.color(
+                (int) (FastColor.ARGB32.alpha(color) * tint.w),
+                (int) (FastColor.ARGB32.red(color) * tint.x),
+                (int) (FastColor.ARGB32.green(color) * tint.y),
+                (int) (FastColor.ARGB32.blue(color) * tint.z));
+    }
+
+    /** Pinta todo lo que se pega (cabeza, cola, adornos) con una textura. */
+    private static void renderPieces(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light,
+                                     int overlay, int color) {
+        ModelPart head = graft.head.part;
+        // Orientación de la cabeza en su propio modelo, ya animado (respecto a la raíz)
+        Quaternionf headRotation = rotationAlong(graft.head.path);
+        // Para los adornos del cuello: del marco de la cabeza en su modelo al de cada uno (antes de que se le quiten
+        // a la cabeza su posición y giro para pintarla)
+        Matrix4f toHead = graft.neckDecorations.isEmpty() ? null : matrixAlong(graft.head.path).invert();
 
         for (HeadBone bodyHead : graft.bodies) {
             float scale = Math.clamp(size(bodyHead.part) / size(head), MIN_SCALE, MAX_SCALE) * INFLATE;
@@ -378,6 +542,16 @@ public final class FusionGraft {
                 head.visible = true;
                 setVisible(graft.limbs.keySet(), limbsWereVisible, false);
                 head.render(poseStack, consumer, light, overlay, color);
+
+                // Los adornos del cuello van con la cabeza: misma posición y giro respecto a ella que en su modelo
+                if (toHead != null) {
+                    for (Decoration decoration : graft.neckDecorations) {
+                        poseStack.pushPose();
+                        poseStack.mulPose(new Matrix4f(toHead).mul(matrixAlong(parentPath(decoration.bone))));
+                        decoration.bone.part.render(poseStack, consumer, light, overlay, color);
+                        poseStack.popPose();
+                    }
+                }
             } finally {
                 // Pase lo que pase, la pila de transformaciones y la cabeza quedan como estaban
                 restoreVisible(graft.limbs.keySet(), limbsWereVisible);
@@ -390,40 +564,209 @@ public final class FusionGraft {
         if (graft.headTail != null) {
             renderTail(graft, consumer, poseStack, light, overlay, color);
         }
+        if (!graft.trunkDecorations.isEmpty()) {
+            renderDecorations(graft, consumer, poseStack, light, overlay, color);
+        }
+    }
+
+    /** El camino hasta el hueso del que cuelga una pieza. */
+    private static List<ModelPart> parentPath(HeadBone bone) {
+        return bone.path.subList(0, bone.path.size() - 1);
     }
 
     /**
-     * Pinta la cola de la especie de la cabeza en el sitio de la del cuerpo, como las cabezas: mismo pivote, girada
-     * como en su modelo (que ya está animado: se mueve con su animación de reposo) y escalada al largo de la cola que
-     * sustituye, para que una cola de Pikachu en un Charizard no quede diminuta.
+     * Pinta los adornos de la especie de la cabeza sobre el tronco del cuerpo. No hay un hueso equivalente donde
+     * engancharlos (como la cola en la cola), así que se colocan en proporción: si la planta de Ivysaur nace arriba
+     * y en el centro de su tronco, se pone arriba y en el centro del tronco del cuerpo.
+     * "Arriba" no sirve tal cual: en un cuadrúpedo es la espalda, pero en un bípedo es el cuello (la planta de
+     * Venusaur y el caparazón de Lapras acababan sobre la cabeza). Por eso todo se mide con los ejes de la columna
+     * de cada Pokémon (ver spineFrame): a lo ancho, a lo largo de la columna (hacia la cabeza) y espalda-barriga.
+     * Así el caparazón va en la espalda de los dos: encima de un cuadrúpedo, detrás de un bípedo. El giro de cada
+     * adorno se pasa igual, de los ejes de un Pokémon a los del otro.
+     * Se escala por lo que mide un tronco respecto al otro. Las animaciones de su especie (ya aplicadas, ver
+     * animateHead) los mueven y deciden cuáles se ven (alas abiertas o cerradas...): uno oculto no se pinta.
+     */
+    private static void renderDecorations(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light,
+                                          int overlay, int color) {
+        Matrix4f headTrunk = matrixAlong(graft.headTrunk.path);
+        Matrix4f bodyTrunk = matrixAlong(graft.bodyTrunk.path);
+        Matrix3f headFrame = spineFrame(headTrunk, matrixAlong(graft.headSpine.path));
+        Matrix3f bodyFrame = spineFrame(bodyTrunk, matrixAlong(graft.bodySpine.path));
+        float[] headBox = frameBox(ownBox(graft.headTrunk.part), headTrunk, headFrame);
+        float[] bodyBox = frameBox(ownBox(graft.bodyTrunk.part), bodyTrunk, bodyFrame);
+        if (headBox[0] > headBox[3] || bodyBox[0] > bodyBox[3]) {
+            return;
+        }
+        float trunkScale = trunkScale(graft);
+        float[] bodyOwn = ownBox(graft.bodyTrunk.part);
+        float bodyTrunkLength = Math.max(bodyOwn[3] - bodyOwn[0], Math.max(bodyOwn[4] - bodyOwn[1], bodyOwn[5] - bodyOwn[2]));
+        Vector3f headOrigin = headTrunk.getTranslation(new Vector3f());
+        Vector3f bodyOrigin = bodyTrunk.getTranslation(new Vector3f());
+        // De los ejes del Pokémon de la cabeza a los del cuerpo (un giro a lo ancho: el eje X es el mismo)
+        Quaternionf frameChange = new Quaternionf().setFromNormalized(
+                new Matrix3f(bodyFrame).mul(new Matrix3f(headFrame).transpose()));
+
+        for (Decoration decoration : graft.trunkDecorations) {
+            ModelPart part = decoration.bone.part;
+            if (!part.visible) {
+                continue;
+            }
+            // Pivote del adorno respecto al pivote de su tronco, en los ejes de la columna de su modelo
+            Matrix4f matrix = matrixAlong(decoration.bone.path);
+            Vector3f pivot = new Matrix3f(headFrame).transpose()
+                    .transform(matrix.getTranslation(new Vector3f()).sub(headOrigin));
+            // El mismo sitio proporcional en el tronco del cuerpo, y de vuelta a los ejes del modelo
+            Vector3f placed = bodyFrame.transform(new Vector3f(remap(pivot.x, headBox, bodyBox, 0),
+                    remap(pivot.y, headBox, bodyBox, 1), remap(pivot.z, headBox, bodyBox, 2))).add(bodyOrigin);
+            Quaternionf rotation = new Quaternionf(frameChange).mul(matrix.getNormalizedRotation(new Quaternionf()));
+            float scale = trunkScale;
+            if (decoration.category.equals("tail")) {
+                // Una cola puesta en un cuerpo que no tenía: como mucho tan larga como su tronco
+                float tailLength = length(part);
+                if (tailLength > 0) {
+                    scale = Math.min(scale, bodyTrunkLength / tailLength);
+                }
+            }
+
+            PartPose saved = part.storePose();
+            poseStack.pushPose();
+            try {
+                poseStack.translate(placed.x, placed.y, placed.z);
+                poseStack.mulPose(rotation);
+                poseStack.scale(scale, scale, scale);
+                // Su posición y giro ya van arriba
+                part.setPos(0, 0, 0);
+                part.setRotation(0, 0, 0);
+                part.render(poseStack, consumer, light, overlay, color);
+            } finally {
+                part.loadPose(saved);
+                poseStack.popPose();
+            }
+        }
+    }
+
+    /**
+     * Lleva una coordenada de la caja de un tronco a la misma posición proporcional en la del otro (eje 0, 1, 2).
+     * Lo que nace fuera de la caja se queda en su borde: la cola de Kyogre cuelga muy por detrás de su tronco y,
+     * llevada en proporción a otro, quedaba flotando lejos de él.
+     */
+    private static float remap(float value, float[] from, float[] to, int axis) {
+        float extent = from[axis + 3] - from[axis];
+        float t = extent < 1e-4F ? 0.5F : Math.clamp((value - from[axis]) / extent, 0F, 1F);
+        return to[axis] + t * (to[axis + 3] - to[axis]);
+    }
+
+    /**
+     * Ejes de la columna de un Pokémon, en los del modelo (columnas de la matriz): X a lo ancho (el del modelo), Y del
+     * tronco hacia la cabeza (hacia delante en un cuadrúpedo, hacia arriba en un bípedo) y Z = X × Y, el de
+     * espalda-barriga. Como X es el mismo en todos los modelos, pasar de unos ejes a otros es inclinar hacia
+     * delante o atrás, como un cuadrúpedo que se pone de pie.
+     * La columna va del pivote del tronco al principio del cuello (ver findSpineEnd), no a la cabeza: un cuello largo
+     * la torcería (la de Lapras apuntaba al cielo y su caparazón, que está encima, acababa hacia el cuello en otros
+     * Pokémon). Tampoco sirve la forma del tronco: el de un bípedo rechoncho (Dragonite) es más ancho que alto.
+     */
+    private static Matrix3f spineFrame(Matrix4f trunk, Matrix4f spineEnd) {
+        Vector3f across = new Vector3f(1, 0, 0);
+        Vector3f spine = spineEnd.getTranslation(new Vector3f()).sub(trunk.getTranslation(new Vector3f()));
+        // Solo cuenta la inclinación: lo que se desvíe a un lado no
+        spine.x = 0;
+        if (spine.lengthSquared() < 1e-8F) {
+            // Cuello justo en el pivote del tronco: hacia arriba (en los modelos de Minecraft la Y crece hacia abajo)
+            spine.set(0, -1, 0);
+        }
+        spine.normalize();
+        Vector3f back = new Vector3f(across).cross(spine);
+        return new Matrix3f(across, spine, back);
+    }
+
+    /**
+     * Caja de los cubos propios de un tronco (ownBox, en su marco) vista desde su pivote con los ejes de su columna:
+     * se llevan sus 8 esquinas al modelo con la transformación del tronco y de ahí a esos ejes.
+     */
+    private static float[] frameBox(float[] local, Matrix4f trunk, Matrix3f frame) {
+        if (local[0] > local[3]) {
+            return local;
+        }
+        Vector3f origin = trunk.getTranslation(new Vector3f());
+        Matrix3f toFrame = new Matrix3f(frame).transpose();
+        float[] box = emptyBox();
+        for (int corner = 0; corner < 8; corner++) {
+            include(box, toFrame.transform(trunk.transformPosition(new Vector3f(
+                    local[(corner & 1) == 0 ? 0 : 3],
+                    local[(corner & 2) == 0 ? 1 : 4],
+                    local[(corner & 4) == 0 ? 2 : 5])).sub(origin)));
+        }
+        return box;
+    }
+
+    /**
+     * Escala de lo que se pega del cuerpo de la especie de la cabeza (cola, adornos): lo que mide el tronco del
+     * cuerpo respecto al suyo. Así cada pieza conserva su tamaño en proporción: la cola pequeña de Lapras sigue
+     * siendo pequeña en otro Pokémon (al igualar largos de cola salía enorme). 0 si falta algún tronco.
+     */
+    private static float trunkScale(Graft graft) {
+        if (graft.headTrunk == null || graft.bodyTrunk == null) {
+            return 0;
+        }
+        float[] head = ownBox(graft.headTrunk.part);
+        float[] body = ownBox(graft.bodyTrunk.part);
+        if (head[0] > head[3] || body[0] > body[3]) {
+            return 0;
+        }
+        return Math.clamp(meanSide(body) / Math.max(meanSide(head), 0.01F), MIN_PIECE_SCALE, MAX_PIECE_SCALE);
+    }
+
+    /** Transformación acumulada a lo largo de un camino de huesos (de la raíz al último), en bloques. */
+    private static Matrix4f matrixAlong(List<ModelPart> path) {
+        PoseStack stack = new PoseStack();
+        for (ModelPart part : path) {
+            part.translateAndRotate(stack);
+        }
+        return new Matrix4f(stack.last().pose());
+    }
+
+    /**
+     * Pinta la cola de la especie de la cabeza en el sitio de la del cuerpo, como las cabezas: su pieza principal en
+     * el pivote de la principal del cuerpo, girada como en su modelo (que ya está animado: se mueve con su animación
+     * de reposo) y escalada por lo que mide un tronco respecto al otro (trunkScale), para que una cola de Pikachu en
+     * un Charizard no quede diminuta ni la de Lapras enorme. Las demás piezas (los mechones de Luxray, las colas de
+     * Ninetales) van donde estén respecto a la principal en su modelo.
      */
     private static void renderTail(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light, int overlay,
                                    int color) {
-        ModelPart tail = graft.headTail.part;
-        float headLength = length(tail);
-        float bodyLength = length(graft.bodyTail.part);
-        // Si alguna no tiene cubos (solo hijos vacíos), no hay con qué comparar: tamaño original
-        float scale = (headLength <= 0 || bodyLength <= 0 ? 1F
-                : Math.clamp(bodyLength / headLength, MIN_SCALE, MAX_SCALE)) * INFLATE;
-        Quaternionf correction = rotationAlong(graft.bodyTail.path).conjugate().mul(rotationAlong(graft.headTail.path));
+        HeadBone headAnchor = graft.headTail.anchor();
+        HeadBone bodyAnchor = graft.bodyTail.anchor();
+        float headLength = length(headAnchor.part);
+        float bodyLength = length(bodyAnchor.part);
+        float scale = trunkScale(graft);
+        if (scale <= 0) {
+            // Sin troncos con los que comparar (modelos "todo cabeza"): igualar el largo de las colas
+            scale = headLength <= 0 || bodyLength <= 0 ? 1F
+                    : Math.clamp(bodyLength / headLength, MIN_SCALE, MAX_SCALE);
+        } else if (headLength > 0 && bodyLength > 0) {
+            // Tope: no mucho más larga que la que sustituye (la de Groudon salía gigante)
+            scale = Math.min(scale, TAIL_GROWTH * bodyLength / headLength);
+        }
+        scale *= INFLATE;
+        Quaternionf correction = rotationAlong(bodyAnchor.path).conjugate().mul(rotationAlong(headAnchor.path));
+        // Del marco de la pieza principal al del hueso del que cuelgan todas las piezas: así cada una se pinta tal
+        // cual (con su posición y giro) y la principal queda justo en el pivote
+        Matrix4f fromAnchor = matrixAlong(headAnchor.path).invert().mul(matrixAlong(parentPath(headAnchor)));
 
-        PartPose saved = tail.storePose();
-        boolean visible = tail.visible;
         poseStack.pushPose();
         try {
-            for (ModelPart part : graft.bodyTail.path) {
+            for (ModelPart part : bodyAnchor.path) {
                 part.translateAndRotate(poseStack);
             }
             poseStack.mulPose(correction);
             poseStack.scale(scale, scale, scale);
-            tail.setPos(0, 0, 0);
-            tail.setRotation(0, 0, 0);
-            // Al pegar un modelo entero su cola se oculta como extremidad mientras se pinta; aquí se pinta suelta
-            tail.visible = true;
-            tail.render(poseStack, consumer, light, overlay, color);
+            poseStack.mulPose(fromAnchor);
+            // Al pegar un modelo entero sus colas se ocultan como extremidades mientras se pinta, pero ya están
+            // restauradas: las que se vean ahora son las que deciden sus animaciones
+            for (HeadBone root : graft.headTail.roots()) {
+                root.part.render(poseStack, consumer, light, overlay, color);
+            }
         } finally {
-            tail.loadPose(saved);
-            tail.visible = visible;
             poseStack.popPose();
         }
     }
@@ -476,6 +819,44 @@ public final class FusionGraft {
         if (cached != null) {
             return cached;
         }
+        // visit no mira la visibilidad: lo que se salta se reconoce por la ruta del hueso del cubo
+        float[] box = boxInOwnFrame(part, path -> {
+            for (String limb : skip.values()) {
+                if (path.equals(limb) || path.startsWith(limb + "/")) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        BOXES.put(part, box);
+        return box;
+    }
+
+    /**
+     * Caja de los cubos propios de un hueso, sin los de sus hijos, en su propio marco. Para un tronco es "el cuerpo"
+     * en sí: con los hijos saldría la caja de todo el Pokémon (cabeza, patas...).
+     */
+    private static float[] ownBox(ModelPart part) {
+        float[] cached = OWN_BOXES.get(part);
+        if (cached != null) {
+            return cached;
+        }
+        // ModelPart.visit da a los cubos del propio hueso la ruta "" y a los de sus hijos "/hijo...". Los cubos girados
+        // del .geo son del hueso, pero un ModelPart no admite cubos girados: Cobblemon (TexturedModel) mete cada uno
+        // en un hijo propio llamado "%hueso%n", con ese giro. Groudon de AllTheMons tiene así casi todos: sin
+        // contarlos, su torso no tenía cubos y el "tronco" salía su cuello
+        float[] box = boxInOwnFrame(part, path -> path.isEmpty() || isRotatedCube(path.substring(1)));
+        OWN_BOXES.put(part, box);
+        return box;
+    }
+
+    /** ¿Es el nombre de un hijo que Cobblemon crea para un cubo girado ("%tophalf%0")? */
+    private static boolean isRotatedCube(String name) {
+        return name.startsWith("%") && name.indexOf('/') < 0;
+    }
+
+    /** Caja de los cubos de un hueso y sus hijos cuya ruta (la de ModelPart.visit) cumpla la condición. */
+    private static float[] boxInOwnFrame(ModelPart part, Predicate<String> include) {
         PartPose saved = part.storePose();
         float xScale = part.xScale;
         float yScale = part.yScale;
@@ -487,13 +868,9 @@ public final class FusionGraft {
             part.yScale = 1;
             part.zScale = 1;
             part.visit(new PoseStack(), (pose, path, index, cube) -> {
-                // visit no mira la visibilidad: lo que se salta se reconoce por la ruta del hueso del cubo
-                for (String limb : skip.values()) {
-                    if (path.equals(limb) || path.startsWith(limb + "/")) {
-                        return;
-                    }
+                if (include.test(path)) {
+                    includeCube(box, pose, cube);
                 }
-                includeCube(box, pose, cube);
             });
         } finally {
             part.loadPose(saved);
@@ -501,7 +878,6 @@ public final class FusionGraft {
             part.yScale = yScale;
             part.zScale = zScale;
         }
-        BOXES.put(part, box);
         return box;
     }
 
@@ -513,14 +889,14 @@ public final class FusionGraft {
         }
     }
 
-    /** Deja como estaban los huesos que haya tocado setVisible (aunque no llegase a tocarlos todos). */
+    /**
+     * Deja como estaban los huesos que haya tocado setVisible (aunque no llegase a tocarlos todos). Al revés de como
+     * se ocultaron: si un hueso saliese dos veces, así recupera lo que tenía antes de la primera.
+     */
     private static void restoreVisible(Collection<ModelPart> parts, List<Boolean> were) {
-        int i = 0;
-        for (ModelPart part : parts) {
-            if (i >= were.size()) {
-                return;
-            }
-            part.visible = were.get(i++);
+        List<ModelPart> list = new ArrayList<>(parts);
+        for (int i = Math.min(list.size(), were.size()) - 1; i >= 0; i--) {
+            list.get(i).visible = were.get(i);
         }
     }
 
@@ -528,7 +904,7 @@ public final class FusionGraft {
      * Aplica al modelo de la cabeza sus animaciones de reposo, con un estado propio por fusión (lo mismo que hace
      * Cobblemon para pintar un Pokémon en un menú). Si la fusión es una entidad, la cabeza mira hacia donde mira.
      */
-    private static void animateHead(Graft graft, PosableState state) {
+    private static FloatingState animateHead(Graft graft, PosableState state) {
         FloatingState headState = HEAD_STATES.computeIfAbsent(state, key -> new FloatingState());
         headState.setCurrentAspects(state.getCurrentAspects());
         headState.setCurrentModel(graft.headModel);
@@ -543,6 +919,7 @@ public final class FusionGraft {
             headPitch = living.getXRot();
         }
         graft.headModel.applyAnimations(null, headState, 0, 0, 0, headYaw, headPitch);
+        return headState;
     }
 
     // ---- Buscar las cabezas de un modelo ----
@@ -558,7 +935,7 @@ public final class FusionGraft {
      */
     private static ModelHeads findHeads(PosableModel model) {
         if (!((Object) model.getRootPart() instanceof ModelPart root)) {
-            return new ModelHeads(List.of(), true, Map.of(), null);
+            return new ModelHeads(List.of(), true, Map.of(), null, null, List.of(), null);
         }
 
         boolean whole = false;
@@ -579,7 +956,7 @@ public final class FusionGraft {
                 ModelPart part = primary.get(primary.size() - 1);
                 whole = volume(part) >= WHOLE_MODEL_SHARE * volume(root);
                 if (cubes(part) == cubes(root)) {
-                    return new ModelHeads(List.of(), true, Map.of(), null);
+                    return new ModelHeads(List.of(), true, Map.of(), null, null, List.of(), null);
                 }
                 if (whole) {
                     limbs = new LinkedHashMap<>();
@@ -603,36 +980,220 @@ public final class FusionGraft {
             }
             heads.add(new HeadBone(part, path));
         }
-        return new ModelHeads(heads, whole || heads.isEmpty(), limbs, findTail(root, heads));
+        Tail tail = findTail(root, heads);
+        if (heads.isEmpty()) {
+            return new ModelHeads(heads, true, limbs, tail, null, List.of(), null);
+        }
+        List<ModelPart> headPath = heads.get(0).path;
+        HeadBone trunk = findTrunk(headPath);
+        return new ModelHeads(heads, whole, limbs, tail, trunk, findDecorations(headPath, heads, tail),
+                findSpineEnd(headPath, trunk));
     }
 
     /**
-     * La cola de un modelo: el primer hueso cuyo nombre empieza por "tail" ("tail", "tail1", "tail_base"...), con
-     * toda su cadena ("tail2", "tail3"... cuelgan de él). En Cobblemon 1.8.1 la tienen 692 de 1142 modelos, casi
-     * siempre colgando del tronco. No cuentan las de dentro de una cabeza (pelos: ya van con la cabeza).
-     * Si hay varias colas separadas (Ninetales, Vulpix...) devuelve null: no sabríamos cuál poner en qué sitio.
+     * Hasta dónde llega la columna, para orientar el Pokémon (ver spineFrame): el primer hueso del cuello después del
+     * tronco ("neck", "neck2", "lowernecc"...) o, si no tiene cuello, la cabeza. Lapras: "neck2", delante del tronco
+     * (su cabeza está muy arriba); Dragonite: "neck", encima.
      */
-    private static HeadBone findTail(ModelPart root, List<HeadBone> heads) {
+    private static HeadBone findSpineEnd(List<ModelPart> headPath, HeadBone trunk) {
+        int from = trunk == null ? 1 : trunk.path.size();
+        for (int i = Math.max(from, 1); i < headPath.size() - 1; i++) {
+            String name = boneName(headPath.get(i - 1), headPath.get(i));
+            if (name.contains("neck") || name.contains("necc")) {
+                return new HeadBone(headPath.get(i), new ArrayList<>(headPath.subList(0, i + 1)));
+            }
+        }
+        return new HeadBone(headPath.get(headPath.size() - 1), headPath);
+    }
+
+    /**
+     * El tronco: en el camino de la raíz a la cabeza principal, el hueso cuyos cubos propios ocupan más ("torso" en
+     * Ivysaur, "thorax" en Scyther, "body" en Butterfree). Los grupos vacíos ("body" en Ivysaur) no cuentan.
+     */
+    private static HeadBone findTrunk(List<ModelPart> headPath) {
+        HeadBone trunk = null;
+        float best = 0;
+        for (int i = 0; i < headPath.size() - 1; i++) {
+            ModelPart part = headPath.get(i);
+            float[] box = ownBox(part);
+            float volume = box[0] > box[3] ? 0 : volume(box);
+            if (volume > best) {
+                best = volume;
+                trunk = new HeadBone(part, new ArrayList<>(headPath.subList(0, i + 1)));
+            }
+        }
+        return trunk;
+    }
+
+    /**
+     * Adornos: los huesos que cuelgan de algún hueso del camino de la raíz a la cabeza principal (el tronco y lo que
+     * lo rodea), con algún cubo, y cuyo nombre no es anatomía común (ver category): "bulb_master" y "vines" en
+     * Ivysaur, "mushrooms" en Paras, "wing_left"/"wing_right" en Butterfree, "shell" en Lapras...
+     * Ni las cabezas ni la cola cuentan, ni nada que las lleve dentro.
+     * Con esta regla, 526 de los 904 modelos con cabeza de Cobblemon 1.8.1 tienen algún adorno.
+     * Los que cuelgan de un hueso del cuello ("neck", "neck2", "lowernecc"...: el pelo de Eevee) se marcan como del cuello. Por
+     * el nombre y no por estar más arriba que el tronco: las alas de Charizard cuelgan de "torso2", encima del
+     * tronco ("torso"), y son del tronco.
+     */
+    private static List<Decoration> findDecorations(List<ModelPart> headPath, List<HeadBone> heads, Tail tail) {
+        List<Decoration> found = new ArrayList<>();
+        for (int i = 0; i < headPath.size() - 1; i++) {
+            // "neck", "neck2", "lowernecc" (así, con cc, los de Groudon de AllTheMons)...
+            String parentName = i > 0 ? boneName(headPath.get(i - 1), headPath.get(i)) : "";
+            boolean neck = parentName.contains("neck") || parentName.contains("necc");
+            for (Map.Entry<String, Bone> child : ((Bone) (Object) headPath.get(i)).getChildren().entrySet()) {
+                if (!((Object) child.getValue() instanceof ModelPart part) || headPath.contains(part)) {
+                    continue;
+                }
+                String category = category(child.getKey());
+                if (category == null || cubes(part) == 0 || holdsHeadOrTail(part, heads, tail)) {
+                    continue;
+                }
+                List<ModelPart> path = new ArrayList<>(headPath.subList(0, i + 1));
+                path.add(part);
+                found.add(new Decoration(category, new HeadBone(part, path), neck));
+            }
+        }
+        return found;
+    }
+
+    /** Nombre (en minúsculas) con el que un hueso cuelga de su padre; "" si no es hijo suyo. */
+    private static String boneName(ModelPart parent, ModelPart child) {
+        for (Map.Entry<String, Bone> entry : ((Bone) (Object) parent).getChildren().entrySet()) {
+            if ((Object) entry.getValue() == child) {
+                return entry.getKey().toLowerCase(Locale.ROOT);
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Clase de adorno de un hueso según su nombre, o null si es anatomía común. Se parte por "_", se quitan números
+     * finales y trozos que solo dicen dónde está ("left", "front"...) y se pasa a singular: "wing_left" y
+     * "closed_wings" → "wing", "bulb_master" → "bulb". Si algún trozo es anatomía ("front_legs", "inner_arm_left",
+     * "neck_fluff") no es un adorno.
+     * Algunos modelos (los de AllTheMons) juntan las palabras sin "_": "leftleg", "humanarm", "leftspike4". Por eso
+     * a cada trozo se le quitan también esas palabras por delante y se mira si acaba en anatomía.
+     */
+    private static String category(String name) {
+        // Huesos que crea Cobblemon, no el autor del modelo: cubos girados ("%tophalf%0", ver ownBox) y localizadores
+        // internos. El cubo girado del torso de Groudon se pegaba como si fuera un adorno
+        if (name.startsWith("%") || name.startsWith("internal_locator")) {
+            return null;
+        }
+        String category = null;
+        for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
+            token = stripModifiers(token.replaceAll("\\d+$", ""));
+            if (token.isEmpty() || NAME_MODIFIERS.contains(token)) {
+                continue;
+            }
+            String singular = token.length() > 3 && token.endsWith("s") ? token.substring(0, token.length() - 1) : token;
+            if (isAnatomy(token) || isAnatomy(singular)) {
+                return null;
+            }
+            if (category == null) {
+                category = singular;
+            }
+        }
+        return category;
+    }
+
+    /** Quita del principio las palabras de posición pegadas: "leftspike" → "spike", "upperarm" → "arm". */
+    private static String stripModifiers(String token) {
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (String modifier : NAME_MODIFIERS) {
+                // "l"/"r" sueltas no: se comerían la primera letra de cualquier palabra
+                if (modifier.length() >= 3 && token.startsWith(modifier) && token.length() - modifier.length() >= 3) {
+                    token = token.substring(modifier.length());
+                    changed = true;
+                }
+            }
+        }
+        return token;
+    }
+
+    /** ¿Es anatomía, o acaba en una palabra de anatomía ("humanarm", "forehead")? */
+    private static boolean isAnatomy(String word) {
+        if (ANATOMY.contains(word)) {
+            return true;
+        }
+        for (String part : ANATOMY) {
+            if (part.length() >= 3 && word.endsWith(part)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** ¿Lleva dentro (o es) alguna de las cabezas o piezas de la cola? */
+    private static boolean holdsHeadOrTail(ModelPart part, List<HeadBone> heads, Tail tail) {
+        if (tail != null) {
+            for (HeadBone root : tail.roots) {
+                if (holds(part, root.part)) {
+                    return true;
+                }
+            }
+        }
+        for (HeadBone head : heads) {
+            if (holds(part, head.part)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean holds(ModelPart node, ModelPart target) {
+        if (node == target) {
+            return true;
+        }
+        for (Bone child : ((Bone) (Object) node).getChildren().values()) {
+            if ((Object) child instanceof ModelPart part && holds(part, target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * La cola de un modelo: los huesos cuyo nombre empieza por "tail" ("tail", "tail1", "tail_fluff"...) que cuelgan
+     * del mismo hueso que el primero, cada uno con toda su cadena ("tail2", "tail3"... cuelgan de él). En Cobblemon
+     * 1.8.1 la tienen 692 de 1142 modelos, casi siempre colgando del tronco. Varias piezas: Luxray (cadena + cinco
+     * mechones), Ninetales... No cuentan las de dentro de una cabeza (pelos: ya van con la cabeza) ni las que cuelgan
+     * de otro sitio que la primera.
+     */
+    private static Tail findTail(ModelPart root, List<HeadBone> heads) {
         List<List<ModelPart>> paths = new ArrayList<>();
         List<ModelPart> current = new ArrayList<>();
         current.add(root);
         collectPaths(root, name -> name.startsWith("tail"), current, paths);
 
-        HeadBone tail = null;
+        List<HeadBone> roots = new ArrayList<>();
+        ModelPart parent = null;
         // collectPaths recorre de arriba abajo: el principio de cada cola sale antes que los huesos de su cadena
         for (List<ModelPart> path : paths) {
-            if (tail != null && path.contains(tail.part)) {
+            if (path.size() < 2 || insideAnother(path, heads) || insideAnother(path, roots)) {
                 continue;
             }
-            if (path.size() < 2 || insideAnother(path, heads)) {
+            ModelPart from = path.get(path.size() - 2);
+            if (parent == null) {
+                parent = from;
+            } else if (from != parent) {
                 continue;
             }
-            if (tail != null) {
-                return null;
-            }
-            tail = new HeadBone(path.get(path.size() - 1), path);
+            roots.add(new HeadBone(path.get(path.size() - 1), path));
         }
-        return tail;
+        if (roots.isEmpty()) {
+            return null;
+        }
+        HeadBone anchor = roots.get(0);
+        for (HeadBone candidate : roots) {
+            if (cubes(candidate.part) > cubes(anchor.part)) {
+                anchor = candidate;
+            }
+        }
+        return new Tail(List.copyOf(roots), anchor);
     }
 
     /**
