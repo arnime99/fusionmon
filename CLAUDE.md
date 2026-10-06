@@ -92,6 +92,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 
 ## Estado
 
+**Fallos visuales en curso: `docs/visual-bugs.md`** (registro de parejas con fallos, patrones, cambios sin commit e ideas). Empezar por ahí.
+
 Hecho y probado: entorno, fase 1 (cristal + selector), fase 2 (fusión de datos, pantalla con vista previa/intercambiar/naturaleza/habilidad y descripciones, movimientos), fase 3 (separar con el cristal), fase 4 (combates en Showdown), fase 5 (evolución de cabeza y cuerpo desde el menú de Cobblemon; movimientos del cuerpo al subir de nivel, también en combate).
 
 Pendiente:
