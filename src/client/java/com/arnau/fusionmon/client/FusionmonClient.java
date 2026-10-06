@@ -79,6 +79,18 @@ public class FusionmonClient implements ClientModInitializer {
 									FusionGraft.setTops(false);
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.top.off"));
 									return 1;
+								})))
+						// /fusionvisual align pivot|skull: cabeza pegada pivote con pivote o cráneo por cráneo
+						.then(ClientCommandManager.literal("align")
+								.then(ClientCommandManager.literal("pivot").executes(context -> {
+									FusionGraft.setSkullAlign(false);
+									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.align.pivot"));
+									return 1;
+								}))
+								.then(ClientCommandManager.literal("skull").executes(context -> {
+									FusionGraft.setSkullAlign(true);
+									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.align.skull"));
+									return 1;
 								})))));
 
 		// /fusiondex: visor de fusiones (FusionDexScreen). La pantalla se abre en la siguiente vuelta del bucle del

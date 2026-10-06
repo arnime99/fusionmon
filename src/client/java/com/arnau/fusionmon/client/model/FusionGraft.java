@@ -138,8 +138,11 @@ public final class FusionGraft {
      */
     private static final float CLUSTER_SIZE = 1F;
     private static final float CLUSTER_SPREAD = 1.4F;
-    /** Al revés, un cuerpo con racimo (Exeggutor): cada cabeza pegada en una de las suyas mide esto de ella. */
-    private static final float CLUSTER_BODY_SCALE = 0.6F;
+    /**
+     * Al revés, un cuerpo con racimo (Exeggutor): cada cabeza pegada en una de las suyas mide esto de ella (se cambian
+     * cráneo por cráneo, ver skullOffset). 1 = mismo tamaño, un reemplazo.
+     */
+    private static final float CLUSTER_BODY_SCALE = 1F;
     /**
      * Cuerpo sin cabeza con una cabeza "normal": los complementos de la cabeza (orejas, pelo...) se ponen en el
      * cuerpo escalados como su cráneo respecto al cuerpo, por esta parte (ver renderOnBody).
@@ -154,6 +157,13 @@ public final class FusionGraft {
     private static boolean decorations = true;
     /** Si los cuerpos sin cabeza llevan la cabeza encima o van en modo colores (/fusionvisual top on|off). */
     private static boolean tops = true;
+    /**
+     * Cómo se coloca una cabeza normal (/fusionvisual align pivot|skull): pivote con pivote (por defecto; suele ser el
+     * cuello) o cráneo por cráneo, como los modelos enteros y Exeggutor (ver skullOffset). En prueba: en ~120 modelos
+     * el pivote de la cabeza está en su centro y no en el cuello, y al juntar uno de esos con uno normal la cabeza
+     * nueva queda desplazada media cabeza.
+     */
+    private static boolean skullAlign = false;
 
     /**
      * Trozos de nombre de hueso que no dicen qué pieza es, solo dónde está o en qué estado ("wing_left",
@@ -315,6 +325,14 @@ public final class FusionGraft {
 
     public static boolean hasTops() {
         return tops;
+    }
+
+    public static void setSkullAlign(boolean value) {
+        skullAlign = value;
+    }
+
+    public static boolean isSkullAlign() {
+        return skullAlign;
     }
 
     /**
@@ -636,10 +654,11 @@ public final class FusionGraft {
                 : matrixAlong(graft.head.path).invert();
 
         // Con varias cabezas se pegan todas con sus cuellos (renderChains), no una sola en el sitio de la del cuerpo
-        // Un cuerpo con racimo de cabezas (Exeggutor): sus cabezas están medio metidas unas en otras y, del tamaño de
-        // cada una, las pegadas se comían entre ellas. Más pequeñas
+        // Un cuerpo con racimo de cabezas (Exeggutor): cada cabeza pegada sustituye a una de las suyas, cráneo por
+        // cráneo (ver skullOffset), del tamaño CLUSTER_BODY_SCALE de ella
         ModelHeads bodyHeads = HEAD_BONES.get(graft.bodyModel);
-        float bodyCluster = bodyHeads != null && !bodyHeads.companions().isEmpty() ? CLUSTER_BODY_SCALE : 1F;
+        boolean clusterBody = bodyHeads != null && !bodyHeads.companions().isEmpty();
+        float bodyCluster = clusterBody ? CLUSTER_BODY_SCALE : 1F;
         for (HeadBone bodyHead : graft.chains.isEmpty() ? graft.bodies : List.<HeadBone>of()) {
             float scale = Math.clamp(bodyCluster * size(bodyHead.part) / pastedSize(graft), MIN_SCALE, MAX_SCALE)
                     * INFLATE;
@@ -654,11 +673,17 @@ public final class FusionGraft {
                     part.translateAndRotate(poseStack);
                 }
                 poseStack.mulPose(correction);
-                if (graft.whole) {
-                    // Un modelo entero no tiene un "cuello" que poner en el pivote: su pivote suele estar en el
-                    // suelo o en el centro de la esfera (se hundiría en el cuerpo). Lo apoyamos donde acababa la
-                    // cabeza del cuerpo: su punto más bajo con el de ella, centrados en horizontal
-                    Vector3f offset = groundOffset(bodyHead.part, correction, head, graft.limbs, scale);
+                if (graft.whole || clusterBody || skullAlign) {
+                    // Reemplazo cráneo por cráneo: el centro del cubo principal de lo que se pega, en el centro del
+                    // de la cabeza que sustituye (los detalles no cuentan). Un modelo entero no tiene un "cuello"
+                    // que poner en el pivote (el suyo suele estar en el suelo), y apoyado por su punto más bajo
+                    // Solrock quedaba flotando o hundido según sus rayos. En Exeggutor el pivote de cada cabeza está
+                    // en su centro: la cabeza nueva, que lo tiene en el cuello, quedaba media metida en el tronco
+                    Vector3f offset = skullOffset(bodyHead.part, correction, head, graft.limbs, scale);
+                    if (offset == null) {
+                        offset = graft.whole ? groundOffset(bodyHead.part, correction, head, graft.limbs, scale)
+                                : new Vector3f();
+                    }
                     poseStack.translate(offset.x, offset.y, offset.z);
                 }
                 poseStack.scale(scale, scale, scale);
@@ -851,6 +876,7 @@ public final class FusionGraft {
             return;
         }
         Vector3f pivot = matrixAlong(graft.top.path).getTranslation(new Vector3f());
+        Quaternionf turn = withoutRoll(rotationAlong(graft.top.path));
         float scale = Math.clamp(ACCESSORY_SCALE * size(graft.top.part) / size(graft.head.part), MIN_PIECE_SCALE,
                 MAX_PIECE_SCALE);
 
@@ -861,16 +887,16 @@ public final class FusionGraft {
             }
             Matrix4f matrix = matrixAlong(piece.path);
             Vector3f from = matrix.getTranslation(new Vector3f());
-            // Del cráneo al cuerpo, sin salirse de él (sin girar el cuerpo: Voltorb rueda)
-            Vector3f placed = new Vector3f(
+            // Del cráneo al cuerpo, sin salirse de él, y con el giro del cuerpo (menos el de rodar)
+            Vector3f placed = turn.transform(new Vector3f(
                     remap(from.x, skull, body, 0, 0F, 1F),
                     remap(from.y, skull, body, 1, 0F, 1F),
-                    remap(from.z, skull, body, 2, 0F, 1F)).add(pivot);
+                    remap(from.z, skull, body, 2, 0F, 1F))).add(pivot);
             PartPose saved = part.storePose();
             poseStack.pushPose();
             try {
                 poseStack.translate(placed.x, placed.y, placed.z);
-                poseStack.mulPose(matrix.getNormalizedRotation(new Quaternionf()));
+                poseStack.mulPose(new Quaternionf(turn).mul(matrix.getNormalizedRotation(new Quaternionf())));
                 poseStack.scale(scale, scale, scale);
                 // Su posición y giro ya van arriba
                 part.setPos(0, 0, 0);
@@ -881,6 +907,20 @@ public final class FusionGraft {
                 poseStack.popPose();
             }
         }
+    }
+
+    /**
+     * Un giro sin su parte alrededor del eje X (descomposición "swing-twist"): sin rodar hacia delante. Voltorb rueda
+     * al andar y lo que lleva pegado daría vueltas con él; Snorunt se balancea de lado y lo pegado tiene que seguirlo.
+     */
+    private static Quaternionf withoutRoll(Quaternionf rotation) {
+        Quaternionf twist = new Quaternionf(rotation.x, 0, 0, rotation.w);
+        if (twist.lengthSquared() < 1e-8F) {
+            // Girado media vuelta en otro eje: no hay parte de rodar que quitar
+            return new Quaternionf(rotation);
+        }
+        twist.normalize();
+        return new Quaternionf(rotation).mul(twist.conjugate());
     }
 
     /** Caja de los cubos propios de un hueso, en el modelo (con la postura de ahora). */
@@ -902,16 +942,18 @@ public final class FusionGraft {
 
     /**
      * Un cuerpo sin cabeza como tronco, para colocar adornos y cola (ver renderDecorations): su pieza principal entera,
-     * en su sitio pero sin su giro (Voltorb rueda), con los ejes de un cuadrúpedo: la columna hacia delante (hacia la
-     * cara, -Z en los modelos), así la espalda queda arriba. La flor de Venusaur va encima de la Voltorb, y la cola,
-     * detrás.
+     * en su sitio y con su giro menos el de rodar (ver withoutRoll), con los ejes de un cuadrúpedo: la columna hacia
+     * delante (hacia la cara, -Z en los modelos), así la espalda queda arriba. La flor de Venusaur va encima de la
+     * Voltorb, y la cola, detrás.
      */
     private static TrunkSpace ballSpace(HeadBone top) {
         Vector3f origin = matrixAlong(top.path).getTranslation(new Vector3f());
         Vector3f across = new Vector3f(1, 0, 0);
         Vector3f spine = new Vector3f(0, 0, -1);
-        Matrix3f frame = new Matrix3f(across, spine, new Vector3f(across).cross(spine));
-        Matrix3f toFrame = new Matrix3f(frame).transpose();
+        Matrix3f still = new Matrix3f(across, spine, new Vector3f(across).cross(spine));
+        // La caja, en los ejes sin girar (está en el marco propio del hueso); los ejes, ya girados con el cuerpo
+        Matrix3f toFrame = new Matrix3f(still).transpose();
+        Matrix3f frame = new Matrix3f().rotation(withoutRoll(rotationAlong(top.path))).mul(still);
         float[] own = localBox(top.part, Map.of());
         float[] box = emptyBox();
         if (own[0] <= own[3]) {
@@ -1284,6 +1326,48 @@ public final class FusionGraft {
     }
 
     /**
+     * Desplazamiento (en el marco ya girado con la corrección) que pone el centro del cubo principal de lo que se pega
+     * en el del cráneo de la cabeza del cuerpo; null si alguno no tiene cubos. Con la postura de cada fotograma
+     * (Solrock flota y se balancea).
+     */
+    private static Vector3f skullOffset(ModelPart bodyHead, Quaternionf correction, ModelPart pasted,
+                                        Map<ModelPart, String> limbs, float scale) {
+        Vector3f target = skullCenter(bodyHead, Map.of());
+        Vector3f own = skullCenter(pasted, limbs);
+        if (target == null || own == null) {
+            return null;
+        }
+        // El centro del cráneo del cuerpo está en el marco de su cabeza; se pinta tras girar con la corrección
+        return new Quaternionf(correction).conjugate().transform(target).sub(own.mul(scale));
+    }
+
+    /**
+     * Centro del cubo con más volumen de un hueso y sus hijos (sin las extremidades que se saltan), en su propio marco
+     * y con la postura de ahora; null si no hay cubos con volumen.
+     */
+    private static Vector3f skullCenter(ModelPart part, Map<ModelPart, String> skip) {
+        float[] best = {-1};
+        Vector3f center = new Vector3f();
+        visitInOwnFrame(part, (pose, path, index, cube) -> {
+            for (String limb : skip.values()) {
+                if (path.equals(limb) || path.startsWith(limb + "/")) {
+                    return;
+                }
+            }
+            float[] box = emptyBox();
+            includeCube(box, pose, cube);
+            // Volumen del cubo en sí, no de su caja: la de un cubo girado es mayor y cambia con la animación (el cubo
+            // de 6x6x6 girado de la cabeza de Nidoking "ganaba" al cráneo, y a ratos no: la cabeza daba saltos)
+            float volume = cubeVolume(cube);
+            if (volume > best[0]) {
+                best[0] = volume;
+                center.set((box[0] + box[3]) / 2F, (box[1] + box[4]) / 2F, (box[2] + box[5]) / 2F);
+            }
+        });
+        return best[0] > 0 ? center : null;
+    }
+
+    /**
      * Desplazamiento (en el marco ya girado con la corrección) que apoya el modelo entero sobre el sitio de la
      * cabeza del cuerpo. En los modelos de Minecraft la Y crece hacia abajo: "lo más bajo" es la Y máxima.
      */
@@ -1369,28 +1453,33 @@ public final class FusionGraft {
 
     /** Caja de los cubos de un hueso y sus hijos cuya ruta (la de ModelPart.visit) cumpla la condición. */
     private static float[] boxInOwnFrame(ModelPart part, Predicate<String> include) {
+        float[] box = emptyBox();
+        visitInOwnFrame(part, (pose, path, index, cube) -> {
+            if (include.test(path)) {
+                includeCube(box, pose, cube);
+            }
+        });
+        return box;
+    }
+
+    /** Recorre los cubos de un hueso y sus hijos en su propio marco (sin su posición, giro ni escala). */
+    private static void visitInOwnFrame(ModelPart part, ModelPart.Visitor visitor) {
         PartPose saved = part.storePose();
         float xScale = part.xScale;
         float yScale = part.yScale;
         float zScale = part.zScale;
-        float[] box = emptyBox();
         try {
             part.loadPose(PartPose.ZERO);
             part.xScale = 1;
             part.yScale = 1;
             part.zScale = 1;
-            part.visit(new PoseStack(), (pose, path, index, cube) -> {
-                if (include.test(path)) {
-                    includeCube(box, pose, cube);
-                }
-            });
+            part.visit(new PoseStack(), visitor);
         } finally {
             part.loadPose(saved);
             part.xScale = xScale;
             part.yScale = yScale;
             part.zScale = zScale;
         }
-        return box;
     }
 
     /** Muestra u oculta unos huesos, apuntando cómo estaban para restoreVisible. */
@@ -1521,9 +1610,10 @@ public final class FusionGraft {
     }
 
     /**
-     * Sobre qué se pone la cabeza en un cuerpo sin cabeza: el hueso de primer nivel (hijo de la raíz) que lleva la pieza
-     * más grande. Casi siempre "body", que es el que mueven las animaciones (Voltorb rueda y bota con él, Koffing
-     * flota): así la cabeza lo sigue. Se mide con todo lo que cuelga de él, para ponerla encima de todo.
+     * Sobre qué se pone la cabeza en un cuerpo sin cabeza: el hueso que lleva la pieza más grande, con todo lo que
+     * cuelga de él. El mismo hueso que mueven las animaciones (Voltorb rueda y bota con "body", Koffing flota,
+     * Snorunt se balancea con "torso"): así lo pegado lo sigue. Con el de primer nivel ("body" en Snorunt, que no se
+     * mueve) los complementos se quedaban quietos y el cuerpo los atravesaba al balancearse.
      */
     private static HeadBone findTop(ModelPart root) {
         List<List<ModelPart>> paths = new ArrayList<>();
@@ -1539,8 +1629,7 @@ public final class FusionGraft {
                 best = path;
             }
         }
-        List<ModelPart> top = new ArrayList<>(best.subList(0, Math.min(2, best.size())));
-        return new HeadBone(top.getLast(), top);
+        return new HeadBone(best.getLast(), new ArrayList<>(best));
     }
 
     /**
@@ -2118,26 +2207,31 @@ public final class FusionGraft {
         }
         float[] all = emptyBox();
         List<float[]> boxes = new ArrayList<>();
+        // Volumen de cada cubo en sí (no el de su caja, mayor en los girados: ver skullCenter)
+        List<Float> volumes = new ArrayList<>();
         part.visit(new PoseStack(), (pose, path, index, cube) -> {
             float[] box = emptyBox();
             includeCube(box, pose, cube);
             includeCube(all, pose, cube);
             boxes.add(box);
+            volumes.add(cubeVolume(cube));
         });
 
-        float[] skull = null;
-        for (float[] box : boxes) {
-            if (volume(box) > 0 && (skull == null || volume(box) > volume(skull))) {
-                skull = box;
+        int skullIndex = -1;
+        for (int i = 0; i < boxes.size(); i++) {
+            if (volumes.get(i) > 0 && (skullIndex < 0 || volumes.get(i) > volumes.get(skullIndex))) {
+                skullIndex = i;
             }
         }
 
         float size;
-        if (skull != null) {
+        if (skullIndex >= 0) {
+            float[] skull = boxes.get(skullIndex);
             float skullSize = meanSide(skull);
             float[] head = skull.clone();
-            for (float[] box : boxes) {
-                if (volume(box) >= PIECE_SHARE * volume(skull) && touches(box, skull, 1 / 16F)) {
+            for (int i = 0; i < boxes.size(); i++) {
+                float[] box = boxes.get(i);
+                if (volumes.get(i) >= PIECE_SHARE * volumes.get(skullIndex) && touches(box, skull, 1 / 16F)) {
                     include(head, new Vector3f(box[0], box[1], box[2]));
                     include(head, new Vector3f(box[3], box[4], box[5]));
                 }
@@ -2152,6 +2246,11 @@ public final class FusionGraft {
         size = Math.max(size, 0.01F);
         SIZES.put(part, size);
         return size;
+    }
+
+    /** Volumen de un cubo (en píxeles³ de modelo), sin contar su giro. */
+    private static float cubeVolume(ModelPart.Cube cube) {
+        return (cube.maxX - cube.minX) * (cube.maxY - cube.minY) * (cube.maxZ - cube.minZ);
     }
 
     private static float volume(float[] box) {

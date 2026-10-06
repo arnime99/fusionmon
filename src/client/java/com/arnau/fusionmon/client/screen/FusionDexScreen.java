@@ -10,6 +10,7 @@ import com.cobblemon.mod.common.api.types.ElementalType;
 import com.cobblemon.mod.common.client.gui.PokemonGuiUtilsKt;
 import com.cobblemon.mod.common.client.gui.ProfileTransformType;
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState;
+import com.cobblemon.mod.common.client.render.models.blockbench.PosableModel;
 import com.cobblemon.mod.common.client.render.models.blockbench.repository.VaryingModelRepository;
 import com.cobblemon.mod.common.entity.PoseType;
 import com.cobblemon.mod.common.pokemon.FormData;
@@ -22,6 +23,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.Mth;
@@ -61,10 +63,9 @@ public class FusionDexScreen extends Screen {
     private static final int TEXT_LINES = 4;
     private static final int LINE = 11;
 
-    // Visor 3D: los valores de FusionConfirmScreen para una caja de 110 px, escalados al tamaño de la caja
-    private static final int BASE_BOX = 110;
-    private static final float BASE_SCALE = 2.4F;
-    private static final double BASE_OFFSET_Y = -10;
+    // Visor 3D: parte de la caja que ocupa el modelo, y la escala que aplica drawProfilePokemon por su cuenta
+    private static final float FIT = 0.85F;
+    private static final float PROFILE_SCALE = 20F;
     private static final int MODEL_LIGHT = 15;
     private static final float MIN_ZOOM = 0.25F;
     private static final float MAX_ZOOM = 5F;
@@ -97,6 +98,7 @@ public class FusionDexScreen extends Screen {
     private Button tailButton;
     private Button decorButton;
     private Button topButton;
+    private Button alignButton;
 
     // Cámara del visor: giro (grados), zoom y desplazamiento (píxeles)
     private float yaw = 30;
@@ -107,6 +109,10 @@ public class FusionDexScreen extends Screen {
     /** Si se está arrastrando el modelo (con qué botón), y si ya se ha movido a mano (deja de girar solo). */
     private int dragButton = -1;
     private boolean manualCamera;
+    /** Encuadre (ver measure): de qué fusión es, centro del modelo y radio que ocupa, en bloques. */
+    private String fitKey;
+    private Vector3f fitCenter = new Vector3f();
+    private float fitRadius = 1;
 
     public FusionDexScreen() {
         super(Component.translatable("gui.fusionmon.dex.title"));
@@ -176,8 +182,8 @@ public class FusionDexScreen extends Screen {
         });
 
         // Fila de abajo: aspecto y modos de /fusionvisual
-        int toggleWidth = Math.min(110, (width - 2 * MARGIN - 5 * GAP) / 6);
-        x = width / 2 - (6 * toggleWidth + 5 * GAP) / 2;
+        int toggleWidth = Math.min(110, (width - 2 * MARGIN - 6 * GAP) / 7);
+        x = width / 2 - (7 * toggleWidth + 6 * GAP) / 2;
         int y = height - SMALL - 4;
         shinyButton = addRenderableWidget(Button.builder(Component.empty(), b -> shiny = !shiny)
                 .bounds(x, y, toggleWidth, SMALL).build());
@@ -196,6 +202,9 @@ public class FusionDexScreen extends Screen {
         x += toggleWidth + GAP;
         topButton = addRenderableWidget(Button.builder(Component.empty(),
                 b -> FusionGraft.setTops(!FusionGraft.hasTops())).bounds(x, y, toggleWidth, SMALL).build());
+        x += toggleWidth + GAP;
+        alignButton = addRenderableWidget(Button.builder(Component.empty(),
+                b -> FusionGraft.setSkullAlign(!FusionGraft.isSkullAlign())).bounds(x, y, toggleWidth, SMALL).build());
     }
 
     @Override
@@ -252,26 +261,85 @@ public class FusionDexScreen extends Screen {
         graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.dex.help"), width / 2, y, GRAY);
     }
 
-    /** Visor 3D: como el de FusionConfirmScreen, más grande, y se puede girar, mover y acercar. */
+    /**
+     * Visor 3D, encuadrado solo: centrado en la caja y ocupando FIT de ella, girando sobre el centro del modelo; se
+     * puede girar, mover y acercar.
+     * Cobblemon coloca los modelos de los menús con unos valores de retrato de cada especie (profileTranslation/Scale),
+     * pensados para su cuadrito del resumen: en una caja grande el modelo salía cortado por arriba. Con
+     * ProfileTransformType.NONE no los usa (solo escala x20, gira y pinta), y lo colocamos aquí con la caja real del
+     * modelo que se pinta (el del cuerpo, si es cabeza sobre cuerpo).
+     */
     private void renderModel(GuiGraphics graphics, RenderablePokemon model, int x, int y, int box, float partialTick) {
         previewState.setCurrentAspects(model.getAspects());
         graphics.fill(x - 1, y - 1, x + box + 1, y + box + 1, 0xFF555555);
         graphics.fill(x, y, x + box, y + box, 0xFF1E1E1E);
+        measure(model);
 
-        float factor = (float) box / BASE_BOX;
         float shownYaw = manualCamera ? yaw : yaw + (System.currentTimeMillis() % TURN_MILLIS) * 360F / TURN_MILLIS;
+        Quaternionf rotation = QuaternionUtilsKt.fromEulerXYZDegrees(new Quaternionf(), new Vector3f(pitch, shownYaw, 0F));
+        // Píxeles por bloque para que el modelo quepa; drawProfilePokemon escala además x20 (el "20F" de abajo)
+        float pixels = box * FIT / (2 * fitRadius) * zoom;
+        // El centro del modelo, ya girado, en el centro de la caja
+        Vector3f center = rotation.transform(new Vector3f(fitCenter));
+
         // Lo que se salga de la caja no se pinta
         graphics.enableScissor(x, y, x + box, y + box);
         PoseStack pose = graphics.pose();
         pose.pushPose();
-        pose.translate(x + box / 2.0 + panX, y + BASE_OFFSET_Y * factor + panY, 0);
-        float scale = BASE_SCALE * factor * zoom;
+        pose.translate(x + box / 2.0 + panX, y + box / 2.0 + panY, 0);
+        float scale = pixels / PROFILE_SCALE;
         pose.scale(scale, scale, scale);
-        Quaternionf rotation = QuaternionUtilsKt.fromEulerXYZDegrees(new Quaternionf(), new Vector3f(pitch, shownYaw, 0F));
+        pose.translate(-center.x * PROFILE_SCALE, -center.y * PROFILE_SCALE, -center.z * PROFILE_SCALE);
         PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, previewState, partialTick,
-                20F, ProfileTransformType.SUMMARY, false, 1F, 1F, 1F, 1F, 0F, 0F, MODEL_LIGHT);
+                PROFILE_SCALE, ProfileTransformType.NONE, false, 1F, 1F, 1F, 1F, 0F, 0F, MODEL_LIGHT);
         pose.popPose();
         graphics.disableScissor();
+    }
+
+    /**
+     * Mide el modelo que se va a pintar (su caja con todos sus cubos, en bloques) cuando cambia la fusión o un modo.
+     * Solo entonces: medido en cada fotograma, el encuadre bailaría con las animaciones.
+     */
+    private void measure(RenderablePokemon model) {
+        String key = model.getSpecies().getResourceIdentifier() + "|" + model.getAspects() + "|"
+                + FusionGraft.isEnabled() + FusionGraft.hasTails() + FusionGraft.hasDecorations() + FusionGraft.hasTops()
+                + FusionGraft.isSkullAlign();
+        if (key.equals(fitKey)) {
+            return;
+        }
+        fitKey = key;
+        fitCenter = new Vector3f();
+        fitRadius = 1;
+        // El mismo que pedirá drawProfilePokemon (con cabeza sobre cuerpo, el del cuerpo: ver VaryingModelRepositoryMixin)
+        PosableModel poser = VaryingModelRepository.INSTANCE.getPoser(model.getSpecies().getResourceIdentifier(),
+                previewState);
+        if (!((Object) poser.getRootPart() instanceof ModelPart root)) {
+            return;
+        }
+        float[] box = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE,
+                -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
+        root.visit(new PoseStack(), (cubePose, path, index, cube) -> {
+            for (int corner = 0; corner < 8; corner++) {
+                // Los cubos van en píxeles de modelo (1/16 de bloque)
+                Vector3f point = cubePose.pose().transformPosition(new Vector3f(
+                        ((corner & 1) == 0 ? cube.minX : cube.maxX) / 16F,
+                        ((corner & 2) == 0 ? cube.minY : cube.maxY) / 16F,
+                        ((corner & 4) == 0 ? cube.minZ : cube.maxZ) / 16F));
+                for (int axis = 0; axis < 3; axis++) {
+                    box[axis] = Math.min(box[axis], point.get(axis));
+                    box[axis + 3] = Math.max(box[axis + 3], point.get(axis));
+                }
+            }
+        });
+        if (box[0] > box[3]) {
+            return;
+        }
+        fitCenter.set((box[0] + box[3]) / 2F, (box[1] + box[4]) / 2F, (box[2] + box[5]) / 2F);
+        // Radio que cabe girando sobre la vertical: el alto, o la diagonal de la planta
+        float halfX = (box[3] - box[0]) / 2F;
+        float halfY = (box[4] - box[1]) / 2F;
+        float halfZ = (box[5] - box[2]) / 2F;
+        fitRadius = Math.max(0.05F, Math.max(halfY, (float) Math.sqrt(halfX * halfX + halfZ * halfZ)));
     }
 
     /**
@@ -468,6 +536,8 @@ public class FusionDexScreen extends Screen {
         tailButton.setMessage(Component.translatable("gui.fusionmon.dex.tail", onOff(FusionGraft.hasTails())));
         decorButton.setMessage(Component.translatable("gui.fusionmon.dex.decor", onOff(FusionGraft.hasDecorations())));
         topButton.setMessage(Component.translatable("gui.fusionmon.dex.top", onOff(FusionGraft.hasTops())));
+        alignButton.setMessage(Component.translatable(FusionGraft.isSkullAlign()
+                ? "gui.fusionmon.dex.align.skull" : "gui.fusionmon.dex.align.pivot"));
     }
 
     private static Component onOff(boolean value) {
