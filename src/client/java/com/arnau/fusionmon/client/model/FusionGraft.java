@@ -191,6 +191,8 @@ public final class FusionGraft {
     private static final Map<PosableModel, ModelHeads> HEAD_BONES = new WeakHashMap<>();
     /** Tamaño de cada cabeza con sus hijos, para escalar la cabeza nueva. */
     private static final Map<ModelPart, Float> SIZES = new WeakHashMap<>();
+    /** Núcleo de cada cuerpo sin cabeza (ver coreBox). */
+    private static final Map<ModelPart, float[]> CORES = new WeakHashMap<>();
     /** Tamaño de cada racimo de cabezas, por su cabeza principal (ver pastedSize). */
     private static final Map<ModelPart, Float> CLUSTERS = new WeakHashMap<>();
     /** Cráneo y complementos de cada cabeza, para los cuerpos sin cabeza (ver renderOnBody). */
@@ -871,7 +873,7 @@ public final class FusionGraft {
             pieces.add(decoration.bone);
         }
         float[] skull = boxInModel(extras.skull);
-        float[] body = localBox(graft.top.part, Map.of());
+        float[] body = coreBox(graft.top.part);
         if (pieces.isEmpty() || skull[0] > skull[3] || body[0] > body[3]) {
             return;
         }
@@ -954,7 +956,7 @@ public final class FusionGraft {
         // La caja, en los ejes sin girar (está en el marco propio del hueso); los ejes, ya girados con el cuerpo
         Matrix3f toFrame = new Matrix3f(still).transpose();
         Matrix3f frame = new Matrix3f().rotation(withoutRoll(rotationAlong(top.path))).mul(still);
-        float[] own = localBox(top.part, Map.of());
+        float[] own = coreBox(top.part);
         float[] box = emptyBox();
         if (own[0] <= own[3]) {
             for (int corner = 0; corner < 8; corner++) {
@@ -998,7 +1000,7 @@ public final class FusionGraft {
      */
     private static void renderOnTop(Graft graft, Quaternionf headRotation, Matrix4f toHead, VertexConsumer consumer,
                                     PoseStack poseStack, int light, int overlay, int color) {
-        float[] body = localBox(graft.top.part, Map.of());
+        float[] body = coreBox(graft.top.part);
         float[] head = liveBox(graft.head.part, graft.limbs);
         if (body[0] > body[3] || head[0] > head[3]) {
             return;
@@ -1460,6 +1462,48 @@ public final class FusionGraft {
             }
         });
         return box;
+    }
+
+    /**
+     * El núcleo de un cuerpo sin cabeza, en su propio marco: su cubo principal (el de más volumen real) con las piezas
+     * grandes pegadas a él (como el cráneo en size). Para colocar lo que se le pega: con la caja de todo lo que cuelga
+     * (las alas de Wingull, los brazos de Cacnea, los rayos de Solrock, las ramas de Corsola) las orejas acababan en
+     * los bordes de esa caja, lejos del cuerpo, y la cola flotando detrás. Se calcula una vez (como localBox).
+     */
+    private static float[] coreBox(ModelPart part) {
+        float[] cached = CORES.get(part);
+        if (cached != null) {
+            return cached;
+        }
+        List<float[]> boxes = new ArrayList<>();
+        List<Float> volumes = new ArrayList<>();
+        visitInOwnFrame(part, (pose, path, index, cube) -> {
+            float[] box = emptyBox();
+            includeCube(box, pose, cube);
+            boxes.add(box);
+            volumes.add(cubeVolume(cube));
+        });
+        int main = -1;
+        for (int i = 0; i < boxes.size(); i++) {
+            if (volumes.get(i) > 0 && (main < 0 || volumes.get(i) > volumes.get(main))) {
+                main = i;
+            }
+        }
+        float[] core;
+        if (main < 0) {
+            // Sin cubos con volumen (todo planos): la caja de todo
+            core = localBox(part, Map.of());
+        } else {
+            core = boxes.get(main).clone();
+            for (int i = 0; i < boxes.size(); i++) {
+                if (volumes.get(i) >= PIECE_SHARE * volumes.get(main) && touches(boxes.get(i), boxes.get(main), 1 / 16F)) {
+                    include(core, new Vector3f(boxes.get(i)[0], boxes.get(i)[1], boxes.get(i)[2]));
+                    include(core, new Vector3f(boxes.get(i)[3], boxes.get(i)[4], boxes.get(i)[5]));
+                }
+            }
+        }
+        CORES.put(part, core);
+        return core;
     }
 
     /** Recorre los cubos de un hueso y sus hijos en su propio marco (sin su posición, giro ni escala). */

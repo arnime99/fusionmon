@@ -120,8 +120,9 @@ public class FusionDexScreen extends Screen {
 
     @Override
     protected void init() {
-        // Solo las especies con modelo en este cliente: las demás se pintarían con el muñeco sustituto
-        species = PokemonSpecies.getImplemented().stream()
+        // Todas las especies con modelo en este cliente (las demás se pintarían con el muñeco sustituto), aunque no
+        // estén marcadas como "implementadas": Gulpin tiene modelo en Cobblemon y Darkrai en AllTheMons, y no salían
+        species = PokemonSpecies.getSpecies().stream()
                 .filter(s -> VaryingModelRepository.INSTANCE.getVariations().containsKey(s.getResourceIdentifier()))
                 .sorted(Comparator.comparingInt(Species::getNationalPokedexNumber))
                 .toList();
