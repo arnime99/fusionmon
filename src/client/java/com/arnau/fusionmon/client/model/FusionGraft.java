@@ -1544,6 +1544,12 @@ public final class FusionGraft {
         Map<ModelPart, String> limbs = Map.of();
         List<List<ModelPart>> paths = new ArrayList<>();
         List<ModelPart> primary = firstPath(root, "head"::equals);
+        if (primary != null && cubes(primary.getLast()) == cubes(root)) {
+            // Su "head" lo lleva todo, patas incluidas (Corsola, Sunkern, Inkay, Gulpin, Nihilego: solo esos 6 en
+            // Cobblemon y AllTheMons). Como cuerpo, ocultarla dejaba solo la cabeza nueva: es un cuerpo sin cabeza,
+            // como Voltorb (conserva sus ramas y lleva los complementos). Como cabeza, se pega entero
+            return headless(root, Map.of(), null);
+        }
         if (primary == null) {
             primary = firstPath(root, "locator_head"::equals);
             if (primary != null) {
