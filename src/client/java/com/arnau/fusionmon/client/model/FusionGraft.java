@@ -305,6 +305,18 @@ public final class FusionGraft {
         tops = value;
     }
 
+    public static boolean hasTails() {
+        return tails;
+    }
+
+    public static boolean hasDecorations() {
+        return decorations;
+    }
+
+    public static boolean hasTops() {
+        return tops;
+    }
+
     /**
      * ¿Se podría pintar esta fusión con cabeza sobre cuerpo? (aunque el prototipo esté apagado).
      * Para el visor de la pantalla de fusión.

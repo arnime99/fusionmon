@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -27,10 +28,35 @@ public final class FusionTextures {
 
     private static final String GENERATED_PREFIX = "fusion_textures/";
 
+    /**
+     * Texturas generadas que se guardan como mucho. Cada una ocupa 64 KB (128x128) o 256 KB (256x256): sin límite, al
+     * recorrer cientos de fusiones en el visor (FusionDexScreen) la memoria no paraba de crecer. Las que se están
+     * pintando se piden en cada fotograma, así que nunca son las más viejas; una liberada se vuelve a generar si hace
+     * falta (milisegundos).
+     */
+    private static final int MAX_GENERATED = 256;
+
     /** "textura de cabeza|especie del cuerpo|aspects del cuerpo" → textura a usar (ahorra preguntar al resolver). */
     private static final Map<String, ResourceLocation> FUSIONS = new HashMap<>();
-    /** "textura|textura de la paleta" → textura recoloreada (o la original si falló). */
-    private static final Map<String, ResourceLocation> RECOLORED = new HashMap<>();
+    /**
+     * "textura|textura de la paleta" → textura recoloreada (o la original si falló). En orden de uso (la más reciente,
+     * al final): al pasar de MAX_GENERATED se libera la que lleva más tiempo sin usarse.
+     */
+    private static final Map<String, ResourceLocation> RECOLORED = new LinkedHashMap<>(16, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, ResourceLocation> eldest) {
+            if (size() <= MAX_GENERATED) {
+                return false;
+            }
+            ResourceLocation texture = eldest.getValue();
+            if (GENERATED.remove(texture)) {
+                Minecraft.getInstance().getTextureManager().release(texture);
+                // Lo que apuntaba a ella tiene que volver a pedirla
+                FUSIONS.values().removeIf(texture::equals);
+            }
+            return true;
+        }
+    };
     private static final Set<ResourceLocation> GENERATED = new HashSet<>();
     private static int nextId;
 

@@ -3,6 +3,7 @@ package com.arnau.fusionmon.client;
 import com.arnau.fusionmon.Fusionmon;
 import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.client.screen.FusionConfirmScreen;
+import com.arnau.fusionmon.client.screen.FusionDexScreen;
 import com.arnau.fusionmon.client.screen.UnfuseConfirmScreen;
 import com.arnau.fusionmon.client.texture.FusionTextures;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
@@ -13,6 +14,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.PackType;
@@ -65,7 +67,8 @@ public class FusionmonClient implements ClientModInitializer {
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.decor.off"));
 									return 1;
 								})))
-						// /fusionvisual top on|off: cuerpos sin cabeza (Voltorb, Lunatone...) con la cabeza encima o en modo colores
+						// /fusionvisual top on|off: cuerpos sin cabeza (Voltorb, Lunatone...) con los complementos de la cabeza o en
+						// modo colores
 						.then(ClientCommandManager.literal("top")
 								.then(ClientCommandManager.literal("on").executes(context -> {
 									FusionGraft.setTops(true);
@@ -77,6 +80,15 @@ public class FusionmonClient implements ClientModInitializer {
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.top.off"));
 									return 1;
 								})))));
+
+		// /fusiondex: visor de fusiones (FusionDexScreen). La pantalla se abre en la siguiente vuelta del bucle del
+		// juego: al terminar un comando, Minecraft cierra el chat, y cerraría también una pantalla abierta aquí mismo
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+				dispatcher.register(ClientCommandManager.literal("fusiondex").executes(context -> {
+					Minecraft client = context.getSource().getClient();
+					client.tell(() -> client.setScreen(new FusionDexScreen()));
+					return 1;
+				})));
 
 		// Las texturas de fusión se generan a partir de las de Cobblemon: si se recargan los recursos
 		// (F3+T, otro resource pack), hay que volver a generarlas
