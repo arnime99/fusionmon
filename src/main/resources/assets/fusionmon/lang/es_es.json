@@ -41,5 +41,7 @@
   "command.fusionmon.visual.tail.off": "Fusiones: con la cola del cuerpo",
   "command.fusionmon.visual.decor.on": "Fusiones: con los adornos de la especie de la cabeza",
   "command.fusionmon.visual.decor.off": "Fusiones: sin adornos de la especie de la cabeza",
+  "command.fusionmon.visual.top.on": "Fusiones: cuerpos sin cabeza con la cabeza encima",
+  "command.fusionmon.visual.top.off": "Fusiones: cuerpos sin cabeza solo con los colores",
   "command.fusionmon.unfused": "Fusión deshecha."
 }

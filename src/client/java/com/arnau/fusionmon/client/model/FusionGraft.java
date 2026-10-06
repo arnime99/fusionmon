@@ -39,6 +39,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 /**
@@ -98,6 +99,16 @@ public final class FusionGraft {
      */
     private static final float TAIL_REACH = 0.25F;
 
+    /**
+     * Un modelo sin patas cuya cola es más de esta parte del volumen es una serpiente o un pez: su cola es medio cuerpo
+     * y solo se cambia la punta (ver findTail). Simulado: 28 modelos (Ekans, Milotic, Magikarp, Feebas, Huntail...).
+     */
+    private static final float SERPENT_TAIL_SHARE = 0.25F;
+    private static final Set<String> LEGS = Set.of("leg", "legs", "foot", "feet");
+
+    /** Clase de "adorno" de los brazos (ver findDecorations y graft). */
+    private static final String ARM = "arm";
+
     /** Clase de adorno de las colas puestas en un cuerpo sin cola. */
     private static final String TAIL = "tail";
     /** Trozos de nombre que hacen adorno a un hueso aunque lleve anatomía en el nombre: la cría de Kangaskhan ("torso_kid"). */
@@ -115,6 +126,25 @@ public final class FusionGraft {
     /** Para medir una cabeza (ver size): qué cuenta como pieza grande pegada al cráneo, y hasta cuánto crece. */
     private static final float PIECE_SHARE = 0.1F;
     private static final float SKULL_GROWTH = 1.5F;
+    /**
+     * Cabeza encima de un cuerpo sin cabeza (ver renderOnTop): su cráneo mide esta parte del ancho del cuerpo, y se
+     * hunde en él esta parte de su alto (como si asomara; apoyada sin más, en una esfera quedaba un hueco por los lados).
+     */
+    private static final float TOP_SIZE = 0.75F;
+    private static final float TOP_SINK = 0.3F;
+    /**
+     * Racimo de cabezas (Exeggutor): el racimo entero mide esto respecto a la cabeza del cuerpo, y las cabezas se
+     * separan de la principal esto respecto a su modelo (ver pastedSize).
+     */
+    private static final float CLUSTER_SIZE = 1F;
+    private static final float CLUSTER_SPREAD = 1.4F;
+    /** Al revés, un cuerpo con racimo (Exeggutor): cada cabeza pegada en una de las suyas mide esto de ella. */
+    private static final float CLUSTER_BODY_SCALE = 0.6F;
+    /**
+     * Cuerpo sin cabeza con una cabeza "normal": los complementos de la cabeza (orejas, pelo...) se ponen en el
+     * cuerpo escalados como su cráneo respecto al cuerpo, por esta parte (ver renderOnBody).
+     */
+    private static final float ACCESSORY_SCALE = 1F;
 
     /** Modo de ver las fusiones: cabeza sobre cuerpo (por defecto) o colores (/fusionvisual colors). */
     private static boolean enabled = true;
@@ -122,6 +152,8 @@ public final class FusionGraft {
     private static boolean tails = true;
     /** Si se pegan al cuerpo los adornos de la especie de la cabeza (/fusionvisual decor on|off). */
     private static boolean decorations = true;
+    /** Si los cuerpos sin cabeza llevan la cabeza encima o van en modo colores (/fusionvisual top on|off). */
+    private static boolean tops = true;
 
     /**
      * Trozos de nombre de hueso que no dicen qué pieza es, solo dónde está o en qué estado ("wing_left",
@@ -149,6 +181,10 @@ public final class FusionGraft {
     private static final Map<PosableModel, ModelHeads> HEAD_BONES = new WeakHashMap<>();
     /** Tamaño de cada cabeza con sus hijos, para escalar la cabeza nueva. */
     private static final Map<ModelPart, Float> SIZES = new WeakHashMap<>();
+    /** Tamaño de cada racimo de cabezas, por su cabeza principal (ver pastedSize). */
+    private static final Map<ModelPart, Float> CLUSTERS = new WeakHashMap<>();
+    /** Cráneo y complementos de cada cabeza, para los cuerpos sin cabeza (ver renderOnBody). */
+    private static final Map<ModelPart, HeadExtras> EXTRAS = new WeakHashMap<>();
     /** Caja de cada hueso con sus hijos, en su propio marco (para apoyar los modelos enteros, ver groundOffset). */
     private static final Map<ModelPart, float[]> BOXES = new WeakHashMap<>();
     /** Caja de los cubos propios de cada tronco (sin sus hijos), en su propio marco: para colocar los adornos. */
@@ -179,13 +215,16 @@ public final class FusionGraft {
      * @param chains      si la especie de la cabeza tiene varias (Dodrio, Scovillain...): todas, cada una con su cuello,
      *                    que se pegan donde empezaba el cuello del cuerpo en vez de una sola cabeza (ver renderChains);
      *                    vacía si no
+     * @param companions  las demás cabezas del racimo de Exeggutor, que se pintan con la principal (ver ModelHeads)
+     * @param top         si el cuerpo no tiene cabeza (bodies vacía): el hueso sobre el que se pone (ver renderOnTop);
+     *                    si no, null
      */
     private record Graft(FusionBody body, VaryingRenderableResolver headResolver, VaryingRenderableResolver bodyResolver,
                          PosableModel headModel, PosableModel bodyModel, HeadBone head, boolean whole,
                          Map<ModelPart, String> limbs, List<HeadBone> bodies, Tail headTail, Tail bodyTail,
                          List<Decoration> trunkDecorations, List<Decoration> neckDecorations, HeadBone headTrunk,
                          HeadBone bodyTrunk, HeadBone headSpine, HeadBone bodySpine, List<ModelPart> hidden,
-                         List<HeadBone> chains) {
+                         List<HeadBone> chains, List<HeadBone> companions, HeadBone top) {
     }
 
     /**
@@ -233,9 +272,14 @@ public final class FusionGraft {
      * @param decorations los adornos que cuelgan del camino hasta la cabeza principal (ver findDecorations)
      * @param spineEnd el principio del cuello (ver findSpineEnd), o null
      * @param chains   con varias cabezas, cada una con su cuello desde donde se separan (ver findChains); si no, vacía
+     * @param companions con varias cabezas sin cuello que cuelgan del mismo hueso (el racimo de Exeggutor): las que
+     *                 no son la principal, que van pegadas con ella como en su modelo; entonces chains está vacía
+     * @param top      sin cabezas: el hueso sobre el que se pone la cabeza cuando es el CUERPO (ver findTop); si no, null
+     * @param face     sin cabezas: sus ojos y boca, que no se pintan con una cabeza encima (ver findFace)
      */
     private record ModelHeads(List<HeadBone> heads, boolean whole, Map<ModelPart, String> limbs, Tail tail,
-                              HeadBone trunk, List<Decoration> decorations, HeadBone spineEnd, List<HeadBone> chains) {
+                              HeadBone trunk, List<Decoration> decorations, HeadBone spineEnd, List<HeadBone> chains,
+                              List<HeadBone> companions, HeadBone top, List<ModelPart> face) {
     }
 
     private FusionGraft() {
@@ -255,6 +299,10 @@ public final class FusionGraft {
 
     public static void setDecorations(boolean value) {
         decorations = value;
+    }
+
+    public static void setTops(boolean value) {
+        tops = value;
     }
 
     /**
@@ -337,9 +385,13 @@ public final class FusionGraft {
         ModelHeads heads = HEAD_BONES.computeIfAbsent(headModel, FusionGraft::findHeads);
         ModelHeads bodyHeads = HEAD_BONES.computeIfAbsent(bodyModel, FusionGraft::findHeads);
         List<HeadBone> bodies = bodyHeads.heads();
-        // Un cuerpo sin cabeza no tiene dónde pegar nada: modo colores
+        // Un cuerpo sin cabeza (Voltorb, Lunatone...) no tiene dónde pegarla: va encima (o, sin eso, modo colores)
+        HeadBone top = null;
         if (bodies.isEmpty()) {
-            return null;
+            if (!tops || bodyHeads.top() == null) {
+                return null;
+            }
+            top = bodyHeads.top();
         }
         // Una cabeza "todo cabeza" (Magikarp, Voltorb, Koffing...): se pega el modelo entero, como en Infinite Fusion
         boolean whole = heads.whole();
@@ -351,17 +403,25 @@ public final class FusionGraft {
         boolean swapTail = tails && heads.tail() != null && bodyHeads.tail() != null;
         List<Decoration> trunkDecorations = new ArrayList<>();
         List<Decoration> neckDecorations = new ArrayList<>();
-        boolean trunks = heads.trunk() != null && bodyHeads.trunk() != null && heads.spineEnd() != null
-                && bodyHeads.spineEnd() != null;
+        // Un cuerpo sin cabeza hace de tronco entero (ver ballSpace)
+        boolean trunks = heads.trunk() != null && heads.spineEnd() != null
+                && (top != null || bodyHeads.trunk() != null && bodyHeads.spineEnd() != null);
         // Varias cabezas (Dodrio, Doduo, Scovillain...): van todas igual, cada una con su cuello, donde empezaba el
         // cuello del cuerpo, que se quita. Si el cuerpo ya tiene varias cabezas, cada una lleva la principal: más
         // serían demasiadas
         boolean allHeads = decorations && !whole && bodies.size() == 1 && !heads.chains().isEmpty()
                 && bodyHeads.spineEnd() != null;
+        // Un racimo de cabezas (Exeggutor) va entero con la principal, con la misma regla
+        List<HeadBone> companions = decorations && !whole && bodies.size() <= 1 ? heads.companions() : List.of();
         // Al pegar un modelo entero, sus adornos ya van con él
         if (!whole) {
+            List<Decoration> arms = new ArrayList<>();
             if (decorations) {
                 for (Decoration decoration : heads.decorations()) {
+                    if (decoration.category.equals(ARM)) {
+                        arms.add(decoration);
+                        continue;
+                    }
                     // Sin una cabeza pegada no hay con qué llevar los del cuello (los cuellos van con sus cabezas)
                     if (decoration.neck && allHeads) {
                         continue;
@@ -375,6 +435,14 @@ public final class FusionGraft {
                     trunkDecorations.add(new Decoration(TAIL, root, false));
                 }
             }
+            // Un cuerpo sin cabeza al que la especie de la cabeza no le pone nada (Machoke: ni orejas, ni pelo, ni
+            // cola) se quedaba solo con los colores: lleva sus brazos
+            if (top != null && trunkDecorations.isEmpty() && neckDecorations.isEmpty() && !swapTail
+                    && EXTRAS.computeIfAbsent(head.part, part -> findExtras(head)).accessories().isEmpty()) {
+                for (Decoration arm : arms) {
+                    trunkDecorations.add(new Decoration(ARM, arm.bone, false));
+                }
+            }
             // Sin tronco en algún lado no hay dónde colocarlos
             if (!trunks) {
                 trunkDecorations.clear();
@@ -384,6 +452,10 @@ public final class FusionGraft {
         List<ModelPart> hidden = new ArrayList<>();
         for (HeadBone bodyHead : bodies) {
             hidden.add(bodyHead.part);
+        }
+        if (top != null && whole) {
+            // Con un modelo entero encima, la cara del cuerpo sobra (con complementos, el cuerpo conserva la suya)
+            hidden.addAll(bodyHeads.face());
         }
         if (allHeads && bodyHeads.spineEnd().part != bodies.get(0).part) {
             // El cuello del cuerpo (con su cabeza): las cabezas nuevas traen el suyo
@@ -410,7 +482,7 @@ public final class FusionGraft {
         return new Graft(body, headResolver, bodyResolver, headModel, bodyModel, head, whole, heads.limbs(), bodies,
                 swapTail ? heads.tail() : null, swapTail ? bodyHeads.tail() : null, trunkDecorations,
                 neckDecorations, heads.trunk(), bodyHeads.trunk(), heads.spineEnd(), bodyHeads.spineEnd(), hidden,
-                allHeads ? heads.chains() : List.of());
+                allHeads ? heads.chains() : List.of(), companions, top);
     }
 
     /** El modelo entero como si fuera una cabeza (su raíz, con todos sus huesos). */
@@ -547,19 +619,22 @@ public final class FusionGraft {
         // Orientación de la cabeza en su propio modelo, ya animado (respecto a la raíz)
         Quaternionf headRotation = rotationAlong(graft.head.path);
         // Para los adornos del cuello: del marco de la cabeza en su modelo al de cada uno (antes de que se le quiten
-        // a la cabeza su posición y giro para pintarla)
-        Matrix4f toHead = graft.neckDecorations.isEmpty() ? null : matrixAlong(graft.head.path).invert();
+        // a la cabeza su posición y giro para pintarla). También para las demás cabezas del racimo de Exeggutor
+        Matrix4f toHead = graft.neckDecorations.isEmpty() && graft.companions.isEmpty() ? null
+                : matrixAlong(graft.head.path).invert();
 
         // Con varias cabezas se pegan todas con sus cuellos (renderChains), no una sola en el sitio de la del cuerpo
+        // Un cuerpo con racimo de cabezas (Exeggutor): sus cabezas están medio metidas unas en otras y, del tamaño de
+        // cada una, las pegadas se comían entre ellas. Más pequeñas
+        ModelHeads bodyHeads = HEAD_BONES.get(graft.bodyModel);
+        float bodyCluster = bodyHeads != null && !bodyHeads.companions().isEmpty() ? CLUSTER_BODY_SCALE : 1F;
         for (HeadBone bodyHead : graft.chains.isEmpty() ? graft.bodies : List.<HeadBone>of()) {
-            float scale = Math.clamp(size(bodyHead.part) / size(head), MIN_SCALE, MAX_SCALE) * INFLATE;
+            float scale = Math.clamp(bodyCluster * size(bodyHead.part) / pastedSize(graft), MIN_SCALE, MAX_SCALE)
+                    * INFLATE;
             // Quitamos el giro que traía la cabeza del cuerpo y ponemos el de la cabeza en su modelo:
             // así mira hacia donde mira en su modelo (y hacia el jugador, con su animación de mirar)
             Quaternionf correction = rotationAlong(bodyHead.path).conjugate().mul(headRotation);
 
-            PartPose saved = head.storePose();
-            boolean visible = head.visible;
-            List<Boolean> limbsWereVisible = new ArrayList<>();
             poseStack.pushPose();
             try {
                 // Mismas transformaciones que ha recibido la cabeza del cuerpo: raíz → ... → cuello → cabeza
@@ -575,29 +650,18 @@ public final class FusionGraft {
                     poseStack.translate(offset.x, offset.y, offset.z);
                 }
                 poseStack.scale(scale, scale, scale);
-
-                // La cabeza nueva sin su posición ni giro propios (ya van arriba), con su pivote en el del cuerpo
-                head.setPos(0, 0, 0);
-                head.setRotation(0, 0, 0);
-                head.visible = true;
-                setVisible(graft.limbs.keySet(), limbsWereVisible, false);
-                head.render(poseStack, consumer, light, overlay, color);
-
-                // Los adornos del cuello van con la cabeza: misma posición y giro respecto a ella que en su modelo
-                if (toHead != null) {
-                    for (Decoration decoration : graft.neckDecorations) {
-                        poseStack.pushPose();
-                        poseStack.mulPose(new Matrix4f(toHead).mul(matrixAlong(parentPath(decoration.bone))));
-                        decoration.bone.part.render(poseStack, consumer, light, overlay, color);
-                        poseStack.popPose();
-                    }
-                }
+                renderHead(graft, toHead, consumer, poseStack, light, overlay, color);
             } finally {
-                // Pase lo que pase, la pila de transformaciones y la cabeza quedan como estaban
-                restoreVisible(graft.limbs.keySet(), limbsWereVisible);
-                head.loadPose(saved);
-                head.visible = visible;
                 poseStack.popPose();
+            }
+        }
+        if (graft.top != null) {
+            // Un cuerpo sin cabeza: un modelo "todo cabeza" (Voltorb, Koffing) va entero encima; de una cabeza normal
+            // solo se le ponen sus complementos (orejas, pelo...), como en Infinite Fusion
+            if (graft.whole) {
+                renderOnTop(graft, headRotation, toHead, consumer, poseStack, light, overlay, color);
+            } else {
+                renderOnBody(graft, consumer, poseStack, light, overlay, color);
             }
         }
 
@@ -655,6 +719,278 @@ public final class FusionGraft {
         }
     }
 
+    /**
+     * Pinta la cabeza pegada (la pila ya trae su sitio, giro y escala) con lo que va con ella: los adornos del cuello
+     * y las demás cabezas del racimo de Exeggutor.
+     */
+    private static void renderHead(Graft graft, Matrix4f toHead, VertexConsumer consumer, PoseStack poseStack,
+                                   int light, int overlay, int color) {
+        ModelPart head = graft.head.part;
+        PartPose saved = head.storePose();
+        boolean visible = head.visible;
+        List<Boolean> limbsWereVisible = new ArrayList<>();
+        try {
+            // La cabeza nueva sin su posición ni giro propios (ya van en la pila)
+            head.setPos(0, 0, 0);
+            head.setRotation(0, 0, 0);
+            head.visible = true;
+            setVisible(graft.limbs.keySet(), limbsWereVisible, false);
+            head.render(poseStack, consumer, light, overlay, color);
+
+            // Los adornos del cuello van con la cabeza: misma posición y giro respecto a ella que en su modelo
+            if (toHead != null) {
+                for (Decoration decoration : graft.neckDecorations) {
+                    renderBeside(decoration.bone, toHead, poseStack, consumer, light, overlay, color);
+                }
+                // Las demás cabezas del racimo, igual: donde están respecto a la principal en su modelo y del mismo
+                // tamaño que ella (como Dodrio no: con su escala de tronco las de Exeggutor salían diminutas,
+                // porque su tronco es enorme)
+                for (HeadBone companion : graft.companions) {
+                    poseStack.pushPose();
+                    // Algo más separadas que en su modelo: en Exeggutor están medio metidas unas en otras y, ya
+                    // pequeñas, parecían una sola
+                    Vector3f offset = new Matrix4f(toHead).mul(matrixAlong(companion.path))
+                            .getTranslation(new Vector3f()).mul(CLUSTER_SPREAD - 1);
+                    poseStack.translate(offset.x, offset.y, offset.z);
+                    renderBeside(companion, toHead, poseStack, consumer, light, overlay, color);
+                    poseStack.popPose();
+                }
+            }
+        } finally {
+            // Pase lo que pase, la cabeza queda como estaba
+            restoreVisible(graft.limbs.keySet(), limbsWereVisible);
+            head.loadPose(saved);
+            head.visible = visible;
+        }
+    }
+
+    /**
+     * El cráneo de una cabeza (el primer hueso con cubos propios bajando desde ella: "head_angle" en Pikachu, la propia
+     * "head" en Venusaur) y sus complementos: lo que cuelga de ella hasta el cráneo y no es la cara (ver findExtras).
+     */
+    private record HeadExtras(HeadBone skull, List<HeadBone> accessories) {
+    }
+
+    /**
+     * Piezas de la cara que no se ponen en un cuerpo sin cabeza (el cuerpo conserva la suya): ojos, boca, mandíbula...
+     * ya son anatomía (ver category); estas no lo son para los adornos, pero también son cara.
+     */
+    private static final Set<String> FACE_PARTS = Set.of("muzzle", "snout", "nose", "nostril", "beak", "teeth",
+            "tooth", "fang", "lip", "brow", "eyebrow", "eyelid", "pupil", "blush", "cheek", "whisker", "chin",
+            "eyeshine", "emote", "overlay");
+
+    private static HeadExtras findExtras(HeadBone head) {
+        // Bajamos por los grupos sin cubos ("head_ai", "head_correction"...) hasta el cráneo
+        List<ModelPart> path = new ArrayList<>(head.path);
+        while (!hasOwnCubes(path.getLast())) {
+            ModelPart next = null;
+            for (Bone child : ((Bone) (Object) path.getLast()).getChildren().values()) {
+                if ((Object) child instanceof ModelPart part && cubes(part) > 0
+                        && (next == null || cubes(part) > cubes(next))) {
+                    next = part;
+                }
+            }
+            if (next == null) {
+                break;
+            }
+            path.add(next);
+        }
+        List<HeadBone> accessories = new ArrayList<>();
+        for (int i = head.path.size() - 1; i < path.size(); i++) {
+            for (Map.Entry<String, Bone> child : ((Bone) (Object) path.get(i)).getChildren().entrySet()) {
+                if (!((Object) child.getValue() instanceof ModelPart part) || path.contains(part) || cubes(part) == 0
+                        || category(child.getKey()) == null || isFacePart(child.getKey())) {
+                    continue;
+                }
+                List<ModelPart> piece = new ArrayList<>(path.subList(0, i + 1));
+                piece.add(part);
+                accessories.add(new HeadBone(part, piece));
+            }
+        }
+        return new HeadExtras(new HeadBone(path.getLast(), path), accessories);
+    }
+
+    private static boolean isFacePart(String name) {
+        for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
+            if (FACE_PARTS.contains(stripModifiers(token.replaceAll("\\d+$", "")))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Cuerpo sin cabeza (Voltorb, Lunatone...) con una cabeza normal: el cuerpo hace también de cabeza, con su cara,
+     * y se le ponen los complementos de la cabeza (orejas, pelo, crin...) y los adornos de su cuello. Cada uno va al
+     * mismo sitio proporcional: respecto al cráneo en su modelo y respecto al cuerpo entero aquí (las orejas de
+     * Pikachu, encima de la Voltorb). Se escalan como el cráneo respecto al cuerpo. Los adornos del tronco y la cola
+     * van aparte, como siempre (renderDecorations, con el cuerpo como tronco: ver ballSpace).
+     */
+    private static void renderOnBody(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light,
+                                     int overlay, int color) {
+        HeadExtras extras = EXTRAS.computeIfAbsent(graft.head.part, part -> findExtras(graft.head));
+        List<HeadBone> pieces = new ArrayList<>(extras.accessories);
+        for (Decoration decoration : graft.neckDecorations) {
+            pieces.add(decoration.bone);
+        }
+        float[] skull = boxInModel(extras.skull);
+        float[] body = localBox(graft.top.part, Map.of());
+        if (pieces.isEmpty() || skull[0] > skull[3] || body[0] > body[3]) {
+            return;
+        }
+        Vector3f pivot = matrixAlong(graft.top.path).getTranslation(new Vector3f());
+        float scale = Math.clamp(ACCESSORY_SCALE * size(graft.top.part) / size(graft.head.part), MIN_PIECE_SCALE,
+                MAX_PIECE_SCALE);
+
+        for (HeadBone piece : pieces) {
+            ModelPart part = piece.part;
+            if (!part.visible) {
+                continue;
+            }
+            Matrix4f matrix = matrixAlong(piece.path);
+            Vector3f from = matrix.getTranslation(new Vector3f());
+            // Del cráneo al cuerpo, sin salirse de él (sin girar el cuerpo: Voltorb rueda)
+            Vector3f placed = new Vector3f(
+                    remap(from.x, skull, body, 0, 0F, 1F),
+                    remap(from.y, skull, body, 1, 0F, 1F),
+                    remap(from.z, skull, body, 2, 0F, 1F)).add(pivot);
+            PartPose saved = part.storePose();
+            poseStack.pushPose();
+            try {
+                poseStack.translate(placed.x, placed.y, placed.z);
+                poseStack.mulPose(matrix.getNormalizedRotation(new Quaternionf()));
+                poseStack.scale(scale, scale, scale);
+                // Su posición y giro ya van arriba
+                part.setPos(0, 0, 0);
+                part.setRotation(0, 0, 0);
+                part.render(poseStack, consumer, light, overlay, color);
+            } finally {
+                part.loadPose(saved);
+                poseStack.popPose();
+            }
+        }
+    }
+
+    /** Caja de los cubos propios de un hueso, en el modelo (con la postura de ahora). */
+    private static float[] boxInModel(HeadBone bone) {
+        float[] own = ownBox(bone.part);
+        float[] box = emptyBox();
+        if (own[0] > own[3]) {
+            return box;
+        }
+        Matrix4f matrix = matrixAlong(bone.path);
+        for (int corner = 0; corner < 8; corner++) {
+            include(box, matrix.transformPosition(new Vector3f(
+                    own[(corner & 1) == 0 ? 0 : 3],
+                    own[(corner & 2) == 0 ? 1 : 4],
+                    own[(corner & 4) == 0 ? 2 : 5])));
+        }
+        return box;
+    }
+
+    /**
+     * Un cuerpo sin cabeza como tronco, para colocar adornos y cola (ver renderDecorations): su pieza principal entera,
+     * en su sitio pero sin su giro (Voltorb rueda), con los ejes de un cuadrúpedo: la columna hacia delante (hacia la
+     * cara, -Z en los modelos), así la espalda queda arriba. La flor de Venusaur va encima de la Voltorb, y la cola,
+     * detrás.
+     */
+    private static TrunkSpace ballSpace(HeadBone top) {
+        Vector3f origin = matrixAlong(top.path).getTranslation(new Vector3f());
+        Vector3f across = new Vector3f(1, 0, 0);
+        Vector3f spine = new Vector3f(0, 0, -1);
+        Matrix3f frame = new Matrix3f(across, spine, new Vector3f(across).cross(spine));
+        Matrix3f toFrame = new Matrix3f(frame).transpose();
+        float[] own = localBox(top.part, Map.of());
+        float[] box = emptyBox();
+        if (own[0] <= own[3]) {
+            for (int corner = 0; corner < 8; corner++) {
+                include(box, toFrame.transform(new Vector3f(
+                        own[(corner & 1) == 0 ? 0 : 3],
+                        own[(corner & 2) == 0 ? 1 : 4],
+                        own[(corner & 4) == 0 ? 2 : 5])));
+            }
+        }
+        return new TrunkSpace(origin, frame, box);
+    }
+
+    /**
+     * Lo que mide lo que se pega en el sitio de la cabeza, para escalarlo: la cabeza (ver size) o, con un racimo
+     * (Exeggutor), el racimo entero, que ocupa CLUSTER_SIZE de lo que ocuparía una cabeza. Escalando cada cabeza como
+     * una sola, las tres juntas eran mucho más grandes que la cabeza del cuerpo.
+     */
+    private static float pastedSize(Graft graft) {
+        if (graft.companions.isEmpty()) {
+            return size(graft.head.part);
+        }
+        return CLUSTERS.computeIfAbsent(graft.head.part, part -> {
+            // Caja de todas las cabezas del racimo, en el modelo
+            float[] box = emptyBox();
+            List<HeadBone> all = new ArrayList<>(graft.companions);
+            all.add(graft.head);
+            for (HeadBone head : all) {
+                PoseStack stack = new PoseStack();
+                stack.mulPose(matrixAlong(parentPath(head)));
+                head.part.visit(stack, (pose, path, index, cube) -> includeCube(box, pose, cube));
+            }
+            return box[0] > box[3] ? size(part) : Math.max(meanSide(box), 0.01F) / CLUSTER_SIZE;
+        });
+    }
+
+    /**
+     * Cuerpos sin cabeza (Voltorb, Lunatone, Koffing...): la cabeza encima, algo hundida (TOP_SINK de su alto), como
+     * si asomara de él, centrada y de TOP_SIZE del ancho del cuerpo. Sus ojos y boca no se pintan (ver findFace).
+     * Sigue la posición del cuerpo (flotar, botar) pero no su giro: Voltorb rueda al andar y la cabeza daría vueltas
+     * con él. Mira hacia donde mira en su modelo (y hacia el jugador, con su animación de mirar).
+     */
+    private static void renderOnTop(Graft graft, Quaternionf headRotation, Matrix4f toHead, VertexConsumer consumer,
+                                    PoseStack poseStack, int light, int overlay, int color) {
+        float[] body = localBox(graft.top.part, Map.of());
+        float[] head = liveBox(graft.head.part, graft.limbs);
+        if (body[0] > body[3] || head[0] > head[3]) {
+            return;
+        }
+        float width = ((body[3] - body[0]) + (body[5] - body[2])) / 2F;
+        float scale = Math.clamp(TOP_SIZE * width / size(graft.head.part), MIN_SCALE, MAX_SCALE);
+        // La caja de la cabeza ya girada como se va a pintar
+        float[] turned = emptyBox();
+        for (int corner = 0; corner < 8; corner++) {
+            include(turned, headRotation.transform(new Vector3f(
+                    head[(corner & 1) == 0 ? 0 : 3],
+                    head[(corner & 2) == 0 ? 1 : 4],
+                    head[(corner & 4) == 0 ? 2 : 5])));
+        }
+        float height = turned[4] - turned[1];
+        // Solo la posición del hueso del cuerpo, sin su giro
+        Vector3f pivot = matrixAlong(graft.top.path).getTranslation(new Vector3f());
+
+        poseStack.pushPose();
+        try {
+            // Lo alto del cuerpo, centrado (en los modelos de Minecraft la Y crece hacia abajo: arriba es la mínima)
+            poseStack.translate(pivot.x + (body[0] + body[3]) / 2F, pivot.y + body[1],
+                    pivot.z + (body[2] + body[5]) / 2F);
+            // Ahí, el punto más bajo de la cabeza, hundido; centrada en horizontal
+            poseStack.translate(-scale * (turned[0] + turned[3]) / 2F, scale * (TOP_SINK * height - turned[4]),
+                    -scale * (turned[2] + turned[5]) / 2F);
+            poseStack.mulPose(headRotation);
+            poseStack.scale(scale, scale, scale);
+            renderHead(graft, toHead, consumer, poseStack, light, overlay, color);
+        } finally {
+            poseStack.popPose();
+        }
+    }
+
+    /**
+     * Pinta una pieza que va con la cabeza pegada (la pila ya está en el marco de esa cabeza): en la misma posición y
+     * giro respecto a ella que en su modelo. toHead pasa del marco del modelo al de la cabeza.
+     */
+    private static void renderBeside(HeadBone piece, Matrix4f toHead, PoseStack poseStack, VertexConsumer consumer,
+                                     int light, int overlay, int color) {
+        poseStack.pushPose();
+        poseStack.mulPose(new Matrix4f(toHead).mul(matrixAlong(parentPath(piece))));
+        piece.part.render(poseStack, consumer, light, overlay, color);
+        poseStack.popPose();
+    }
+
     /** El camino hasta el hueso del que cuelga una pieza. */
     private static List<ModelPart> parentPath(HeadBone bone) {
         return bone.path.subList(0, bone.path.size() - 1);
@@ -677,7 +1013,7 @@ public final class FusionGraft {
     private static void renderDecorations(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light,
                                           int overlay, int color) {
         TrunkSpace head = trunkSpace(graft.headTrunk, graft.headSpine);
-        TrunkSpace body = trunkSpace(graft.bodyTrunk, graft.bodySpine);
+        TrunkSpace body = graft.top != null ? ballSpace(graft.top) : trunkSpace(graft.bodyTrunk, graft.bodySpine);
         if (head.box[0] > head.box[3] || body.box[0] > body.box[3]) {
             return;
         }
@@ -710,6 +1046,12 @@ public final class FusionGraft {
                     remap(pivot.z, head.box, body.box, 2, dorsalMin, 1F - dorsalMin))).add(body.origin);
             Quaternionf own = matrix.getNormalizedRotation(new Quaternionf());
             Quaternionf rotation = new Quaternionf(frameChange).mul(own);
+            boolean arm = decoration.category.equals(ARM);
+            if (arm) {
+                // Un brazo cuelga como en su modelo: con los ejes de un cuerpo sin cabeza (cuadrúpedo, ver ballSpace),
+                // el de un bípedo acababa apuntando hacia atrás
+                rotation = own;
+            }
             if (tail) {
                 // Una cola, a medio camino entre su giro respecto al Pokémon entero y el que le toca con los ejes del
                 // cuerpo: la de un cuadrúpedo en un bípedo acababa apuntando al suelo con los ejes, y la de un bípedo
@@ -725,7 +1067,7 @@ public final class FusionGraft {
                 if (tailLength > 0) {
                     axes.set(Math.min(trunkScale, bodyTrunkLength / tailLength));
                 }
-            } else {
+            } else if (!arm) {
                 // Los adornos se ajustan algo a la forma de cada eje del cuerpo: el caparazón de Lapras se hundía en
                 // Dragonite, mucho más grueso de delante a atrás. Sin pasarse, o una pieza se deformaría
                 for (int axis = 0; axis < 3; axis++) {
@@ -937,7 +1279,7 @@ public final class FusionGraft {
                                          Map<ModelPart, String> limbs, float scale) {
         float[] head = localBox(bodyHead, Map.of());
         // Sin las extremidades que no se pintan: si no, Tentacool se apoyaría en la punta de unos tentáculos ocultos
-        float[] pasted = localBox(model, limbs);
+        float[] pasted = liveBox(model, limbs);
         if (head[0] > head[3] || pasted[0] > pasted[3]) {
             // Alguno no tiene cubos: pivote con pivote
             return new Vector3f();
@@ -968,8 +1310,19 @@ public final class FusionGraft {
         if (cached != null) {
             return cached;
         }
+        float[] box = liveBox(part, skip);
+        BOXES.put(part, box);
+        return box;
+    }
+
+    /**
+     * Como localBox, pero con la postura de ahora, sin caché. Para apoyar un modelo entero que se pega: Solrock flota y
+     * se balancea con su animación, y medido una sola vez quedaba más alto o ladeado según el instante en que se
+     * midió. Medido en cada fotograma, siempre queda apoyado y centrado (son pocos cubos).
+     */
+    private static float[] liveBox(ModelPart part, Map<ModelPart, String> skip) {
         // visit no mira la visibilidad: lo que se salta se reconoce por la ruta del hueso del cubo
-        float[] box = boxInOwnFrame(part, path -> {
+        return boxInOwnFrame(part, path -> {
             for (String limb : skip.values()) {
                 if (path.equals(limb) || path.startsWith(limb + "/")) {
                     return false;
@@ -977,8 +1330,6 @@ public final class FusionGraft {
             }
             return true;
         });
-        BOXES.put(part, box);
-        return box;
     }
 
     /**
@@ -1084,7 +1435,8 @@ public final class FusionGraft {
      */
     private static ModelHeads findHeads(PosableModel model) {
         if (!((Object) model.getRootPart() instanceof ModelPart root)) {
-            return new ModelHeads(List.of(), true, Map.of(), null, null, List.of(), null, List.of());
+            return new ModelHeads(List.of(), true, Map.of(), null, null, List.of(), null, List.of(), List.of(), null,
+                    List.of());
         }
 
         boolean whole = false;
@@ -1105,7 +1457,7 @@ public final class FusionGraft {
                 ModelPart part = primary.get(primary.size() - 1);
                 whole = volume(part) >= WHOLE_MODEL_SHARE * volume(root);
                 if (cubes(part) == cubes(root)) {
-                    return new ModelHeads(List.of(), true, Map.of(), null, null, List.of(), null, List.of());
+                    return headless(root, Map.of(), null);
                 }
                 if (whole) {
                     limbs = new LinkedHashMap<>();
@@ -1131,12 +1483,82 @@ public final class FusionGraft {
         }
         Tail tail = findTail(root, heads);
         if (heads.isEmpty()) {
-            return new ModelHeads(heads, true, limbs, tail, null, List.of(), null, List.of());
+            return headless(root, limbs, tail);
         }
         List<ModelPart> headPath = heads.get(0).path;
         HeadBone trunk = findTrunk(headPath);
-        return new ModelHeads(heads, whole, limbs, tail, trunk, findDecorations(headPath, heads, tail),
-                findSpineEnd(headPath, trunk), heads.size() > 1 ? findChains(heads) : List.of());
+        // Varias cabezas sin cuello, que cuelgan juntas del mismo hueso (Exeggutor: "head", "head2" y "head3" de
+        // "upperHead"): son un racimo que va entero con la principal, no cabezas con cuello como las de Dodrio
+        ModelPart cluster = heads.size() > 1 ? sharedParent(heads) : null;
+        List<HeadBone> companions = cluster == null ? List.of() : List.copyOf(heads.subList(1, heads.size()));
+        // Lo que cuelga de ese hueso (las hojas de Exeggutor) también va con las cabezas, salvo que sea el tronco
+        if (cluster != null && trunk != null && headPath.indexOf(cluster) <= headPath.indexOf(trunk.part)) {
+            cluster = null;
+        }
+        List<HeadBone> chains = heads.size() > 1 && companions.isEmpty() ? findChains(heads) : List.of();
+        return new ModelHeads(heads, whole, limbs, tail, trunk, findDecorations(headPath, heads, tail, cluster),
+                findSpineEnd(headPath, trunk), chains, companions, null, List.of());
+    }
+
+    /**
+     * Un modelo sin cabeza: como CABEZA se pega entero; como CUERPO, la cabeza va encima de él (ver findTop, findFace).
+     */
+    private static ModelHeads headless(ModelPart root, Map<ModelPart, String> limbs, Tail tail) {
+        return new ModelHeads(List.of(), true, limbs, tail, null, List.of(), null, List.of(), List.of(), findTop(root),
+                findFace(root));
+    }
+
+    /**
+     * Sobre qué se pone la cabeza en un cuerpo sin cabeza: el hueso de primer nivel (hijo de la raíz) que lleva la pieza
+     * más grande. Casi siempre "body", que es el que mueven las animaciones (Voltorb rueda y bota con él, Koffing
+     * flota): así la cabeza lo sigue. Se mide con todo lo que cuelga de él, para ponerla encima de todo.
+     */
+    private static HeadBone findTop(ModelPart root) {
+        List<List<ModelPart>> paths = new ArrayList<>();
+        List<ModelPart> current = new ArrayList<>();
+        current.add(root);
+        collectPaths(root, name -> true, current, paths);
+        List<ModelPart> best = List.of(root);
+        float bestVolume = hasOwnCubes(root) ? volume(ownBox(root)) : 0;
+        for (List<ModelPart> path : paths) {
+            float[] box = ownBox(path.getLast());
+            if (box[0] <= box[3] && volume(box) > bestVolume) {
+                bestVolume = volume(box);
+                best = path;
+            }
+        }
+        List<ModelPart> top = new ArrayList<>(best.subList(0, Math.min(2, best.size())));
+        return new HeadBone(top.getLast(), top);
+    }
+
+    /**
+     * Ojos, cejas y boca de un modelo sin cabeza ("eyes", "eye_left", "mouth_open", "eyebrow_left"...): con otra
+     * cabeza encima sobran (Voltorb con dos caras). "face" no: en Staryu es la gema del centro.
+     */
+    private static List<ModelPart> findFace(ModelPart root) {
+        List<List<ModelPart>> paths = new ArrayList<>();
+        List<ModelPart> current = new ArrayList<>();
+        current.add(root);
+        collectPaths(root, name -> name.startsWith("eye") || name.startsWith("mouth"), current, paths);
+        List<ModelPart> face = new ArrayList<>();
+        for (List<ModelPart> path : paths) {
+            // Solo el de más arriba de cada grupo: "eyes" y no también "eye_left", que va dentro
+            if (path.stream().limit(path.size() - 1L).noneMatch(face::contains)) {
+                face.add(path.getLast());
+            }
+        }
+        return face;
+    }
+
+    /** El hueso del que cuelgan directamente todas las cabezas, o null si no es el mismo. */
+    private static ModelPart sharedParent(List<HeadBone> heads) {
+        ModelPart parent = parentPath(heads.get(0)).getLast();
+        for (HeadBone head : heads) {
+            if (parentPath(head).getLast() != parent) {
+                return null;
+            }
+        }
+        return parent;
     }
 
     /**
@@ -1172,23 +1594,69 @@ public final class FusionGraft {
      */
     private static HeadBone findSpineEnd(List<ModelPart> headPath, HeadBone trunk) {
         int from = trunk == null ? 1 : trunk.path.size();
+        // Una serpiente (el tronco es un cuello, ver findTrunk): hasta el ÚLTIMO cuello, para que la columna sea todo
+        // lo que se alza hasta la cabeza
+        boolean serpent = trunk != null && isNeck(headPath, trunk.path.size() - 1);
+        int end = -1;
         for (int i = Math.max(from, 1); i < headPath.size() - 1; i++) {
-            String name = boneName(headPath.get(i - 1), headPath.get(i));
-            if (name.contains("neck") || name.contains("necc")) {
-                return new HeadBone(headPath.get(i), new ArrayList<>(headPath.subList(0, i + 1)));
+            if (isNeck(headPath, i)) {
+                end = i;
+                if (!serpent) {
+                    break;
+                }
             }
         }
-        return new HeadBone(headPath.get(headPath.size() - 1), headPath);
+        if (end < 0) {
+            return new HeadBone(headPath.get(headPath.size() - 1), headPath);
+        }
+        return new HeadBone(headPath.get(end), new ArrayList<>(headPath.subList(0, end + 1)));
+    }
+
+    /** ¿Se llama como un cuello el hueso i del camino? ("neck", "neck2", "lowernecc"...) */
+    private static boolean isNeck(List<ModelPart> path, int i) {
+        if (i < 1) {
+            return false;
+        }
+        String name = boneName(path.get(i - 1), path.get(i));
+        return name.contains("neck") || name.contains("necc");
     }
 
     /**
      * El tronco: en el camino de la raíz a la cabeza principal, el hueso cuyos cubos propios ocupan más ("torso" en
-     * Ivysaur, "thorax" en Scyther, "body" en Butterfree). Los grupos vacíos ("body" en Ivysaur) no cuentan.
+     * Ivysaur, "thorax" en Scyther, "body" en Butterfree). Los grupos vacíos ("body" en Ivysaur) no cuentan, ni los
+     * cuellos si hay otra cosa: el de Greninja o Zamazenta es más grueso que su torso.
+     * Si todo el camino es cuello, es una serpiente (Gyarados: "neck1"... "neck5"; Dragonair, Milotic, Rayquaza...):
+     * el tronco es el primer cuello con cubos, la base de lo que se alza. Con el más grueso salía "neck5", el trozo
+     * de justo debajo de la cabeza, y adornos y cabezas no se colocaban bien. Si solo tiene un cuello (Snorlax,
+     * Slugma: su "neck" es todo el cuerpo), ese.
      */
     private static HeadBone findTrunk(List<ModelPart> headPath) {
+        HeadBone trunk = biggestOwnCubes(headPath, i -> !isNeck(headPath, i));
+        if (trunk != null) {
+            return trunk;
+        }
+        int lastNeck = -1;
+        for (int i = 0; i < headPath.size() - 1; i++) {
+            if (isNeck(headPath, i)) {
+                lastNeck = i;
+            }
+        }
+        for (int i = 0; i < lastNeck; i++) {
+            if (isNeck(headPath, i) && hasOwnCubes(headPath.get(i))) {
+                return new HeadBone(headPath.get(i), new ArrayList<>(headPath.subList(0, i + 1)));
+            }
+        }
+        return biggestOwnCubes(headPath, i -> true);
+    }
+
+    /** El hueso del camino (sin la cabeza) con la mayor caja de cubos propios entre los que cumplen la condición. */
+    private static HeadBone biggestOwnCubes(List<ModelPart> headPath, IntPredicate allowed) {
         HeadBone trunk = null;
         float best = 0;
         for (int i = 0; i < headPath.size() - 1; i++) {
+            if (!allowed.test(i)) {
+                continue;
+            }
             ModelPart part = headPath.get(i);
             float[] box = ownBox(part);
             float volume = box[0] > box[3] ? 0 : volume(box);
@@ -1211,12 +1679,13 @@ public final class FusionGraft {
      * el nombre y no por estar más arriba que el tronco: las alas de Charizard cuelgan de "torso2", encima del
      * tronco ("torso"), y son del tronco.
      */
-    private static List<Decoration> findDecorations(List<ModelPart> headPath, List<HeadBone> heads, Tail tail) {
+    private static List<Decoration> findDecorations(List<ModelPart> headPath, List<HeadBone> heads, Tail tail,
+                                                    ModelPart cluster) {
         List<Decoration> found = new ArrayList<>();
         for (int i = 0; i < headPath.size() - 1; i++) {
-            // "neck", "neck2", "lowernecc" (así, con cc, los de Groudon de AllTheMons)...
-            String parentName = i > 0 ? boneName(headPath.get(i - 1), headPath.get(i)) : "";
-            boolean neck = parentName.contains("neck") || parentName.contains("necc");
+            // "neck", "neck2", "lowernecc" (así, con cc, los de Groudon de AllTheMons)... Y lo que cuelga del hueso
+            // del que cuelga un racimo de cabezas (las hojas de Exeggutor, de "upperHead"): va con ellas
+            boolean neck = isNeck(headPath, i) || headPath.get(i) == cluster;
             for (Map.Entry<String, Bone> child : ((Bone) (Object) headPath.get(i)).getChildren().entrySet()) {
                 if (!((Object) child.getValue() instanceof ModelPart part) || headPath.contains(part)) {
                     continue;
@@ -1225,6 +1694,10 @@ public final class FusionGraft {
                     continue;
                 }
                 String category = category(child.getKey());
+                // Los brazos son anatomía, pero se apuntan: un cuerpo sin cabeza puede llevarlos (ver graft)
+                if (category == null && isArm(child.getKey())) {
+                    category = ARM;
+                }
                 if (category == null) {
                     continue;
                 }
@@ -1280,6 +1753,21 @@ public final class FusionGraft {
             }
         }
         return category;
+    }
+
+    /** ¿Es un brazo ("arm_right", "inner_arm_left", "upperarm", "shoulder_left")? */
+    private static boolean isArm(String name) {
+        // Los huesos de Cobblemon (cubos girados, localizadores) no
+        if (name.startsWith("%") || name.startsWith("internal_locator")) {
+            return false;
+        }
+        for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
+            String word = stripModifiers(token.replaceAll("\\d+$", ""));
+            if (word.equals("arm") || word.equals("arms") || word.equals("shoulder")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Quita del principio las palabras de posición pegadas: "leftspike" → "spike", "upperarm" → "arm". */
@@ -1382,7 +1870,70 @@ public final class FusionGraft {
                 anchor = candidate;
             }
         }
+        // Serpientes y peces: sin patas, la "cola" es media cuerpo (Ekans, Milotic, Magikarp, Volcarona...): se
+        // cambiaba el cuerpo entero por la cola del otro. En esos la cola es solo la punta. Con patas, una cola enorme
+        // es una cola (Pachirisu, Ninetales); y si es poca cosa (las aletas del final de Gyarados), también
+        // Y si de la cola cuelgan patas, es el cuerpo de un ciempiés (Centiskorch: "tail", "tail2"... con sus patas)
+        float share = 0;
+        boolean legsOnTail = false;
+        for (HeadBone candidate : roots) {
+            share += volume(candidate.part);
+            legsOnTail |= hasLegs(candidate.part);
+        }
+        if (share > SERPENT_TAIL_SHARE * volume(root) && !hasLegs(root) || legsOnTail) {
+            HeadBone tip = tip(anchor);
+            if (tip.part != anchor.part) {
+                return new Tail(List.of(tip), tip);
+            }
+        }
         return new Tail(List.copyOf(roots), anchor);
+    }
+
+    /**
+     * El último eslabón de una cola: siguiendo los hijos "tail..." con volumen propio ("tail2", "tail3"...), hasta el
+     * último; con lo que lleve colgando (las aletas de Milotic, el cascabel de Ekans). Siguiendo cualquier hijo se
+     * acababa en una aleta suelta: se ocultaba solo esa y se veían las dos colas.
+     */
+    private static HeadBone tip(HeadBone start) {
+        List<ModelPart> path = new ArrayList<>(start.path);
+        while (true) {
+            ModelPart next = null;
+            for (Map.Entry<String, Bone> child : ((Bone) (Object) path.getLast()).getChildren().entrySet()) {
+                if (!child.getKey().toLowerCase(Locale.ROOT).startsWith("tail")
+                        || !((Object) child.getValue() instanceof ModelPart part)) {
+                    continue;
+                }
+                // Sin volumen propio es un grupo ("tail_fins") o una pieza plana: no es un eslabón
+                float[] own = ownBox(part);
+                if (own[0] > own[3] || volume(own) <= 0) {
+                    continue;
+                }
+                if (next == null || cubes(part) > cubes(next)) {
+                    next = part;
+                }
+            }
+            if (next == null) {
+                return new HeadBone(path.getLast(), path);
+            }
+            path.add(next);
+        }
+    }
+
+    /** ¿Tiene el modelo algún hueso de pierna o pie ("leg_left", "leftleg", "foot_front", "legs"...)? */
+    private static boolean hasLegs(ModelPart root) {
+        List<List<ModelPart>> found = new ArrayList<>();
+        List<ModelPart> current = new ArrayList<>();
+        current.add(root);
+        collectPaths(root, name -> {
+            for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
+                String word = stripModifiers(token.replaceAll("\\d+$", ""));
+                if (LEGS.contains(word)) {
+                    return true;
+                }
+            }
+            return false;
+        }, current, found);
+        return !found.isEmpty();
     }
 
     /**

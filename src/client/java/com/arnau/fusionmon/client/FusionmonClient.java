@@ -64,6 +64,18 @@ public class FusionmonClient implements ClientModInitializer {
 									FusionGraft.setDecorations(false);
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.decor.off"));
 									return 1;
+								})))
+						// /fusionvisual top on|off: cuerpos sin cabeza (Voltorb, Lunatone...) con la cabeza encima o en modo colores
+						.then(ClientCommandManager.literal("top")
+								.then(ClientCommandManager.literal("on").executes(context -> {
+									FusionGraft.setTops(true);
+									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.top.on"));
+									return 1;
+								}))
+								.then(ClientCommandManager.literal("off").executes(context -> {
+									FusionGraft.setTops(false);
+									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.top.off"));
+									return 1;
 								})))));
 
 		// Las texturas de fusión se generan a partir de las de Cobblemon: si se recargan los recursos

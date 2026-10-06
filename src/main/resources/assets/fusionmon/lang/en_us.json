@@ -41,5 +41,7 @@
   "command.fusionmon.visual.tail.off": "Fusions: with the body's tail",
   "command.fusionmon.visual.decor.on": "Fusions: with the head species' decorations",
   "command.fusionmon.visual.decor.off": "Fusions: without the head species' decorations",
+  "command.fusionmon.visual.top.on": "Fusions: headless bodies with the head on top",
+  "command.fusionmon.visual.top.off": "Fusions: headless bodies with colors only",
   "command.fusionmon.unfused": "Fusion undone."
 }
