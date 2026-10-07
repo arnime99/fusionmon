@@ -48,13 +48,18 @@ public final class FusionCommands {
         }
 
         if (FusionData.isFusion(pokemon)) {
-            RegistryAccess registryAccess = player.registryAccess();
-            Pokemon head = FusionData.readHead(pokemon, registryAccess);
-            Pokemon body = FusionData.readBody(pokemon, registryAccess);
-            context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.info",
-                    pokemon.getDisplayName(false),
-                    head.getDisplayName(false), head.getLevel(),
-                    body.getDisplayName(false), body.getLevel()), false);
+            String missing = FusionData.missingSpecies(pokemon);
+            if (missing != null) {
+                context.getSource().sendFailure(Component.translatable("message.fusionmon.missing_species", missing));
+            } else {
+                RegistryAccess registryAccess = player.registryAccess();
+                Pokemon head = FusionData.readHead(pokemon, registryAccess);
+                Pokemon body = FusionData.readBody(pokemon, registryAccess);
+                context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.info",
+                        pokemon.getDisplayName(false),
+                        head.getDisplayName(false), head.getLevel(),
+                        body.getDisplayName(false), body.getLevel()), false);
+            }
         } else {
             context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.not_fusion",
                     pokemon.getDisplayName(false)), false);
@@ -80,7 +85,11 @@ public final class FusionCommands {
             return 0;
         }
 
-        FusionService.unfuse(player, pokemon);
+        FusionService.Parts parts = FusionService.prepareUnfuse(player, pokemon);
+        if (parts == null) {
+            return 0;
+        }
+        FusionService.unfuse(player, pokemon, parts);
         context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.unfused"), false);
         return 1;
     }

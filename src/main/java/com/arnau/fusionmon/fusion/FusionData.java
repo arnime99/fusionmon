@@ -99,6 +99,26 @@ public final class FusionData {
         return Pokemon.Companion.loadFromNBT(registryAccess, data(visible).getCompound(BODY));
     }
 
+    /**
+     * La especie guardada de una de las partes que ya no existe (p. ej. se ha quitado el mod que la añadía), o null.
+     * Sin ella Cobblemon no puede volver a crear esa parte: readHead/readBody lanzarían una excepción.
+     */
+    public static String missingSpecies(Pokemon visible) {
+        CompoundTag data = data(visible);
+        for (String key : new String[]{HEAD_SPECIES, BODY_SPECIES}) {
+            String id = data.getString(key);
+            // Las fusiones de la versión 1 no guardaban la especie: no se puede comprobar sin leer la parte
+            if (id.isEmpty()) {
+                continue;
+            }
+            ResourceLocation speciesId = ResourceLocation.tryParse(id);
+            if (speciesId == null || PokemonSpecies.getByIdentifier(speciesId) == null) {
+                return id;
+            }
+        }
+        return null;
+    }
+
     /** Forma de la cabeza, o null si no es una fusión (o es una fusión de la versión 1, sin estos datos). */
     public static FormData headForm(Pokemon visible) {
         return form(visible, HEAD_SPECIES, HEAD_FORM);

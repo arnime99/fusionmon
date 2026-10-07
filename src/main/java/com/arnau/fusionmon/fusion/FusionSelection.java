@@ -174,8 +174,13 @@ public final class FusionSelection {
             return;
         }
 
-        Pokemon head = FusionData.readHead(fused, player.registryAccess());
-        Pokemon body = FusionData.readBody(fused, player.registryAccess());
+        // Si no se va a poder separar (sin sitio, especie que falta...) se avisa ya, sin abrir la pantalla
+        FusionService.Parts parts = FusionService.prepareUnfuse(player, fused);
+        if (parts == null) {
+            return;
+        }
+        Pokemon head = parts.head();
+        Pokemon body = parts.body();
         PENDING_UNFUSES.put(player.getUUID(), fusedId);
         ServerPlayNetworking.send(player, new OpenUnfuseScreenPayload(
                 fused.getDisplayName(false),
@@ -201,13 +206,19 @@ public final class FusionSelection {
             return;
         }
 
+        // Otra vez: mientras la pantalla estaba abierta el PC podría haberse llenado. Antes de gastar el cristal
+        FusionService.Parts parts = FusionService.prepareUnfuse(player, fused);
+        if (parts == null) {
+            return;
+        }
+
         if (!FusionCrystalItem.consumeOne(player)) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.no_crystal"));
             return;
         }
 
         Component fusedName = fused.getDisplayName(false);
-        FusionService.unfuse(player, fused);
+        FusionService.unfuse(player, fused, parts);
         player.sendSystemMessage(Component.translatable("message.fusionmon.unfused", fusedName));
     }
 
