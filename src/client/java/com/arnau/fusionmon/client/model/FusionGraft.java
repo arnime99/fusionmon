@@ -177,11 +177,12 @@ public final class FusionGraft {
      * trozos en el nombre no es un adorno. "ftorso"/"fleg"/"fbody" son grupos de brazos y patas delanteras;
      * "bone", "cube", "group", "bb" ("bb_main")... son nombres sin significado que deja Blockbench. "main" no: en
      * "frill_main" (el volante del cuello de Vaporeon) solo dice cuál es la pieza principal.
+     * "mounch" es la boca en los modelos de AllTheMons (Gulpin, Swalot): la cara de Swalot se pegaba como un adorno.
      */
     private static final Set<String> ANATOMY = Set.of("head", "neck", "torso", "ftorso", "body", "fbody", "chest",
             "belly", "abdomen", "thorax", "waist", "hip", "pelvis", "butt", "spine", "segment", "leg", "fleg", "thigh",
             "knee", "foot", "feet", "toe", "arm", "shoulder", "hand", "finger", "tail", "tentacle", "jaw", "mouth",
-            "eye", "face", "tongue", "locator", "bone", "cube", "group", "root", "bb", "seat", "shadow");
+            "mounch", "eye", "face", "tongue", "locator", "bone", "cube", "group", "root", "bb", "seat", "shadow");
 
     /** Estado (entidad o menú) → especie de la cabeza; se apunta cuando Cobblemon pide el modelo. */
     private static final Map<PosableState, ResourceLocation> HEADS = new WeakHashMap<>();
@@ -201,6 +202,8 @@ public final class FusionGraft {
     private static final Map<ModelPart, float[]> BOXES = new WeakHashMap<>();
     /** Caja de los cubos propios de cada tronco (sin sus hijos), en su propio marco: para colocar los adornos. */
     private static final Map<ModelPart, float[]> OWN_BOXES = new WeakHashMap<>();
+    /** Lo mismo, solo con los cubos con volumen (ver solidOwnBox). */
+    private static final Map<ModelPart, float[]> SOLID_BOXES = new WeakHashMap<>();
     /** Modelos de cabeza que ya han fallado al pintarse (para avisar en el log una sola vez). */
     private static final Set<PosableModel> WARNED = Collections.newSetFromMap(new WeakHashMap<>());
 
@@ -851,7 +854,11 @@ public final class FusionGraft {
 
     private static boolean isFacePart(String name) {
         for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
-            if (FACE_PARTS.contains(stripModifiers(token.replaceAll("\\d+$", "")))) {
+            token = stripModifiers(token.replaceAll("\\d+$", ""));
+            // También en plural, como en category: las cejas de Pidgey ("brows") se ponían como complemento y, con su
+            // pivote lejos de sus cubos, salían flotando encima de los cuerpos sin cabeza
+            String singular = token.length() > 3 && token.endsWith("s") ? token.substring(0, token.length() - 1) : token;
+            if (FACE_PARTS.contains(token) || FACE_PARTS.contains(singular)) {
                 return true;
             }
         }
@@ -1223,8 +1230,16 @@ public final class FusionGraft {
         Matrix3f toFrame = new Matrix3f(frame).transpose();
         float[] box = emptyBox();
         List<ModelPart> bones = parentPath(spineEnd);
+        // Sin los planos de grosor cero si hay cubos con volumen: los harapos de la falda de Darkrai le daban un tronco
+        // de 36 de ancho (el de verdad mide 14) y lo que se le pegaba salía enorme. Hay cuerpos hechos solo de planos
+        // (Swalot es una caja hueca): esos se miden con ellos
+        boolean solid = false;
+        for (ModelPart bone : bones) {
+            float[] own = solidOwnBox(bone);
+            solid |= own[0] <= own[3];
+        }
         for (int i = 0; i < bones.size(); i++) {
-            float[] own = ownBox(bones.get(i));
+            float[] own = solid ? solidOwnBox(bones.get(i)) : ownBox(bones.get(i));
             if (own[0] > own[3]) {
                 continue;
             }
@@ -1348,8 +1363,9 @@ public final class FusionGraft {
      * y con la postura de ahora; null si no hay cubos con volumen.
      */
     private static Vector3f skullCenter(ModelPart part, Map<ModelPart, String> skip) {
-        float[] best = {-1};
-        Vector3f center = new Vector3f();
+        // El mejor cubo sin contar adornos [0] y contándolos [1], por si la cabeza es todo adornos (ver inDecoration)
+        float[] best = {-1, -1};
+        Vector3f[] centers = {new Vector3f(), new Vector3f()};
         visitInOwnFrame(part, (pose, path, index, cube) -> {
             for (String limb : skip.values()) {
                 if (path.equals(limb) || path.startsWith(limb + "/")) {
@@ -1361,12 +1377,29 @@ public final class FusionGraft {
             // Volumen del cubo en sí, no de su caja: la de un cubo girado es mayor y cambia con la animación (el cubo
             // de 6x6x6 girado de la cabeza de Nidoking "ganaba" al cráneo, y a ratos no: la cabeza daba saltos)
             float volume = cubeVolume(cube);
-            if (volume > best[0]) {
-                best[0] = volume;
-                center.set((box[0] + box[3]) / 2F, (box[1] + box[4]) / 2F, (box[2] + box[5]) / 2F);
+            for (int i = inDecoration(path) ? 1 : 0; i < 2; i++) {
+                if (volume > best[i]) {
+                    best[i] = volume;
+                    centers[i].set((box[0] + box[3]) / 2F, (box[1] + box[4]) / 2F, (box[2] + box[5]) / 2F);
+                }
             }
         });
-        return best[0] > 0 ? center : null;
+        return best[0] > 0 ? centers[0] : best[1] > 0 ? centers[1] : null;
+    }
+
+    /**
+     * ¿Cuelga el cubo (por su ruta, la de ModelPart.visit: "/hair/hair2") de algún hueso que sea un adorno (ver
+     * category)? Para buscar el cráneo: el cubo más grande de una cabeza no siempre es suyo. En Darkrai es el pelo
+     * (el modelo entero pegado quedaba centrado en él, flotando); en ~100 modelos, un sombrero, un casco, una crin, la
+     * burbuja de Araquanid o el afro de Bouffalant.
+     */
+    private static boolean inDecoration(String path) {
+        for (String bone : path.split("/")) {
+            if (!bone.isEmpty() && category(bone) != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1445,6 +1478,22 @@ public final class FusionGraft {
         // contarlos, su torso no tenía cubos y el "tronco" salía su cuello
         float[] box = boxInOwnFrame(part, path -> path.isEmpty() || isRotatedCube(path.substring(1)));
         OWN_BOXES.put(part, box);
+        return box;
+    }
+
+    /** Como ownBox, pero solo con los cubos con volumen (sin planos de grosor cero). Ver trunkSpace. */
+    private static float[] solidOwnBox(ModelPart part) {
+        float[] cached = SOLID_BOXES.get(part);
+        if (cached != null) {
+            return cached;
+        }
+        float[] box = emptyBox();
+        visitInOwnFrame(part, (pose, path, index, cube) -> {
+            if ((path.isEmpty() || isRotatedCube(path.substring(1))) && cubeVolume(cube) > 0) {
+                includeCube(box, pose, cube);
+            }
+        });
+        SOLID_BOXES.put(part, box);
         return box;
     }
 
@@ -2109,6 +2158,7 @@ public final class FusionGraft {
     }
 
     private static boolean isLimb(String name) {
+        name = name.toLowerCase(Locale.ROOT);
         return name.startsWith("leg") || name.startsWith("foot") || name.startsWith("feet")
                 || name.startsWith("toe") || name.startsWith("tentacle") || name.startsWith("tail");
     }
@@ -2222,7 +2272,8 @@ public final class FusionGraft {
                 continue;
             }
             current.add(part);
-            if (name.test(child.getKey())) {
+            // En minúsculas: la cabeza de Iron Valiant (AllTheMons) es "Head"; las colas de Iron Bundle, "Tail1"...
+            if (name.test(child.getKey().toLowerCase(Locale.ROOT))) {
                 found.add(new ArrayList<>(current));
             }
             collectPaths(part, name, current, found);
@@ -2259,18 +2310,27 @@ public final class FusionGraft {
         List<float[]> boxes = new ArrayList<>();
         // Volumen de cada cubo en sí (no el de su caja, mayor en los girados: ver skullCenter)
         List<Float> volumes = new ArrayList<>();
+        List<Boolean> decorations = new ArrayList<>();
         part.visit(new PoseStack(), (pose, path, index, cube) -> {
             float[] box = emptyBox();
             includeCube(box, pose, cube);
             includeCube(all, pose, cube);
             boxes.add(box);
             volumes.add(cubeVolume(cube));
+            decorations.add(inDecoration(path));
         });
 
+        // El cráneo, como en skullCenter: sin contar los adornos si queda algún cubo
         int skullIndex = -1;
-        for (int i = 0; i < boxes.size(); i++) {
-            if (volumes.get(i) > 0 && (skullIndex < 0 || volumes.get(i) > volumes.get(skullIndex))) {
-                skullIndex = i;
+        for (boolean withDecorations : new boolean[]{false, true}) {
+            for (int i = 0; i < boxes.size(); i++) {
+                if (volumes.get(i) > 0 && (withDecorations || !decorations.get(i))
+                        && (skullIndex < 0 || volumes.get(i) > volumes.get(skullIndex))) {
+                    skullIndex = i;
+                }
+            }
+            if (skullIndex >= 0) {
+                break;
             }
         }
 
