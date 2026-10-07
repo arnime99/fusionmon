@@ -289,9 +289,58 @@ function FindTrunk($headPath) {
     }
     BiggestOwnCubes $headPath { param($i) $true }
 }
+# Tronco al lado del camino (FusionGraft.trunkBeside): si el camino a la cabeza no tiene tronco (o es un solo cuello),
+# el cuerpo cuelga de una rama al lado ("belly" de Snorlax, "torso2" de Yamper, los segmentos de Onix, la cadena de
+# Ekans). Ramas que cuelgan del camino y no son cabeza, patas, brazos, cola ni adorno; dentro, los huesos con cubos
+# propios (sin entrar en patas, brazos, cola ni cabezas). El tronco es el de mayor caja propia; "branch", toda su rama
+function IsTailPiece([string]$n, $tail) {
+    if (-not $tail) { return $false }
+    foreach ($r in $tail.roots) { if (Holds $r.part $n) { return $true } }
+    $false
+}
+# Lo que no es tronco aunque cuelgue de su rama: extremidades (patas, pies, manos, dedos, garras, tentáculos: Haunter,
+# Tentacruel) y piezas de la cara (la mandíbula de Wailmer)
+$NOT_TRUNK = @('leg','legs','foot','feet','toe','toes','claw','claws','hand','hands','finger','fingers','tentacle',
+    'tentacles','jaw','mouth','eye','eyes','face','tongue','tooth','teeth')
+function IsNotTrunk([string]$name) {
+    if ((IsLegName $name) -or (IsArm $name)) { return $true }
+    foreach ($tok in $name.ToLower().Split('_')) {
+        $w = StripModifiers ($tok -replace '\d+$','')
+        if ($NOT_TRUNK -contains $w -or $w.StartsWith('tentacle')) { return $true }
+    }
+    $false
+}
+function BranchBones([string]$n, $path, $heads, $tail, $acc) {
+    if ((IsNotTrunk $n) -or (IsTailPiece $n $tail)) { return }
+    foreach ($h in $heads) { if (Holds $n $h.part) { return } }
+    if (HasOwnCubes $n) { [void]$acc.Add(@{ part = $n; path = $path }) }
+    foreach ($k in (Kids $n)) { BranchBones $k.name ([string[]]($path + $k.name)) $heads $tail $acc }
+}
+function TrunkBeside($headPath, $heads, $tail) {
+    $best = $null; $bestV = 0; $branch = $null
+    for ($i = 0; $i -lt $headPath.Count - 1; $i++) {
+        foreach ($k in (Kids $headPath[$i])) {
+            $n = $k.name
+            if ($headPath -contains $n -or (Category $n)) { continue }
+            $acc = New-Object System.Collections.ArrayList
+            BranchBones $n ([string[]]((Sub $headPath ($i + 1)) + $n)) $heads $tail $acc
+            foreach ($b in $acc) {
+                $v = BoxVol (OwnBox $b.part $false)
+                if ($v -gt $bestV) { $bestV = $v; $best = $b; $branch = $acc }
+            }
+        }
+    }
+    if (-not $best) { return $null }
+    @{ part = $best.part; path = $best.path; index = -1; branch = $branch }
+}
 function FindSpineEnd($headPath, $trunk) {
-    $from = if ($trunk) { $trunk.path.Count } else { 1 }
-    $serpent = $trunk -and (IsNeck $headPath ($trunk.path.Count - 1))
+    # Desde donde el camino del tronco se separa del de la cabeza (si el tronco está en el camino, desde él)
+    $from = 1
+    if ($trunk) {
+        $from = 0
+        while ($from -lt $trunk.path.Count -and $from -lt $headPath.Count -and $trunk.path[$from] -eq $headPath[$from]) { $from++ }
+    }
+    $serpent = $trunk -and $trunk.index -ge 0 -and (IsNeck $headPath $trunk.index)
     $end = -1
     for ($i = [math]::Max($from, 1); $i -lt $headPath.Count - 1; $i++) {
         if (IsNeck $headPath $i) { $end = $i; if (-not $serpent) { break } }
@@ -425,19 +474,32 @@ function Analyze($geoText) {
         if ($same) { $cluster = $parent; $companions = $heads.Count - 1 } else { $chains = $heads.Count }
     }
     $trunk = FindTrunk $headPath
+    $necks = 0
+    for ($i = 0; $i -lt $headPath.Count - 1; $i++) { if (IsNeck $headPath $i) { $necks++ } }
+    $neckTrunk = $trunk -and (IsNeck $headPath $trunk.index)
+    # Sin tronco en el camino, o solo un cuello (Snorlax: "neck" es un trozo pequeño y la barriga cuelga al lado): al lado
+    $beside = $false
+    if (-not $trunk -or ($neckTrunk -and $necks -lt 2)) {
+        $found = TrunkBeside $headPath $heads $tail
+        if ($found) { $trunk = $found; $beside = $true; $neckTrunk = $false }
+    }
     if ($cluster -and $trunk -and [array]::IndexOf($headPath, $cluster) -le $trunk.index) { $cluster = $null }
     $spine = FindSpineEnd $headPath $trunk
     $decor = FindDecorations $headPath $heads $tail $cluster
 
     # --- Categoría ---
-    # Serpiente: la cola es la punta, o el camino a la cabeza es una cadena de cuellos (Gyarados: neck1...neck5). Con un
-    # solo cuello como tronco no (Snorlax: su "neck" es todo el cuerpo; Ariados: el cuerpo cuelga al lado del cuello)
-    $necks = 0
-    for ($i = 0; $i -lt $headPath.Count - 1; $i++) { if (IsNeck $headPath $i) { $necks++ } }
-    $neckTrunk = $trunk -and (IsNeck $headPath $trunk.index)
-    $serpent = ($tail -and $tail.tip) -or ($neckTrunk -and $necks -ge 2)
-    if ($neckTrunk -and $necks -lt 2) { [void]$r.warnings.Add("el tronco es el cuello ($($trunk.part)): el cuerpo no está en el camino a la cabeza o el cuello es todo el cuerpo") }
+    # Serpiente: la cola es la punta, el camino a la cabeza es una cadena de cuellos (Gyarados: neck1...neck5), o el
+    # tronco es una cadena de segmentos al lado de la cabeza y no hay patas (Onix, Ekans). Con un solo cuello como
+    # tronco no (Snorlax)
     $legs = LegCount ''
+    # Cadena: cuántos niveles baja la rama del tronco (Onix: segment1 > segment2 > ... cada uno con su boulder)
+    $chain = 0
+    if ($beside) {
+        $depths = @($trunk.branch | ForEach-Object { $_.path.Count })
+        $chain = ($depths | Measure-Object -Maximum).Maximum - ($depths | Measure-Object -Minimum).Minimum + 1
+    }
+    $serpent = ($tail -and $tail.tip) -or ($neckTrunk -and $necks -ge 2) -or ($beside -and $legs -eq 0 -and $chain -ge 4)
+    if ($neckTrunk -and $necks -lt 2) { [void]$r.warnings.Add("el tronco es el cuello ($($trunk.part)): el cuerpo no está en el camino a la cabeza o el cuello es todo el cuerpo") }
     if ($whole) { $r.shape = 'todo cabeza' }
     elseif ($serpent) { $r.shape = 'serpiente/pez' }
     elseif ($legs -eq 0) { $r.shape = 'sin patas' }
@@ -452,7 +514,7 @@ function Analyze($geoText) {
     if ($tail) { $tags += $(if ($tail.tip) { 'cola (punta)' } else { 'cola' }) }
     $r.tags = $tags
 
-    $r.trunk = if ($trunk) { $trunk.part } else { '' }
+    $r.trunk = if (-not $trunk) { '' } elseif ($beside) { "$($trunk.part) (al lado, $($trunk.branch.Count) huesos)" } else { $trunk.part }
     $r.spine = $spine.part
     $r.decor = (@($decor | Where-Object { -not $_.neck } | ForEach-Object { "$($_.name) [$($_.category)]" }) -join ', ')
     $r.neckDecor = (@($decor | Where-Object { $_.neck } | ForEach-Object { "$($_.name) [$($_.category)]" }) -join ', ')
@@ -498,7 +560,8 @@ function Analyze($geoText) {
     if (-not $whole) {
         if (-not $trunk) { [void]$r.warnings.Add('sin tronco (ningún hueso con cubos hasta la cabeza): sin adornos') }
         else {
-            $bones = Sub $spine.path ($spine.path.Count - 1)
+            $bones = @(Sub $spine.path ($spine.path.Count - 1))
+            if ($beside) { $bones += @($trunk.branch | ForEach-Object { $_.part }) }
             $solidVol = 0.0; $planes = $false
             foreach ($bn in $bones) { foreach ($c in (OwnCubes $bn)) { $v = CubeVol $c; $solidVol += $v; if ($v -le 0) { $planes = $true } } }
             if ($solidVol -le 0 -and $planes) { [void]$r.warnings.Add('tronco hecho solo de planos: escala de adornos poco fiable') }

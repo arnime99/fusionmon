@@ -111,7 +111,7 @@
   "gui.fusionmon.inspect.legend.decor": "adorno del tronco",
   "gui.fusionmon.inspect.legend.neck_decor": "adorno del cuello (va con la cabeza)",
   "gui.fusionmon.inspect.legend.arm": "brazos",
-  "gui.fusionmon.inspect.legend.tail": "cola",
+  "gui.fusionmon.inspect.legend.tail": "cola (el punto: donde se engancha la cola nueva)",
   "gui.fusionmon.inspect.progress": "Revisadas %s de %s (con fallo: %s) · en el filtro: %s",
   "gui.fusionmon.inspect.help": "←/→ especie · V vista · G sexo · F filtro · B bien · X fallo (Intro guarda la nota) · U borrar revisión · C cámara · arrastrar: girar (derecho: mover) · rueda: zoom",
   "command.fusionmon.unfused": "Fusión deshecha."

@@ -820,6 +820,10 @@ public final class FusionGraft {
             for (HeadBone tailRoot : heads.tail().roots()) {
                 renderInPlace(tailRoot, consumer, poseStack, light, overlay, INSPECT_TAIL);
             }
+            // Dónde se engancha: la cola de la otra especie se pega en el pivote de la principal (ver renderTail)
+            HeadBone anchor = heads.tail().anchor();
+            markers.add(new Marker(new Matrix4f(base).mul(matrixAlong(anchor.path)),
+                    point(Math.max(0.015F, length(anchor.part) * 0.1F)), INSPECT_TAIL));
         }
         if (heads.heads().isEmpty()) {
             // Sin cabeza: el núcleo sobre el que se ponen las cosas (ver coreBox)
@@ -1479,9 +1483,9 @@ public final class FusionGraft {
      * la torcería (la de Lapras apuntaba al cielo y su caparazón, que está encima, acababa hacia el cuello en otros
      * Pokémon). Tampoco sirve la forma del tronco: el de un bípedo rechoncho (Dragonite) es más ancho que alto.
      */
-    private static Matrix3f spineFrame(Matrix4f trunk, Matrix4f spineEnd) {
+    private static Matrix3f spineFrame(Vector3f trunk, Matrix4f spineEnd) {
         Vector3f across = new Vector3f(1, 0, 0);
-        Vector3f spine = spineEnd.getTranslation(new Vector3f()).sub(trunk.getTranslation(new Vector3f()));
+        Vector3f spine = spineEnd.getTranslation(new Vector3f()).sub(trunk);
         // Solo cuenta la inclinación: lo que se desvíe a un lado no
         spine.x = 0;
         if (spine.lengthSquared() < 1e-8F) {
@@ -1507,29 +1511,49 @@ public final class FusionGraft {
      * El espacio del tronco de un modelo, con su postura de ahora. La caja es la de los cubos propios de TODOS los
      * huesos del camino hasta el cuello ("torso" + "torso2" + "chest"..., o los segmentos de Gyarados), no solo los
      * del tronco: el tronco es el hueso más grande, pero en Vaporeon es el trozo de atrás y en Dragonite la parte de
-     * abajo, y el caparazón de Lapras acababa en el culo o colgando como una cola.
+     * abajo, y el caparazón de Lapras acababa en el culo o colgando como una cola. Si el tronco está al lado del camino
+     * (ver trunkBeside), con toda su rama.
      */
     private static TrunkSpace trunkSpace(HeadBone trunk, HeadBone spineEnd) {
         Matrix4f trunkMatrix = matrixAlong(trunk.path);
         Vector3f origin = trunkMatrix.getTranslation(new Vector3f());
-        Matrix3f frame = spineFrame(trunkMatrix, matrixAlong(spineEnd.path));
+        List<HeadBone> branch = TRUNK_BRANCHES.getOrDefault(trunk.part, List.of());
+        // La columna sale del pivote del tronco; con un tronco al lado, del centro de su rama: el pivote de la cadena de
+        // Ekans está justo al lado de su cabeza y la columna salía en diagonal
+        Vector3f spineStart = new Vector3f(origin);
+        if (!branch.isEmpty()) {
+            spineStart.zero();
+            for (HeadBone bone : branch) {
+                spineStart.add(matrixAlong(bone.path).getTranslation(new Vector3f()));
+            }
+            spineStart.div(branch.size());
+        }
+        Matrix3f frame = spineFrame(spineStart, matrixAlong(spineEnd.path));
         Matrix3f toFrame = new Matrix3f(frame).transpose();
         float[] box = emptyBox();
-        List<ModelPart> bones = parentPath(spineEnd);
+        // Los huesos del camino hasta el cuello y la rama del tronco, si está al lado
+        List<ModelPart> spine = parentPath(spineEnd);
+        List<List<ModelPart>> bones = new ArrayList<>();
+        for (int i = 0; i < spine.size(); i++) {
+            bones.add(spine.subList(0, i + 1));
+        }
+        for (HeadBone bone : branch) {
+            bones.add(bone.path);
+        }
         // Sin los planos de grosor cero si hay cubos con volumen: los harapos de la falda de Darkrai le daban un tronco
         // de 36 de ancho (el de verdad mide 14) y lo que se le pegaba salía enorme. Hay cuerpos hechos solo de planos
         // (Swalot es una caja hueca): esos se miden con ellos
         boolean solid = false;
-        for (ModelPart bone : bones) {
-            float[] own = solidOwnBox(bone);
+        for (List<ModelPart> path : bones) {
+            float[] own = solidOwnBox(path.getLast());
             solid |= own[0] <= own[3];
         }
-        for (int i = 0; i < bones.size(); i++) {
-            float[] own = solid ? solidOwnBox(bones.get(i)) : ownBox(bones.get(i));
+        for (List<ModelPart> path : bones) {
+            float[] own = solid ? solidOwnBox(path.getLast()) : ownBox(path.getLast());
             if (own[0] > own[3]) {
                 continue;
             }
-            Matrix4f bone = matrixAlong(bones.subList(0, i + 1));
+            Matrix4f bone = matrixAlong(path);
             for (int corner = 0; corner < 8; corner++) {
                 include(box, toFrame.transform(bone.transformPosition(new Vector3f(
                         own[(corner & 1) == 0 ? 0 : 3],
@@ -1992,7 +2016,7 @@ public final class FusionGraft {
             return headless(root, limbs, tail);
         }
         List<ModelPart> headPath = heads.get(0).path;
-        HeadBone trunk = findTrunk(headPath);
+        HeadBone trunk = findTrunk(headPath, heads, tail);
         // Varias cabezas sin cuello, que cuelgan juntas del mismo hueso (Exeggutor: "head", "head2" y "head3" de
         // "upperHead"): son un racimo que va entero con la principal, no cabezas con cuello como las de Dodrio
         ModelPart cluster = heads.size() > 1 ? sharedParent(heads) : null;
@@ -2099,10 +2123,18 @@ public final class FusionGraft {
      * (su cabeza está muy arriba); Dragonite: "neck", encima.
      */
     private static HeadBone findSpineEnd(List<ModelPart> headPath, HeadBone trunk) {
-        int from = trunk == null ? 1 : trunk.path.size();
+        // Desde donde el camino del tronco se separa del de la cabeza: el propio tronco si está en el camino, o el hueso
+        // del que cuelga su rama si está al lado (ver trunkBeside)
+        int from = 1;
+        if (trunk != null) {
+            from = 0;
+            while (from < trunk.path.size() && from < headPath.size() && trunk.path.get(from) == headPath.get(from)) {
+                from++;
+            }
+        }
         // Una serpiente (el tronco es un cuello, ver findTrunk): hasta el ÚLTIMO cuello, para que la columna sea todo
         // lo que se alza hasta la cabeza
-        boolean serpent = trunk != null && isNeck(headPath, trunk.path.size() - 1);
+        boolean serpent = trunk != null && headPath.contains(trunk.part) && isNeck(headPath, trunk.path.size() - 1);
         int end = -1;
         for (int i = Math.max(from, 1); i < headPath.size() - 1; i++) {
             if (isNeck(headPath, i)) {
@@ -2133,18 +2165,20 @@ public final class FusionGraft {
      * cuellos si hay otra cosa: el de Greninja o Zamazenta es más grueso que su torso.
      * Si todo el camino es cuello, es una serpiente (Gyarados: "neck1"... "neck5"; Dragonair, Milotic, Rayquaza...):
      * el tronco es el primer cuello con cubos, la base de lo que se alza. Con el más grueso salía "neck5", el trozo
-     * de justo debajo de la cabeza, y adornos y cabezas no se colocaban bien. Si solo tiene un cuello (Snorlax,
-     * Slugma: su "neck" es todo el cuerpo), ese.
+     * de justo debajo de la cabeza, y adornos y cabezas no se colocaban bien.
+     * Si en el camino no hay tronco, o solo un cuello, el cuerpo está al lado (ver trunkBeside).
      */
-    private static HeadBone findTrunk(List<ModelPart> headPath) {
+    private static HeadBone findTrunk(List<ModelPart> headPath, List<HeadBone> heads, Tail tail) {
         HeadBone trunk = biggestOwnCubes(headPath, i -> !isNeck(headPath, i));
         if (trunk != null) {
             return trunk;
         }
         int lastNeck = -1;
+        int necks = 0;
         for (int i = 0; i < headPath.size() - 1; i++) {
             if (isNeck(headPath, i)) {
                 lastNeck = i;
+                necks++;
             }
         }
         for (int i = 0; i < lastNeck; i++) {
@@ -2152,7 +2186,108 @@ public final class FusionGraft {
                 return new HeadBone(headPath.get(i), new ArrayList<>(headPath.subList(0, i + 1)));
             }
         }
-        return biggestOwnCubes(headPath, i -> true);
+        // Sin nada en el camino, o un solo cuello (el de Snorlax es un trozo pequeño bajo la cabeza, y su barriga
+        // cuelga al lado): el tronco está en una rama al lado. Si no hay, el cuello
+        HeadBone beside = trunkBeside(headPath, heads, tail);
+        return beside != null ? beside : necks > 0 ? biggestOwnCubes(headPath, i -> true) : null;
+    }
+
+    /**
+     * Huesos de la rama de un tronco que está al lado del camino a la cabeza (ver trunkBeside), para medirlo entero
+     * (trunkSpace): los segmentos de Onix, la cadena de Ekans. Por el hueso del tronco.
+     */
+    private static final Map<ModelPart, List<HeadBone>> TRUNK_BRANCHES = new WeakHashMap<>();
+
+    /**
+     * Lo que no es tronco aunque cuelgue de su rama: extremidades (las manos de Haunter, los tentáculos de Tentacruel)
+     * y piezas de la cara (la mandíbula de Wailmer).
+     */
+    private static final Set<String> NOT_TRUNK = Set.of("leg", "legs", "foot", "feet", "toe", "toes", "claw",
+            "claws", "hand", "hands", "finger", "fingers", "tentacle", "tentacles", "jaw", "mouth", "eye", "eyes", "face",
+            "tongue", "tooth", "teeth");
+
+    /**
+     * El tronco cuando no está en el camino a la cabeza: en ~60 modelos el cuerpo cuelga de una rama al lado de la
+     * cabeza o del cuello, no por encima ("torso" → "belly" y "torso" → "neck" → "head" en Snorlax; "torso2" hermano de
+     * "head" en Yamper; "thorax" en Ariados; la cadena "segment1" → "segment2"... de Onix; "body" → "tail"... de
+     * Ekans). Sin esto no tenían tronco (sin adornos) o el tronco era un cuello pequeño.
+     * Se buscan las ramas que cuelgan del camino y no son adorno (ver category); dentro, los huesos con cubos propios
+     * sin entrar en patas, brazos, manos, tentáculos, cara, cola ni cabezas. El tronco es el de mayor caja propia, y
+     * su rama entera se apunta para medirlo (TRUNK_BRANCHES). Simulado en todos los modelos con
+     * tools/species-table.ps1: cambia el tronco de 51 modelos base, todos de los que no tenían o lo tenían en el cuello.
+     */
+    private static HeadBone trunkBeside(List<ModelPart> headPath, List<HeadBone> heads, Tail tail) {
+        HeadBone best = null;
+        float bestVolume = 0;
+        List<HeadBone> bestBranch = null;
+        for (int i = 0; i < headPath.size() - 1; i++) {
+            for (Map.Entry<String, Bone> child : ((Bone) (Object) headPath.get(i)).getChildren().entrySet()) {
+                if (!((Object) child.getValue() instanceof ModelPart part) || headPath.contains(part)
+                        || category(child.getKey()) != null) {
+                    continue;
+                }
+                List<ModelPart> path = new ArrayList<>(headPath.subList(0, i + 1));
+                path.add(part);
+                List<HeadBone> branch = new ArrayList<>();
+                collectBranch(child.getKey(), part, path, heads, tail, branch);
+                for (HeadBone bone : branch) {
+                    float volume = volume(ownBox(bone.part));
+                    if (volume > bestVolume) {
+                        bestVolume = volume;
+                        best = bone;
+                        bestBranch = branch;
+                    }
+                }
+            }
+        }
+        if (best != null) {
+            TRUNK_BRANCHES.put(best.part, List.copyOf(bestBranch));
+        }
+        return best;
+    }
+
+    /** Los huesos con cubos propios de una rama de tronco (ver trunkBeside). */
+    private static void collectBranch(String name, ModelPart part, List<ModelPart> path, List<HeadBone> heads,
+                                      Tail tail, List<HeadBone> found) {
+        if (isNotTrunk(name) || holdsHead(part, heads) || insideTail(part, tail)) {
+            return;
+        }
+        if (hasOwnCubes(part)) {
+            found.add(new HeadBone(part, path));
+        }
+        for (Map.Entry<String, Bone> child : ((Bone) (Object) part).getChildren().entrySet()) {
+            if ((Object) child.getValue() instanceof ModelPart childPart) {
+                List<ModelPart> childPath = new ArrayList<>(path);
+                childPath.add(childPart);
+                collectBranch(child.getKey(), childPart, childPath, heads, tail, found);
+            }
+        }
+    }
+
+    /** ¿Es una extremidad o una pieza de la cara (ver NOT_TRUNK), una pata o un brazo? */
+    private static boolean isNotTrunk(String name) {
+        if (isLegName(name) || isArm(name)) {
+            return true;
+        }
+        for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
+            String word = stripModifiers(token.replaceAll("\\d+$", ""));
+            if (NOT_TRUNK.contains(word) || word.startsWith("tentacle")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** ¿Es (o está dentro de) alguna pieza de la cola? */
+    private static boolean insideTail(ModelPart part, Tail tail) {
+        if (tail != null) {
+            for (HeadBone root : tail.roots) {
+                if (holds(root.part, part)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** El hueso del camino (sin la cabeza) con la mayor caja de cubos propios entre los que cumplen la condición. */
@@ -2430,16 +2565,20 @@ public final class FusionGraft {
         List<List<ModelPart>> found = new ArrayList<>();
         List<ModelPart> current = new ArrayList<>();
         current.add(root);
-        collectPaths(root, name -> {
-            for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
-                String word = stripModifiers(token.replaceAll("\\d+$", ""));
-                if (LEGS.contains(word)) {
-                    return true;
-                }
-            }
-            return false;
-        }, current, found);
+        collectPaths(root, FusionGraft::isLegName, current, found);
         return !found.isEmpty();
+    }
+
+    /** ¿Es un hueso de pierna o pie ("leg_left", "leftleg", "legs", "foot_front", "lleg")? */
+    private static boolean isLegName(String name) {
+        for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
+            String word = stripModifiers(token.replaceAll("\\d+$", ""));
+            // "lleg", "rfoot" (Groudon de AllTheMons): la l/r pegada; stripModifiers no quita letras sueltas
+            if (LEGS.contains(word) || word.matches("[lr](leg|legs|foot|feet)")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

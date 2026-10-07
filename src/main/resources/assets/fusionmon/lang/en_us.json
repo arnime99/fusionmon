@@ -111,7 +111,7 @@
   "gui.fusionmon.inspect.legend.decor": "trunk decoration",
   "gui.fusionmon.inspect.legend.neck_decor": "neck decoration (goes with the head)",
   "gui.fusionmon.inspect.legend.arm": "arms",
-  "gui.fusionmon.inspect.legend.tail": "tail",
+  "gui.fusionmon.inspect.legend.tail": "tail (the point: where the new tail attaches)",
   "gui.fusionmon.inspect.progress": "Reviewed %s of %s (wrong: %s) · in filter: %s",
   "gui.fusionmon.inspect.help": "←/→ species · V view · G gender · F filter · B OK · X wrong (Enter saves the note) · U clear review · C camera · drag: rotate (right: move) · wheel: zoom",
   "command.fusionmon.unfused": "Fusion undone."

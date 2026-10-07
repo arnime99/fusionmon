@@ -32,9 +32,59 @@ detectada en **una especie** o una **regla de combinación** mala, así que se r
 2. **Reglas por categoría**: una lista fija de cruces (2 representantes por categoría, ~50-60 parejas) que se repasa
    tras cada cambio para ver si se ha roto algo.
 
+### Revisión 1: los 200 con avisos (`run/fusionmon/species-review.json`, 23 bien, 177 fallo)
+
+Patrones (por orden de cuántas especies arreglan):
+
+- **A. El cuerpo no está en el camino a la cabeza** (~27): el tronco cuelga al lado del cuello/cabeza, no por encima
+  (`torso` → `torso1_scale` y `torso` → `torso2` → cabeza en Wigglytuff; `torso` → `belly` y `torso` → `neck` en
+  Snorlax; `torso2` hermano de `head` en Yamper; `thorax` en Ariados). Hoy: "sin tronco" o "el tronco es el cuello".
+  Wigglytuff, Yamper, Snorlax, Ariados, Keldeo, Slugma, Magcargo, Blipbug, Mismagius, Rockruff, Necrozma, Bellibolt,
+  Slurpuff, Misdreavus, Masquerain, Iron Moth, Revavroom, Tapu Bulu, Spinarak, Anorith, Clauncher, Amoonguss,
+  Jellicent, Frillish, Galvantula, Wailord, Veluza, Flapple. Idea: si no hay tronco en el camino (o es un solo cuello),
+  buscarlo en las ramas que cuelgan del camino y no son cabeza, patas, brazos, cola ni adorno.
+- **B. Serpientes** (11): el cuerpo es una cadena de segmentos al lado de la cabeza (`body` → `head` y `body` → `tail`...
+  en Ekans; `segment1...` en Onix). Tronco = la cadena sin la punta; cola = la punta. Ekans, Onix, Steelix, Rayquaza,
+  Dratini, Eelektrik, Centiskorch, Sizzlipede, Huntail, Gorebyss, Silicobra.
+- **C. Todo cabeza con adornos/brazos/patas** (~38, + 5 peces): no hay cuerpo, solo cabeza con cosas. Como cabeza
+  debería pegarse entero. Chimecho, Comfey, Cottonee, Eldegoss, Gossifleur, Litwick, Milcery, Shuppet, Yamask, Woobat,
+  Cutiefly, Flutter Mane, Pecharunt, Swirlix, Duosion, Drifloon, Drifblim, Sunkern, Gulpin, Corsola, Klefki, Pineco,
+  Boldore, Ferrothorn, Geodude, Jigglypuff, Azurill, Clobbopus, Scream Tail, Stonjourner, Metagross, Shelgon, Surskit,
+  Toedscruel, Trubbish, Omanyte, Omastar, Inkay. Peces (cabeza + cuerpo = cabeza, aletas y cola): Sharpedo, Carvanha,
+  Wailmer, Stunfisk, Seaking. Idea: con cabeza y sin tronco en ningún sitio (tras A) → "todo cabeza".
+- **D. Coberturas que son tronco** (~16): vestido, lana, chaqueta, cesta, flor... envuelven el tronco: no son adornos.
+  Gothitelle, Gothorita, Magearna, Jynx, Dolliv, Mareep, Dubwool, Wooloo, Obstagoon, Sneasler, Flabébé, Floette,
+  Tarountula, Vullaby, Rabsca, Rellor (Meloetta, Reuniclus, Tapu Fini: bien así). Idea geométrica: un "adorno" cuya caja
+  contiene casi todo el tronco es parte del tronco.
+- **E. Mismo adorno con otro nombre** (7): caparazones `collar` (Chesnaught), `rock` (Dwebble), `back_bubbles`
+  (Froakie), `mushroom` (Parasect), `cannon` (Genesect) → como `shell`; `tuff` (Mandibuzz) → alas. Idea: clase por
+  posición y tamaño (lo grande sobre la espalda = caparazón) además del nombre.
+- **F. Punto de pegado / cráneo** (~16): pivote lejos o adelantado → pegar en el borde de abajo del cráneo:
+  Cresselia, Meltan, Xurkitree, Regieleki, Guzzlord, Mawile, Corphish, Crawdaunt, Raging Bolt, Hatterene. Cubo del
+  cráneo equivocado: Coalossal (`coal`), Lampent, Galvantula, Seaking, Feebas (coge la cola), Vespiquen.
+- **G. Varios individuos o cabezas** (12): Magneton, Sandy Shocks, Klink (2), Klang (2), Klinklang (3), Dugtrio,
+  Exeggcute, Falinks, Combee, Vanilluxe (2), Doublade, Drakloak (lleva un Dreepy). Una cabeza por individuo:
+  probablemente datos por especie (JSON).
+- **H. Cabeza con otro nombre** (8): Blacephalon (`head_ball`), Skeledirge (`head_top`), Wo-Chien (`top_head` es
+  caparazón; la cabeza es otro bloque), Dondozo, Silvally, Dhelmise (`wheel`), Nihilego, Magnemite.
+- **Únicos, dejar o JSON**: Aegislash, Archaludon, Cofagrigus, Duraludon, Eternatus, Miraidon, Tatsugiri, Malamar,
+  Magnezone, Applin, Enamorus, Yveltal, Hoopa.
+- **Avisos que sobran**: "cara fuera de la cabeza" casi siempre está bien (Jirachi, Mimikyu, Shiftry, Palpitoad,
+  Slowbro, Ogerpon, Sinistcha, Tapu Fini, Cosmoem, Crabominable); "adorno mayor que el tronco" con alas (Altaria,
+  Swablu, Swanna, Talonflame, Togekiss, Fearow) está bien.
+
 ## Cambios sin commit (pendientes de probar)
 
-(ninguno)
+- Inspector: punto naranja donde se engancha la cola (pivote de la principal).
+- **A + B, tronco al lado** (`findTrunk` → `trunkBeside`, `TRUNK_BRANCHES`, `trunkSpace`, `findSpineEnd`): si el camino
+  a la cabeza no tiene tronco o solo un cuello, el tronco es el hueso más grande de las ramas que cuelgan del camino y
+  no son adorno, cabeza, extremidad (`NOT_TRUNK`: patas, manos, tentáculos...), cara ni cola; su caja abarca toda la
+  rama, y la columna sale del centro de la rama. Cambia el tronco de 51 modelos base (Snorlax `belly`, Ariados
+  `thorax`, Ekans la cadena `tail`...`tail5`, Onix los 14 segmentos, Wigglytuff, Yamper, Keldeo...). Quedan 34 sin
+  tronco: casi todos del grupo C (todo cabeza). Jellicent y Galvantula siguen sin tronco (mirar aparte).
+  Para probar en el inspector (vista partes/cuerpo, caja azul): Snorlax, Ariados, Wigglytuff, Yamper, Keldeo, Slugma,
+  Magcargo, Ekans, Onix, Steelix, Rayquaza, Dratini, Huntail, Centiskorch; y en el visor alguna fusión con ellos de
+  cuerpo y una cabeza con adornos (Charizard, Butterfree, Lapras), y Pikachu + Ekans/Onix.
 
 ## Abiertos
 
