@@ -2,35 +2,37 @@
 
 ## Cómo trabajamos
 
-1. El usuario prueba en el visor (`/fusiondex`) y apunta aquí: **cabeza + cuerpo · síntoma · captura** (si hay).
-2. Claude agrupa los fallos por **patrón** (qué tienen en común los modelos), lo confirma leyendo los `.geo.json`
-   y simulando la regla sobre **todos** los modelos (scripts de PowerShell sobre el jar de Cobblemon y
-   `run/resourcepacks/AllTheMons-R4.0.zip`), y arregla la regla, no el Pokémon.
-3. El usuario vuelve a probar las parejas de la lista; lo que funcione se tacha y se hace commit.
+1. **Por especies, no por parejas.** El usuario revisa en el inspector (`/fusioninspect`) y marca cada especie bien
+   o fallo con una nota `pieza: qué pasa`; queda en `run/fusionmon/species-review.json` (**leerlo**). Las parejas del
+   visor (`/fusiondex`) se usan para probar las reglas de combinación (posición, tamaños) y lo que se arregla.
+2. Claude agrupa los fallos por **patrón**, lo confirma en los `.geo.json` y lo simula sobre **todos** los modelos con
+   `tools/species-table.ps1` (copia de las reglas de `FusionGraft`: si cambia una regla, cambiarla también ahí y
+   regenerar `docs/species/`), y arregla la regla, no el Pokémon.
+3. El usuario vuelve a mirar las afectadas (**Filter: wrong** en el inspector) y se hace commit de lo que confirma.
 
 Nada de código por especie: si hiciera falta un caso a mano, sería con datos (JSON de ajustes por especie).
 
-## Siguiente: revisión por especies (en marcha)
+## Estado (2026-10-07)
 
-Hecho: **tabla automática** `docs/species/` (`README.md` resumen, `especies.csv` para Excel), generada por
-`tools/species-table.ps1` (copia de las reglas de `FusionGraft`: si cambia una regla, cambiarla también ahí y
-regenerar). **Modo inspector** (`/fusioninspect`, sin commit, pendiente de probar): la revisión del usuario queda en
-`run/fusionmon/species-review.json`.
+Hecho y probado: tabla automática (`docs/species/`), inspector, **A + B** (tronco al lado: `trunkBeside`),
+**"Pegar: cráneo" por defecto** (`Align.SKULL`; "pivote" y "base" siguen en el botón y en `/fusionvisual align`),
+**tamaño "suave al crecer" por defecto** (`Sizing.SOFT_UP`: lo que se agranda, proporción^0,6; lo que se encoge,
+exacto; `MIN_SCALE` 0,25), cola de serpientes sin `tail` (`chainTail`: último segmento).
 
-
-Idea del usuario: probar parejas al azar no acaba nunca (~1 000 000 de combinaciones). Cada fallo es o una pieza mal
-detectada en **una especie** o una **regla de combinación** mala, así que se revisa en dos ejes:
-
-1. **Especies una a una** (~1400 modelos con formas y AllTheMons):
-   - Tabla automática (script) con la categoría de cada modelo (bípedo, cuadrúpedo, serpiente/pez, todo cabeza, cuerpo
-     sin cabeza, varias cabezas, varios individuos...), lo detectado (cabeza, cráneo, punto del cuello, tronco, cola,
-     adornos) y **avisos** de lo sospechoso. Se revisan primero los avisos y una muestra de cada categoría.
-   - **Modo inspector** en `/fusiondex`: una especie sola con la cabeza aislada (lo que se pegaría), el punto del
-     cuello, la caja del cráneo y adornos/cola en otro color; teclas bien/fallo + nota, guardado en un archivo.
-   - Lo que no tenga regla general → **ajustes por especie en JSON** (Magneton = 3 cabezas, hueso de la cabeza de
-     Skeledirge...), ampliable por resource packs. Nunca código por especie.
-2. **Reglas por categoría**: una lista fija de cruces (2 representantes por categoría, ~50-60 parejas) que se repasa
-   tras cada cambio para ver si se ha roto algo.
+**Siguiente:**
+1. **Tamaños de las colas** (idea del usuario): hoy son proporcionales a la cola que sustituyen / al tronco. Tienen que
+   notarse sin pasarse: equilibrar para los muy pequeños y los muy grandes. Las de serpiente (Onix, Steelix) salen
+   diminutas o no se ven, y la cabeza de Onix/Steelix sigue grande en cuerpos pequeños. Ideas: medir el tronco por la
+   raíz cúbica del volumen (una caja larga como la de Onix "mide" demasiado por su lado medio); un mínimo de cola
+   respecto al cuerpo (que siempre se note) además del tope (`TAIL_GROWTH`).
+2. **C. Todo cabeza** (34 sin tronco en la tabla, casi todos de este grupo): con cabeza y sin tronco en ningún
+   sitio → como cabeza se pega entero. Y los de tronco diminuto al lado de la cabeza (Gossifleur `waist`, Yamask).
+3. **D. Coberturas** (vestido, lana, chaqueta → tronco), **F** (cráneo equivocado), **E**, **H**, **G** (JSON).
+4. Quitar avisos que sobran de la tabla ("cara fuera de la cabeza", "adorno mayor que el tronco" con alas).
+5. Después de C–D: seguir revisando especies "sin revisar" en el inspector.
+6. Más adelante: **ajustes por especie en JSON** para lo que no tenga regla (Magneton = 3 cabezas, hueso de la cabeza
+   de Skeledirge...), ampliable por resource packs; y una **lista fija de cruces por categoría** (2 representantes por
+   categoría, ~50-60 parejas) para repasar tras cada cambio.
 
 ### Revisión 1: los 200 con avisos (`run/fusionmon/species-review.json`, 23 bien, 177 fallo)
 
@@ -73,20 +75,28 @@ Patrones (por orden de cuántas especies arreglan):
   Slowbro, Ogerpon, Sinistcha, Tapu Fini, Cosmoem, Crabominable); "adorno mayor que el tronco" con alas (Altaria,
   Swablu, Swanna, Talonflame, Togekiss, Fearow) está bien.
 
+A + B (tronco al lado) hecho y probado. Quedan 34 sin tronco: casi todos del grupo C. Jellicent y Galvantula siguen
+sin tronco (mirar aparte).
+
+### Pegado y tamaños (probado por el usuario)
+
+- Modos de pegado (`Align`, botón del visor, `/fusionvisual align pivot|skull|base`): **cráneo** (por defecto, el que
+  mejor queda), pivote, y **base** (`attachPoint`/`neckFace`: centro de la cara del cráneo por la que entra el cuello;
+  punto verde lima en el inspector).
+- Tamaños (`Sizing`/`soften`, botón "Tamaño" del visor): **suave al crecer** (por defecto), exacto, suave.
+- Cola de serpientes sin `tail` (`chainTail`): Onix `boulder14`, Steelix `boulder8`, Dratini `segment8`, Rayquaza
+  `tip`. Mal: Magneton (grupo G), Frillish (`frill_right_end2`), Necrozma (`bone90`).
+
 ## Cambios sin commit (pendientes de probar)
 
-- Inspector: punto naranja donde se engancha la cola (pivote de la principal).
-- **A + B, tronco al lado** (`findTrunk` → `trunkBeside`, `TRUNK_BRANCHES`, `trunkSpace`, `findSpineEnd`): si el camino
-  a la cabeza no tiene tronco o solo un cuello, el tronco es el hueso más grande de las ramas que cuelgan del camino y
-  no son adorno, cabeza, extremidad (`NOT_TRUNK`: patas, manos, tentáculos...), cara ni cola; su caja abarca toda la
-  rama, y la columna sale del centro de la rama. Cambia el tronco de 51 modelos base (Snorlax `belly`, Ariados
-  `thorax`, Ekans la cadena `tail`...`tail5`, Onix los 14 segmentos, Wigglytuff, Yamper, Keldeo...). Quedan 34 sin
-  tronco: casi todos del grupo C (todo cabeza). Jellicent y Galvantula siguen sin tronco (mirar aparte).
-  Para probar en el inspector (vista partes/cuerpo, caja azul): Snorlax, Ariados, Wigglytuff, Yamper, Keldeo, Slugma,
-  Magcargo, Ekans, Onix, Steelix, Rayquaza, Dratini, Huntail, Centiskorch; y en el visor alguna fusión con ellos de
-  cuerpo y una cabeza con adornos (Charizard, Butterfree, Lapras), y Pikachu + Ekans/Onix.
+(ninguno)
 
 ## Abiertos
+
+- **Ninetales**: su cabeza está inclinada en su modelo y su cráneo también; al pegar, no queda del todo bien.
+- **Vaporeon + Lopunny**: una línea larga y fina en diagonal atraviesa la fusión (¿un plano de Vaporeon, volante o
+  aleta, estirado?). Vaporeon + Haxorus: bien.
+- **Colas**: ver "Siguiente" arriba (equilibrar tamaños, serpientes).
 
 - **Adornos del tronco gigantes sobre Emboar**: Iron Valiant, Gardevoir, Roselia y Wartortle como cabeza sobre
   Emboar: su falda/caparazón sale enorme (el caparazón de Wartortle tapa todo el cuerpo). Las tres capturas son con

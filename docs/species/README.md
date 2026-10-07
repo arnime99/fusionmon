@@ -26,7 +26,7 @@ Etiquetas (se pueden sumar a cualquier forma):
 - varias cabezas: 14
 - racimo: 3
 - alas: 134
-- cola (punta): 31
+- cola (punta): 40
 - cola: 681
 
 Punto de pegado de la cabeza (columna `pegado`):

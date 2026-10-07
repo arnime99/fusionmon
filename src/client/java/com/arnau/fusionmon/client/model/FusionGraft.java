@@ -75,7 +75,7 @@ public final class FusionGraft {
 
     private static final String SHINY = "shiny";
     /** Para que una cabeza enorme o diminuta no quede absurda del todo. */
-    private static final float MIN_SCALE = 0.4F;
+    private static final float MIN_SCALE = 0.25F;
     private static final float MAX_SCALE = 2.5F;
     /**
      * Límites de escala de colas y adornos, más amplios que los de las cabezas: entre Pokémon tan dispares como
@@ -157,13 +157,41 @@ public final class FusionGraft {
     private static boolean decorations = true;
     /** Si los cuerpos sin cabeza llevan la cabeza encima o van en modo colores (/fusionvisual top on|off). */
     private static boolean tops = true;
+    /** Cómo se coloca una cabeza normal en el sitio de la del cuerpo (/fusionvisual align ...). */
+    public enum Align {
+        /** Pivote con pivote: el pivote suele estar en el cuello. */
+        PIVOT,
+        /** Cráneo por cráneo, centro con centro (por defecto), como los modelos enteros y Exeggutor (ver skullOffset). */
+        SKULL,
+        /**
+         * Base con base: el centro de la cara del cráneo que mira al cuello (ver attachPoint). En 195 modelos el pivote
+         * está en medio de la cabeza (Charizard, Pidgey) y en 886 en el cuello: al juntar uno de cada, pivote con
+         * pivote, la cabeza nueva quedaba media cabeza hundida (Charizard en Snorlax) o flotando.
+         */
+        BASE
+    }
+
+    /** Por defecto cráneo por cráneo: probado por el usuario con muchas parejas, el que mejor queda (BASE va detrás). */
+    private static Align align = Align.SKULL;
+
     /**
-     * Cómo se coloca una cabeza normal (/fusionvisual align pivot|skull): pivote con pivote (por defecto; suele ser el
-     * cuello) o cráneo por cráneo, como los modelos enteros y Exeggutor (ver skullOffset). En prueba: en ~120 modelos
-     * el pivote de la cabeza está en su centro y no en el cuello, y al juntar uno de esos con uno normal la cabeza
-     * nueva queda desplazada media cabeza.
+     * Cómo se pasan los tamaños de una especie a otra (/fusionvisual size ...). Las escalas son proporciones: el cráneo
+     * del cuerpo respecto al de la cabeza, un tronco respecto al otro. Exactas, una cabeza normal sobre Snorlax u Onix
+     * (cráneos enormes) salía gigante y las alas de Butterfree sobre Snorlax, x4.
      */
-    private static boolean skullAlign = false;
+    public enum Sizing {
+        /** La proporción tal cual. */
+        EXACT,
+        /** La proporción elevada a SOFT_SIZE: más cerca de 1, en los dos sentidos (x2,5 → x1,7; x0,5 → x0,66). */
+        SOFT,
+        /** Suavizada solo al agrandar: lo que se encoge (la cabeza de Onix en Charmander), exacto. */
+        SOFT_UP
+    }
+
+    /** Exponente de Sizing.SOFT. */
+    private static final float SOFT_SIZE = 0.6F;
+    /** Por defecto suavizado solo al agrandar: probado por el usuario, el que mejor queda. */
+    private static Sizing sizing = Sizing.SOFT_UP;
 
     /**
      * Trozos de nombre de hueso que no dicen qué pieza es, solo dónde está o en qué estado ("wing_left",
@@ -332,12 +360,28 @@ public final class FusionGraft {
         return tops;
     }
 
-    public static void setSkullAlign(boolean value) {
-        skullAlign = value;
+    public static void setAlign(Align value) {
+        align = value;
     }
 
-    public static boolean isSkullAlign() {
-        return skullAlign;
+    public static Align getAlign() {
+        return align;
+    }
+
+    public static void setSizing(Sizing value) {
+        sizing = value;
+    }
+
+    public static Sizing getSizing() {
+        return sizing;
+    }
+
+    /** Una proporción de tamaños pasada por el modo de Sizing. */
+    private static float soften(float ratio) {
+        if (ratio <= 0 || sizing == Sizing.EXACT || sizing == Sizing.SOFT_UP && ratio < 1) {
+            return ratio;
+        }
+        return (float) Math.pow(ratio, SOFT_SIZE);
     }
 
     /**
@@ -615,6 +659,7 @@ public final class FusionGraft {
     public static final int INSPECT_ARM = 0xFF88FF55;
     public static final int INSPECT_TAIL = 0xFFFFA020;
     public static final int INSPECT_PIVOT = 0xFFFFFF00;
+    public static final int INSPECT_BASE = 0xFF00FF80;
     public static final int INSPECT_SKULL = 0xFFFF3030;
     public static final int INSPECT_TRUNK = 0xFF3080FF;
     public static final int INSPECT_SPINE = 0xFFFFFFFF;
@@ -855,7 +900,13 @@ public final class FusionGraft {
         if (skull != null) {
             markers.add(new Marker(pose, skull.box, INSPECT_SKULL));
         }
-        markers.add(new Marker(pose, point(skull == null ? 0.02F : meanSide(skull.box) * 0.12F), INSPECT_PIVOT));
+        float half = skull == null ? 0.02F : meanSide(skull.box) * 0.12F;
+        markers.add(new Marker(pose, point(half), INSPECT_PIVOT));
+        // Y el de "Pegar: base" (ver attachPoint)
+        Vector3f attach = attachPoint(head);
+        if (attach != null) {
+            markers.add(new Marker(new Matrix4f(pose).translate(attach), point(half * 0.8F), INSPECT_BASE));
+        }
     }
 
     /** Cajita alrededor del origen, para marcar un punto. */
@@ -955,7 +1006,7 @@ public final class FusionGraft {
         boolean clusterBody = bodyHeads != null && !bodyHeads.companions().isEmpty();
         float bodyCluster = clusterBody ? CLUSTER_BODY_SCALE : 1F;
         for (HeadBone bodyHead : graft.chains.isEmpty() ? graft.bodies : List.<HeadBone>of()) {
-            float scale = Math.clamp(bodyCluster * size(bodyHead.part) / pastedSize(graft), MIN_SCALE, MAX_SCALE)
+            float scale = Math.clamp(soften(bodyCluster * size(bodyHead.part) / pastedSize(graft)), MIN_SCALE, MAX_SCALE)
                     * INFLATE;
             // Quitamos el giro que traía la cabeza del cuerpo y ponemos el de la cabeza en su modelo:
             // así mira hacia donde mira en su modelo (y hacia el jugador, con su animación de mirar)
@@ -968,7 +1019,16 @@ public final class FusionGraft {
                     part.translateAndRotate(poseStack);
                 }
                 poseStack.mulPose(correction);
-                if (graft.whole || clusterBody || skullAlign) {
+                if (align == Align.BASE && !graft.whole && !clusterBody) {
+                    // Base con base: el punto donde el cuello entra en el cráneo de lo que se pega, en el de la cabeza
+                    // que sustituye (ver attachPoint), estén donde estén sus pivotes
+                    Vector3f target = attachPoint(bodyHead);
+                    Vector3f own = attachPoint(graft.head);
+                    if (target != null && own != null) {
+                        Vector3f offset = new Quaternionf(correction).conjugate().transform(target).sub(own.mul(scale));
+                        poseStack.translate(offset.x, offset.y, offset.z);
+                    }
+                } else if (graft.whole || clusterBody || align == Align.SKULL) {
                     // Reemplazo cráneo por cráneo: el centro del cubo principal de lo que se pega, en el centro del
                     // de la cabeza que sustituye (los detalles no cuentan). Un modelo entero no tiene un "cuello"
                     // que poner en el pivote (el suyo suele estar en el suelo), y apoyado por su punto más bajo
@@ -1018,7 +1078,7 @@ public final class FusionGraft {
                                      int color) {
         float scale = trunkScale(graft);
         if (scale <= 0) {
-            scale = Math.clamp(size(graft.bodies.get(0).part) / size(graft.head.part), MIN_SCALE, MAX_SCALE);
+            scale = Math.clamp(soften(size(graft.bodies.get(0).part) / size(graft.head.part)), MIN_SCALE, MAX_SCALE);
         }
         Vector3f anchor = matrixAlong(graft.bodySpine.path).getTranslation(new Vector3f());
         List<Matrix4f> matrices = new ArrayList<>();
@@ -1573,7 +1633,8 @@ public final class FusionGraft {
         if (head.box[0] > head.box[3] || body.box[0] > body.box[3]) {
             return 0;
         }
-        return Math.clamp(meanSide(body.box) / Math.max(meanSide(head.box), 0.01F), MIN_PIECE_SCALE, MAX_PIECE_SCALE);
+        return Math.clamp(soften(meanSide(body.box) / Math.max(meanSide(head.box), 0.01F)), MIN_PIECE_SCALE,
+                MAX_PIECE_SCALE);
     }
 
     /** trunkScale de una fusión, o 0 si a algún modelo le falta tronco o cuello con los que medirlo. */
@@ -1614,7 +1675,7 @@ public final class FusionGraft {
         if (scale <= 0) {
             // Sin troncos con los que comparar (modelos "todo cabeza"): igualar el largo de las colas
             scale = headLength <= 0 || bodyLength <= 0 ? 1F
-                    : Math.clamp(bodyLength / headLength, MIN_SCALE, MAX_SCALE);
+                    : Math.clamp(soften(bodyLength / headLength), MIN_SCALE, MAX_SCALE);
         } else if (headLength > 0 && bodyLength > 0) {
             // Tope: no mucho más larga que la que sustituye (la de Groudon salía gigante)
             scale = Math.min(scale, TAIL_GROWTH * bodyLength / headLength);
@@ -1679,6 +1740,62 @@ public final class FusionGraft {
         }
         float[] box = skull.box;
         return new Vector3f((box[0] + box[3]) / 2F, (box[1] + box[4]) / 2F, (box[2] + box[5]) / 2F);
+    }
+
+    /** Cara del cráneo por la que entra el cuello de cada cabeza (ver neckFace): eje * 2 + 1 si es la del lado positivo. */
+    private static final Map<ModelPart, Integer> NECK_FACES = new WeakHashMap<>();
+
+    /**
+     * Punto de pegado de una cabeza para Align.BASE, en su marco propio: el centro de la cara de su cráneo por la que
+     * entra el cuello. Así todas las cabezas se pegan igual, tengan el pivote en el cuello (Bulbasaur), en medio de la
+     * cabeza (Charizard) o lejos (Cresselia). null si no tiene cráneo.
+     */
+    private static Vector3f attachPoint(HeadBone head) {
+        Skull skull = skull(head.part, Map.of());
+        if (skull == null) {
+            return null;
+        }
+        float[] box = skull.box;
+        // La cara se elige una vez: con la postura de cada fotograma podría saltar de una a otra
+        int face = NECK_FACES.computeIfAbsent(head.part, part -> neckFace(head, box));
+        int axis = face / 2;
+        Vector3f point = new Vector3f((box[0] + box[3]) / 2F, (box[1] + box[4]) / 2F, (box[2] + box[5]) / 2F);
+        point.setComponent(axis, face % 2 == 1 ? box[axis + 3] : box[axis]);
+        return point;
+    }
+
+    /**
+     * La cara del cráneo (en su marco propio) que mira hacia el cuello: hacia el primer hueso con cubos subiendo por el
+     * camino a la cabeza (el cuello, o el tronco si no tiene), el eje en que más se aleja. Sin ninguno, la de abajo (en
+     * los modelos de Minecraft la Y crece hacia abajo).
+     */
+    private static int neckFace(HeadBone head, float[] skullBox) {
+        Vector3f center = new Vector3f((skullBox[0] + skullBox[3]) / 2F, (skullBox[1] + skullBox[4]) / 2F,
+                (skullBox[2] + skullBox[5]) / 2F);
+        Matrix4f toHead = matrixAlong(head.path).invert();
+        Vector3f direction = new Vector3f(0, 1, 0);
+        for (int i = head.path.size() - 2; i >= 1; i--) {
+            float[] own = solidOwnBox(head.path.get(i));
+            if (own[0] > own[3]) {
+                own = ownBox(head.path.get(i));
+            }
+            if (own[0] > own[3]) {
+                continue;
+            }
+            Vector3f neck = new Matrix4f(toHead).mul(matrixAlong(head.path.subList(0, i + 1))).transformPosition(
+                    new Vector3f((own[0] + own[3]) / 2F, (own[1] + own[4]) / 2F, (own[2] + own[5]) / 2F));
+            if (neck.distanceSquared(center) > 1e-8F) {
+                direction = neck.sub(center);
+            }
+            break;
+        }
+        int axis = 0;
+        for (int i = 1; i < 3; i++) {
+            if (Math.abs(direction.get(i)) > Math.abs(direction.get(axis))) {
+                axis = i;
+            }
+        }
+        return axis * 2 + (direction.get(axis) > 0 ? 1 : 0);
     }
 
     /**
@@ -2017,6 +2134,9 @@ public final class FusionGraft {
         }
         List<ModelPart> headPath = heads.get(0).path;
         HeadBone trunk = findTrunk(headPath, heads, tail);
+        if (tail == null && trunk != null) {
+            tail = chainTail(root, trunk);
+        }
         // Varias cabezas sin cuello, que cuelgan juntas del mismo hueso (Exeggutor: "head", "head2" y "head3" de
         // "upperHead"): son un racimo que va entero con la principal, no cabezas con cuello como las de Dodrio
         ModelPart cluster = heads.size() > 1 ? sharedParent(heads) : null;
@@ -2244,6 +2364,37 @@ public final class FusionGraft {
             TRUNK_BRANCHES.put(best.part, List.copyOf(bestBranch));
         }
         return best;
+    }
+
+    /** Niveles de una cadena de tronco (ver chainTail) a partir de los que es el cuerpo de una serpiente. */
+    private static final int SERPENT_CHAIN = 4;
+
+    /**
+     * La cola de una serpiente sin huesos "tail" (Onix, Steelix, Rayquaza: "segment1" → "segment2"..., cada uno con su
+     * roca): si el tronco es una cadena al lado de la cabeza de SERPENT_CHAIN niveles o más y el modelo no tiene patas,
+     * el último segmento es la cola, como la punta de Milotic o Ekans (ver findTail), y sale de la rama del tronco.
+     * null si no.
+     */
+    private static Tail chainTail(ModelPart root, HeadBone trunk) {
+        List<HeadBone> branch = TRUNK_BRANCHES.get(trunk.part);
+        if (branch == null || branch.size() < 2 || hasLegs(root)) {
+            return null;
+        }
+        int shallow = Integer.MAX_VALUE;
+        HeadBone tip = null;
+        for (HeadBone bone : branch) {
+            shallow = Math.min(shallow, bone.path.size());
+            if (tip == null || bone.path.size() > tip.path.size()
+                    || bone.path.size() == tip.path.size() && cubes(bone.part) > cubes(tip.part)) {
+                tip = bone;
+            }
+        }
+        if (tip.path.size() - shallow + 1 < SERPENT_CHAIN || tip.part == trunk.part) {
+            return null;
+        }
+        HeadBone cut = tip;
+        TRUNK_BRANCHES.put(trunk.part, branch.stream().filter(bone -> !holds(cut.part, bone.part)).toList());
+        return new Tail(List.of(tip), tip);
     }
 
     /** Los huesos con cubos propios de una rama de tronco (ver trunkBeside). */

@@ -483,6 +483,20 @@ function Analyze($geoText) {
         $found = TrunkBeside $headPath $heads $tail
         if ($found) { $trunk = $found; $beside = $true; $neckTrunk = $false }
     }
+    # Serpiente sin huesos "tail" (FusionGraft.chainTail): cadena de 4 niveles o más al lado y sin patas → el último
+    # segmento es la cola y sale del tronco
+    if (-not $tail -and $beside -and $trunk.branch.Count -ge 2 -and -not (HasLegs '')) {
+        $tip = $null; $shallow = [int]::MaxValue
+        foreach ($b in $trunk.branch) {
+            $shallow = [math]::Min($shallow, $b.path.Count)
+            if (-not $tip -or $b.path.Count -gt $tip.path.Count -or ($b.path.Count -eq $tip.path.Count -and (TreeCnt $b.part) -gt (TreeCnt $tip.part))) { $tip = $b }
+        }
+        if ($tip.path.Count - $shallow + 1 -ge 4 -and $tip.part -ne $trunk.part) {
+            $tail = @{ roots = @($tip); tip = $true }
+            $trunk.branch = @($trunk.branch | Where-Object { -not (Holds $tip.part $_.part) })
+            $r.tail = "$($tip.part) (último segmento)"
+        }
+    }
     if ($cluster -and $trunk -and [array]::IndexOf($headPath, $cluster) -le $trunk.index) { $cluster = $null }
     $spine = FindSpineEnd $headPath $trunk
     $decor = FindDecorations $headPath $heads $tail $cluster

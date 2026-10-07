@@ -248,10 +248,10 @@ public class SpeciesInspectorScreen extends Screen {
     }
 
     private int legend(GuiGraphics graphics, int x, int y, int width) {
-        int[] colors = {FusionGraft.INSPECT_PIVOT, FusionGraft.INSPECT_SKULL, FusionGraft.INSPECT_TRUNK,
-                FusionGraft.INSPECT_SPINE, FusionGraft.INSPECT_TRUNK_DECOR, FusionGraft.INSPECT_NECK_DECOR,
-                FusionGraft.INSPECT_ARM, FusionGraft.INSPECT_TAIL};
-        String[] keys = {"pivot", "skull", "trunk", "spine", "decor", "neck_decor", "arm", "tail"};
+        int[] colors = {FusionGraft.INSPECT_PIVOT, FusionGraft.INSPECT_BASE, FusionGraft.INSPECT_SKULL,
+                FusionGraft.INSPECT_TRUNK, FusionGraft.INSPECT_SPINE, FusionGraft.INSPECT_TRUNK_DECOR,
+                FusionGraft.INSPECT_NECK_DECOR, FusionGraft.INSPECT_ARM, FusionGraft.INSPECT_TAIL};
+        String[] keys = {"pivot", "base", "skull", "trunk", "spine", "decor", "neck_decor", "arm", "tail"};
         for (int i = 0; i < colors.length; i++) {
             y = text(graphics, Component.literal("■ ").append(Component.translatable("gui.fusionmon.inspect.legend." + keys[i])),
                     x, y, width, colors[i] & 0xFFFFFF);

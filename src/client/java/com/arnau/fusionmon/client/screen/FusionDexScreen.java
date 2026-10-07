@@ -81,6 +81,7 @@ public class FusionDexScreen extends Screen {
     private Button decorButton;
     private Button topButton;
     private Button alignButton;
+    private Button sizeButton;
 
     /** El visor 3D (cámara y encuadre). */
     private final ModelViewport viewport = new ModelViewport();
@@ -154,8 +155,8 @@ public class FusionDexScreen extends Screen {
         });
 
         // Fila de abajo: aspecto y modos de /fusionvisual
-        int toggleWidth = Math.min(110, (width - 2 * MARGIN - 6 * GAP) / 7);
-        x = width / 2 - (7 * toggleWidth + 6 * GAP) / 2;
+        int toggleWidth = Math.min(110, (width - 2 * MARGIN - 7 * GAP) / 8);
+        x = width / 2 - (8 * toggleWidth + 7 * GAP) / 2;
         int y = height - SMALL - 4;
         shinyButton = addRenderableWidget(Button.builder(Component.empty(), b -> shiny = !shiny)
                 .bounds(x, y, toggleWidth, SMALL).build());
@@ -176,7 +177,12 @@ public class FusionDexScreen extends Screen {
                 b -> FusionGraft.setTops(!FusionGraft.hasTops())).bounds(x, y, toggleWidth, SMALL).build());
         x += toggleWidth + GAP;
         alignButton = addRenderableWidget(Button.builder(Component.empty(),
-                b -> FusionGraft.setSkullAlign(!FusionGraft.isSkullAlign())).bounds(x, y, toggleWidth, SMALL).build());
+                b -> FusionGraft.setAlign(FusionGraft.Align.values()[(FusionGraft.getAlign().ordinal() + 1)
+                        % FusionGraft.Align.values().length])).bounds(x, y, toggleWidth, SMALL).build());
+        x += toggleWidth + GAP;
+        sizeButton = addRenderableWidget(Button.builder(Component.empty(),
+                b -> FusionGraft.setSizing(FusionGraft.Sizing.values()[(FusionGraft.getSizing().ordinal() + 1)
+                        % FusionGraft.Sizing.values().length])).bounds(x, y, toggleWidth, SMALL).build());
     }
 
     @Override
@@ -203,7 +209,7 @@ public class FusionDexScreen extends Screen {
         RenderablePokemon model = new RenderablePokemon(head, aspects(), ItemStack.EMPTY);
         // Los modos de /fusionvisual cambian lo que se pinta: hay que volver a encuadrar
         String modes = "" + FusionGraft.isEnabled() + FusionGraft.hasTails() + FusionGraft.hasDecorations()
-                + FusionGraft.hasTops() + FusionGraft.isSkullAlign();
+                + FusionGraft.hasTops() + FusionGraft.getAlign() + FusionGraft.getSizing();
         viewport.render(graphics, model, previewState, modes, boxX, boxTop, box, partialTick, null, null);
 
         // Debajo: nombre, tipos, stats y si se ha encontrado la cabeza
@@ -406,8 +412,10 @@ public class FusionDexScreen extends Screen {
         tailButton.setMessage(Component.translatable("gui.fusionmon.dex.tail", onOff(FusionGraft.hasTails())));
         decorButton.setMessage(Component.translatable("gui.fusionmon.dex.decor", onOff(FusionGraft.hasDecorations())));
         topButton.setMessage(Component.translatable("gui.fusionmon.dex.top", onOff(FusionGraft.hasTops())));
-        alignButton.setMessage(Component.translatable(FusionGraft.isSkullAlign()
-                ? "gui.fusionmon.dex.align.skull" : "gui.fusionmon.dex.align.pivot"));
+        alignButton.setMessage(Component.translatable("gui.fusionmon.dex.align."
+                + FusionGraft.getAlign().name().toLowerCase(Locale.ROOT)));
+        sizeButton.setMessage(Component.translatable("gui.fusionmon.dex.size."
+                + FusionGraft.getSizing().name().toLowerCase(Locale.ROOT)));
     }
 
     private static Component onOff(boolean value) {

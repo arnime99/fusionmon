@@ -81,16 +81,22 @@ public class FusionmonClient implements ClientModInitializer {
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.top.off"));
 									return 1;
 								})))
-						// /fusionvisual align pivot|skull: cabeza pegada pivote con pivote o cráneo por cráneo
+						// /fusionvisual align pivot|skull|base: cabeza pegada pivote con pivote, cráneo por cráneo o base con
+						// base (ver FusionGraft.Align)
 						.then(ClientCommandManager.literal("align")
 								.then(ClientCommandManager.literal("pivot").executes(context -> {
-									FusionGraft.setSkullAlign(false);
+									FusionGraft.setAlign(FusionGraft.Align.PIVOT);
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.align.pivot"));
 									return 1;
 								}))
 								.then(ClientCommandManager.literal("skull").executes(context -> {
-									FusionGraft.setSkullAlign(true);
+									FusionGraft.setAlign(FusionGraft.Align.SKULL);
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.align.skull"));
+									return 1;
+								}))
+								.then(ClientCommandManager.literal("base").executes(context -> {
+									FusionGraft.setAlign(FusionGraft.Align.BASE);
+									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.align.base"));
 									return 1;
 								})))));
 
