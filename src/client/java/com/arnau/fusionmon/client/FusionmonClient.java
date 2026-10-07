@@ -4,6 +4,7 @@ import com.arnau.fusionmon.Fusionmon;
 import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.client.screen.FusionConfirmScreen;
 import com.arnau.fusionmon.client.screen.FusionDexScreen;
+import com.arnau.fusionmon.client.screen.SpeciesInspectorScreen;
 import com.arnau.fusionmon.client.screen.UnfuseConfirmScreen;
 import com.arnau.fusionmon.client.texture.FusionTextures;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
@@ -99,6 +100,13 @@ public class FusionmonClient implements ClientModInitializer {
 				dispatcher.register(ClientCommandManager.literal("fusiondex").executes(context -> {
 					Minecraft client = context.getSource().getClient();
 					client.tell(() -> client.setScreen(new FusionDexScreen()));
+					return 1;
+				})));
+		// /fusioninspect: inspector de especies (SpeciesInspectorScreen), para revisar una a una lo que detecta el graft
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+				dispatcher.register(ClientCommandManager.literal("fusioninspect").executes(context -> {
+					Minecraft client = context.getSource().getClient();
+					client.tell(() -> client.setScreen(new SpeciesInspectorScreen()));
 					return 1;
 				})));
 

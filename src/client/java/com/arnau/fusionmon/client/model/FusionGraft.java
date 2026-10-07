@@ -546,6 +546,10 @@ public final class FusionGraft {
     /** Antes de pintar el modelo del cuerpo: ocultar sus cabezas (y su cola y adornos sustituidos). */
     public static void beforeRender(PosableModel model) {
         active = null;
+        if (inspectView != null) {
+            beforeInspect(model);
+            return;
+        }
         PosableState state = model.getCurrentState();
         if (!enabled || state == null) {
             return;
@@ -564,6 +568,10 @@ public final class FusionGraft {
 
     /** Después: volver a mostrar lo oculto y pintar en su sitio la cabeza (cola, adornos) de la otra especie. */
     public static void afterRender(PosableModel model, PoseStack poseStack, int light, int overlay, int color) {
+        if (inspectView != null && inspected == model) {
+            afterInspect(model, poseStack, light, overlay);
+            return;
+        }
         Graft graft = active;
         if (graft == null || graft.bodyModel != model) {
             return;
@@ -584,6 +592,284 @@ public final class FusionGraft {
             if (WARNED.add(graft.headModel)) {
                 Fusionmon.LOGGER.warn("No se pudo pintar la cabeza pegada de una fusión", e);
             }
+        }
+    }
+
+    // ---- Inspector de especies (SpeciesInspectorScreen) ----
+    // Enseña lo que detectan estas reglas en UNA especie, con el mismo código que usan las fusiones: así lo que se
+    // revisa en el inspector es exactamente lo que hará el juego
+
+    /** Qué enseña el inspector de una especie. */
+    public enum InspectView {
+        /** El modelo entero, con lo que pasa de un Pokémon a otro teñido: adornos, brazos y cola. */
+        PARTS,
+        /** Solo lo que se pega cuando la especie es la CABEZA (con lo que va con ella). */
+        HEAD,
+        /** Lo que queda cuando es el CUERPO: sin sus cabezas, con el sitio donde va la nueva y el tronco. */
+        BODY
+    }
+
+    /** Tintes (ARGB) del inspector para cada clase de pieza, y colores de sus marcadores. */
+    public static final int INSPECT_TRUNK_DECOR = 0xFF40E0FF;
+    public static final int INSPECT_NECK_DECOR = 0xFFFF55FF;
+    public static final int INSPECT_ARM = 0xFF88FF55;
+    public static final int INSPECT_TAIL = 0xFFFFA020;
+    public static final int INSPECT_PIVOT = 0xFFFFFF00;
+    public static final int INSPECT_SKULL = 0xFFFF3030;
+    public static final int INSPECT_TRUNK = 0xFF3080FF;
+    public static final int INSPECT_SPINE = 0xFFFFFFFF;
+
+    /**
+     * Una caja que el inspector dibuja encima del modelo, con líneas que se ven a través de él.
+     *
+     * @param pose transformación desde la pantalla hasta el marco de la caja (la del momento en que se pintó)
+     * @param box  la caja en ese marco, en bloques
+     */
+    public record Marker(Matrix4f pose, float[] box, int color) {
+    }
+
+    /**
+     * Lo que detectan las reglas en un modelo, en texto, para el inspector.
+     *
+     * @param kind   "normal", "whole" (como cabeza se pega entero), "headless" (sin cabeza: como cuerpo, la cabeza va
+     *               encima), "chains" (varias cabezas con cuello) o "cluster" (racimo de cabezas)
+     * @param attach dónde está el pivote de la cabeza (lo que se pega en el cuello del cuerpo) respecto a su cráneo:
+     *               "base" (en el cuello), "center" (en medio de la cabeza) o "far" (fuera); "" sin cabeza
+     * @param top    sin cabeza: el hueso sobre el que se pone la cabeza nueva (ver findTop)
+     */
+    public record Anatomy(String kind, String head, String attach, String skull, String trunk, String spine,
+                          String tail, List<String> decorations, List<String> neckDecorations, String top) {
+    }
+
+    private static InspectView inspectView;
+    private static ResourceLocation inspectTexture;
+    /** El modelo que se inspecciona: el primero que se pinta con la inspección en marcha. */
+    private static PosableModel inspected;
+    private static final List<Marker> markers = new ArrayList<>();
+    private static final List<ModelPart> inspectHidden = new ArrayList<>();
+    private static final List<Boolean> inspectWereVisible = new ArrayList<>();
+
+    /** Lo próximo que se pinte se pinta como en el inspector (ver InspectView), con esa textura para lo teñido. */
+    public static void startInspection(InspectView view, ResourceLocation texture) {
+        inspectView = view;
+        inspectTexture = texture;
+        inspected = null;
+        markers.clear();
+    }
+
+    /** Termina la inspección y devuelve los marcadores que hay que dibujar encima del modelo. */
+    public static List<Marker> stopInspection() {
+        inspectView = null;
+        inspectTexture = null;
+        inspected = null;
+        List<Marker> result = List.copyOf(markers);
+        markers.clear();
+        return result;
+    }
+
+    /** Lo detectado en un modelo, en texto (ver Anatomy). */
+    public static Anatomy describe(PosableModel model) {
+        ModelHeads heads = HEAD_BONES.computeIfAbsent(model, FusionGraft::findHeads);
+        List<String> decorations = new ArrayList<>();
+        List<String> neck = new ArrayList<>();
+        for (Decoration decoration : heads.decorations()) {
+            (decoration.neck ? neck : decorations).add(name(decoration.bone) + " [" + decoration.category + "]");
+        }
+        String tail = "";
+        if (heads.tail() != null) {
+            tail = String.join(", ", heads.tail().roots().stream().map(FusionGraft::name).toList());
+        }
+        if (heads.heads().isEmpty()) {
+            return new Anatomy("headless", "", "", "", "", "", tail, decorations, neck,
+                    heads.top() == null ? "" : name(heads.top()));
+        }
+        HeadBone head = heads.heads().get(0);
+        String kind = heads.whole() ? "whole" : !heads.chains().isEmpty() ? "chains"
+                : !heads.companions().isEmpty() ? "cluster" : "normal";
+        String headName = name(head) + (heads.heads().size() > 1 ? " (+" + (heads.heads().size() - 1) + ")" : "");
+        Skull skull = skull(head.part, Map.of());
+        String skullName = skull == null ? "" : skull.path.isEmpty() ? name(head)
+                : skull.path.substring(skull.path.lastIndexOf('/') + 1);
+        return new Anatomy(kind, headName, attach(skull), skullName,
+                heads.trunk() == null ? "" : name(heads.trunk()), heads.spineEnd() == null ? "" : name(heads.spineEnd()),
+                tail, decorations, neck, "");
+    }
+
+    /** Dónde está el pivote de una cabeza (el origen de su marco) respecto a su cráneo (ver Anatomy.attach). */
+    private static String attach(Skull skull) {
+        if (skull == null) {
+            return "";
+        }
+        float[] box = skull.box;
+        boolean inner = true;
+        float distance2 = 0;
+        for (int axis = 0; axis < 3; axis++) {
+            float size = box[axis + 3] - box[axis];
+            // En medio = en la mitad central del cráneo en los tres ejes
+            if (size <= 0 || -box[axis] / size < 0.25F || -box[axis] / size > 0.75F) {
+                inner = false;
+            }
+            float outside = Math.max(0, Math.max(box[axis], -box[axis + 3]));
+            distance2 += outside * outside;
+        }
+        if (inner) {
+            return "center";
+        }
+        return Math.sqrt(distance2) > meanSide(box) ? "far" : "base";
+    }
+
+    /** Nombre del hueso (el último del camino) tal como cuelga de su padre. */
+    private static String name(HeadBone bone) {
+        int size = bone.path.size();
+        return size < 2 ? "root" : boneName(bone.path.get(size - 2), bone.part);
+    }
+
+    /** Antes de pintar el modelo inspeccionado: ocultar lo que se pintará después teñido (o todo, si es "cabeza"). */
+    private static void beforeInspect(PosableModel model) {
+        if (inspected != null || !((Object) model.getRootPart() instanceof ModelPart root)) {
+            return;
+        }
+        ModelHeads heads = HEAD_BONES.computeIfAbsent(model, FusionGraft::findHeads);
+        inspectHidden.clear();
+        inspectWereVisible.clear();
+        if (inspectView == InspectView.HEAD) {
+            inspectHidden.add(root);
+        } else {
+            if (inspectView == InspectView.BODY) {
+                for (HeadBone head : heads.heads()) {
+                    inspectHidden.add(head.part);
+                }
+            }
+            for (Decoration decoration : heads.decorations()) {
+                inspectHidden.add(decoration.bone.part);
+            }
+            if (heads.tail() != null) {
+                for (HeadBone tailRoot : heads.tail().roots()) {
+                    inspectHidden.add(tailRoot.part);
+                }
+            }
+        }
+        setVisible(inspectHidden, inspectWereVisible, false);
+        inspected = model;
+    }
+
+    /** Después: volver a enseñarlo, pintar lo teñido y apuntar los marcadores. */
+    private static void afterInspect(PosableModel model, PoseStack poseStack, int light, int overlay) {
+        restoreVisible(inspectHidden, inspectWereVisible);
+        ModelHeads heads = HEAD_BONES.get(model);
+        MultiBufferSource buffers = model.getBufferProvider();
+        if (heads == null || buffers == null || inspectTexture == null
+                || !((Object) model.getRootPart() instanceof ModelPart root)) {
+            return;
+        }
+        VertexConsumer consumer = buffers.getBuffer(RenderType.entityCutout(inspectTexture));
+        // La pila está como al empezar a pintar el modelo, antes de su raíz (como en renderPieces)
+        Matrix4f base = new Matrix4f(poseStack.last().pose());
+        try {
+            if (inspectView == InspectView.HEAD) {
+                inspectHead(heads, root, base, consumer, poseStack, light, overlay);
+            } else {
+                inspectParts(heads, base, consumer, poseStack, light, overlay);
+            }
+        } catch (RuntimeException e) {
+            if (WARNED.add(model)) {
+                Fusionmon.LOGGER.warn("No se pudo pintar la inspección de un modelo", e);
+            }
+        }
+    }
+
+    /** Vista "cabeza": lo que se pega, como se pega (el modelo entero sin patas, o la cabeza con lo que va con ella). */
+    private static void inspectHead(ModelHeads heads, ModelPart root, Matrix4f base, VertexConsumer consumer,
+                                    PoseStack poseStack, int light, int overlay) {
+        if (heads.heads().isEmpty() || heads.whole()) {
+            List<Boolean> were = new ArrayList<>();
+            setVisible(heads.limbs().keySet(), were, false);
+            try {
+                root.render(poseStack, consumer, light, overlay, -1);
+            } finally {
+                restoreVisible(heads.limbs().keySet(), were);
+            }
+            Skull skull = skull(root, heads.limbs());
+            if (skull != null) {
+                markers.add(new Marker(new Matrix4f(base).mul(matrixAlong(List.of(root))), skull.box, INSPECT_SKULL));
+            }
+            return;
+        }
+        HeadBone head = heads.heads().get(0);
+        renderInPlace(head, consumer, poseStack, light, overlay, -1);
+        for (HeadBone companion : heads.companions()) {
+            renderInPlace(companion, consumer, poseStack, light, overlay, -1);
+        }
+        for (Decoration decoration : heads.decorations()) {
+            if (decoration.neck) {
+                renderInPlace(decoration.bone, consumer, poseStack, light, overlay, INSPECT_NECK_DECOR);
+            }
+        }
+        markHead(base, head);
+    }
+
+    /** Vistas "partes" y "cuerpo": adornos, brazos y cola teñidos; cráneo, punto de pegado y tronco marcados. */
+    private static void inspectParts(ModelHeads heads, Matrix4f base, VertexConsumer consumer, PoseStack poseStack,
+                                     int light, int overlay) {
+        for (Decoration decoration : heads.decorations()) {
+            int tint = decoration.neck ? INSPECT_NECK_DECOR
+                    : ARM.equals(decoration.category) ? INSPECT_ARM : INSPECT_TRUNK_DECOR;
+            renderInPlace(decoration.bone, consumer, poseStack, light, overlay, tint);
+        }
+        if (heads.tail() != null) {
+            for (HeadBone tailRoot : heads.tail().roots()) {
+                renderInPlace(tailRoot, consumer, poseStack, light, overlay, INSPECT_TAIL);
+            }
+        }
+        if (heads.heads().isEmpty()) {
+            // Sin cabeza: el núcleo sobre el que se ponen las cosas (ver coreBox)
+            if (heads.top() != null) {
+                markers.add(new Marker(new Matrix4f(base).mul(matrixAlong(heads.top().path)), coreBox(heads.top().part),
+                        INSPECT_TRUNK));
+            }
+            return;
+        }
+        for (HeadBone head : heads.heads()) {
+            markHead(base, head);
+        }
+        if (heads.trunk() != null && heads.spineEnd() != null) {
+            TrunkSpace space = trunkSpace(heads.trunk(), heads.spineEnd());
+            if (space.box()[0] <= space.box()[3]) {
+                // La caja del tronco está en los ejes de la columna, con el origen en el pivote del tronco
+                Matrix4f pose = new Matrix4f(base).translate(space.origin()).mul(new Matrix4f(space.frame()));
+                markers.add(new Marker(pose, space.box(), INSPECT_TRUNK));
+            }
+            markers.add(new Marker(new Matrix4f(base).mul(matrixAlong(heads.spineEnd().path)), point(0.02F),
+                    INSPECT_SPINE));
+        }
+    }
+
+    /** Marcadores de una cabeza: su cráneo y su pivote (el punto que se pega donde estaba la cabeza del cuerpo). */
+    private static void markHead(Matrix4f base, HeadBone head) {
+        Matrix4f pose = new Matrix4f(base).mul(matrixAlong(head.path));
+        Skull skull = skull(head.part, Map.of());
+        if (skull != null) {
+            markers.add(new Marker(pose, skull.box, INSPECT_SKULL));
+        }
+        markers.add(new Marker(pose, point(skull == null ? 0.02F : meanSide(skull.box) * 0.12F), INSPECT_PIVOT));
+    }
+
+    /** Cajita alrededor del origen, para marcar un punto. */
+    private static float[] point(float half) {
+        return new float[]{-half, -half, -half, half, half, half};
+    }
+
+    /** Pinta un hueso (con lo que cuelga) en su sitio del modelo, con un tinte. */
+    private static void renderInPlace(HeadBone bone, VertexConsumer consumer, PoseStack poseStack, int light,
+                                      int overlay, int color) {
+        poseStack.pushPose();
+        try {
+            for (ModelPart part : parentPath(bone)) {
+                part.translateAndRotate(poseStack);
+            }
+            bone.part.render(poseStack, consumer, light, overlay, color);
+        } finally {
+            poseStack.popPose();
         }
     }
 
@@ -1363,9 +1649,29 @@ public final class FusionGraft {
      * y con la postura de ahora; null si no hay cubos con volumen.
      */
     private static Vector3f skullCenter(ModelPart part, Map<ModelPart, String> skip) {
+        Skull skull = skull(part, skip);
+        if (skull == null) {
+            return null;
+        }
+        float[] box = skull.box;
+        return new Vector3f((box[0] + box[3]) / 2F, (box[1] + box[4]) / 2F, (box[2] + box[5]) / 2F);
+    }
+
+    /**
+     * El cubo del cráneo de una cabeza (ver skullCenter).
+     *
+     * @param box  su caja, en el marco propio del hueso de la cabeza, en bloques
+     * @param path ruta del hueso del cubo desde la cabeza, como la da ModelPart.visit ("" = la propia cabeza,
+     *             "/head_angle")
+     */
+    private record Skull(float[] box, String path) {
+    }
+
+    /** El cubo del cráneo (ver skullCenter); null si no hay cubos con volumen. */
+    private static Skull skull(ModelPart part, Map<ModelPart, String> skip) {
         // El mejor cubo sin contar adornos [0] y contándolos [1], por si la cabeza es todo adornos (ver inDecoration)
         float[] best = {-1, -1};
-        Vector3f[] centers = {new Vector3f(), new Vector3f()};
+        Skull[] found = new Skull[2];
         visitInOwnFrame(part, (pose, path, index, cube) -> {
             for (String limb : skip.values()) {
                 if (path.equals(limb) || path.startsWith(limb + "/")) {
@@ -1380,11 +1686,11 @@ public final class FusionGraft {
             for (int i = inDecoration(path) ? 1 : 0; i < 2; i++) {
                 if (volume > best[i]) {
                     best[i] = volume;
-                    centers[i].set((box[0] + box[3]) / 2F, (box[1] + box[4]) / 2F, (box[2] + box[5]) / 2F);
+                    found[i] = new Skull(box, path);
                 }
             }
         });
-        return best[0] > 0 ? centers[0] : best[1] > 0 ? centers[1] : null;
+        return best[0] > 0 ? found[0] : best[1] > 0 ? found[1] : null;
     }
 
     /**

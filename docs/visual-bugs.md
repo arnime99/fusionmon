@@ -14,7 +14,8 @@ Nada de código por especie: si hiciera falta un caso a mano, sería con datos (
 
 Hecho: **tabla automática** `docs/species/` (`README.md` resumen, `especies.csv` para Excel), generada por
 `tools/species-table.ps1` (copia de las reglas de `FusionGraft`: si cambia una regla, cambiarla también ahí y
-regenerar). Siguiente: modo inspector.
+regenerar). **Modo inspector** (`/fusioninspect`, sin commit, pendiente de probar): la revisión del usuario queda en
+`run/fusionmon/species-review.json`.
 
 
 Idea del usuario: probar parejas al azar no acaba nunca (~1 000 000 de combinaciones). Cada fallo es o una pieza mal
