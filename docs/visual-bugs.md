@@ -10,7 +10,12 @@
 
 Nada de código por especie: si hiciera falta un caso a mano, sería con datos (JSON de ajustes por especie).
 
-## Siguiente: revisión por especies (propuesto, sin empezar)
+## Siguiente: revisión por especies (en marcha)
+
+Hecho: **tabla automática** `docs/species/` (`README.md` resumen, `especies.csv` para Excel), generada por
+`tools/species-table.ps1` (copia de las reglas de `FusionGraft`: si cambia una regla, cambiarla también ahí y
+regenerar). Siguiente: modo inspector.
+
 
 Idea del usuario: probar parejas al azar no acaba nunca (~1 000 000 de combinaciones). Cada fallo es o una pieza mal
 detectada en **una especie** o una **regla de combinación** mala, así que se revisa en dos ejes:
