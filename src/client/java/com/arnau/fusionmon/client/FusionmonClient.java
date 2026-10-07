@@ -128,6 +128,8 @@ public class FusionmonClient implements ClientModInitializer {
 					@Override
 					public void onResourceManagerReload(ResourceManager resourceManager) {
 						FusionTextures.clear();
+						// Con los modelos nuevos (otro resource pack...) una pareja que falló puede ir bien
+						FusionGraft.clearFailures();
 					}
 				});
 	}

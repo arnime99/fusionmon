@@ -85,8 +85,13 @@ public final class FusionTextures {
         ResourceLocation result = headTexture;
         VaryingRenderableResolver bodyResolver = body.resolver();
         if (bodyResolver != null) {
-            // La textura que tendría el cuerpo, preguntando a su resolver con sus aspects
-            result = recolored(headTexture, bodyResolver.getTexture(body.state()));
+            try {
+                // La textura que tendría el cuerpo, preguntando a su resolver con sus aspects
+                result = recolored(headTexture, bodyResolver.getTexture(body.state()));
+            } catch (RuntimeException e) {
+                // Un resolver mal definido (p. ej. de un resource pack) no debe tumbar el juego: colores de la cabeza
+                Fusionmon.LOGGER.warn("No se pudo pedir la textura del cuerpo de la fusión {}", key, e);
+            }
         }
         FUSIONS.put(key, result);
         return result;

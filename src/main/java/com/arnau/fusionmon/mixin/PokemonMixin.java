@@ -81,7 +81,11 @@ public abstract class PokemonMixin {
         FormData head = FusionData.headForm(self);
         FormData body = FusionData.bodyForm(self);
         if (head != null && body != null) {
-            cir.setReturnValue(FusionShowdown.speciesId(head, body));
+            String id = FusionShowdown.speciesId(head, body);
+            // Si no se pudo registrar en Showdown, que pelee como su cabeza antes que romper el combate
+            if (FusionShowdown.isUsable(id)) {
+                cir.setReturnValue(id);
+            }
         }
     }
 

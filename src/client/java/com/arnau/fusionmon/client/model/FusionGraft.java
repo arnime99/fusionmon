@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.WeakHashMap;
 import java.util.function.IntPredicate;
 import java.util.function.Predicate;
@@ -234,6 +235,8 @@ public final class FusionGraft {
     private static final Map<ModelPart, float[]> SOLID_BOXES = new WeakHashMap<>();
     /** Modelos de cabeza que ya han fallado al pintarse (para avisar en el log una sola vez). */
     private static final Set<PosableModel> WARNED = Collections.newSetFromMap(new WeakHashMap<>());
+    /** Parejas cuyo graft ha fallado al montarse (ver graft): se pintan en modo colores hasta recargar recursos. */
+    private static final Set<String> FAILED = new HashSet<>();
 
     // Estado "suelto" para pedir la textura original de la cabeza (con el shiny del cuerpo si hace falta)
     private static FloatingState textureState;
@@ -440,10 +443,39 @@ public final class FusionGraft {
         return body.resolver() == null ? null : body;
     }
 
+    /**
+     * El graft de una fusión, o null para pintarla en modo colores. Analizar los modelos son muchas reglas sobre
+     * modelos de cualquier mod: si algo falla con una pareja, se avisa una vez en el log y esa pareja se queda en modo
+     * colores, en vez de lanzar el error en cada fotograma (se llama desde el render: sería un crash del juego).
+     */
     private static Graft graft(ResourceLocation name, PosableState state, boolean evenIfDisabled) {
         if (!enabled && !evenIfDisabled) {
             return null;
         }
+        if (!FAILED.isEmpty() && FAILED.contains(failureKey(name, state))) {
+            return null;
+        }
+        try {
+            return buildGraft(name, state);
+        } catch (RuntimeException e) {
+            String key = failureKey(name, state);
+            FAILED.add(key);
+            Fusionmon.LOGGER.warn("No se pudo montar la fusión {}: se pinta solo con colores", key, e);
+            return null;
+        }
+    }
+
+    /** Al recargar recursos: los modelos son otros, así que se vuelve a intentar con las parejas que fallaron. */
+    public static void clearFailures() {
+        FAILED.clear();
+    }
+
+    /** Cabeza + aspects (en ellos van la especie y los aspects del cuerpo): identifica la pareja que ha fallado. */
+    private static String failureKey(ResourceLocation name, PosableState state) {
+        return name + " " + new TreeSet<>(state.getCurrentAspects());
+    }
+
+    private static Graft buildGraft(ResourceLocation name, PosableState state) {
         FusionBody body = FusionBody.of(state.getCurrentAspects());
         if (body == null) {
             return null;
@@ -589,6 +621,11 @@ public final class FusionGraft {
 
     /** Antes de pintar el modelo del cuerpo: ocultar sus cabezas (y su cola y adornos sustituidos). */
     public static void beforeRender(PosableModel model) {
+        // Si el pintado anterior se cortó a medias (un error antes de afterRender), sus piezas siguen ocultas: el
+        // modelo del cuerpo es el de la especie, así que TODOS los de esa especie saldrían sin cabeza hasta reiniciar
+        if (active != null) {
+            restoreVisible(active.hidden, hiddenWereVisible);
+        }
         active = null;
         if (inspectView != null) {
             beforeInspect(model);

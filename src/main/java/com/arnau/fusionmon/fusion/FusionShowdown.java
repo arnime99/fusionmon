@@ -14,9 +14,11 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Hace que Showdown (el motor de combate de Cobblemon) conozca las fusiones.
@@ -37,8 +39,19 @@ public final class FusionShowdown {
     private FusionShowdown() {
     }
 
+    /**
+     * Especies de fusión que no se han podido registrar en Showdown. Para ellas showdownId() devuelve la especie de
+     * la cabeza (ver PokemonMixin): Showdown no conocería la de la fusión y el combate no podría empezar.
+     */
+    private static final Set<String> FAILED = new HashSet<>();
+
     public static String speciesId(FormData head, FormData body) {
         return "fusionmon" + head.showdownId() + "x" + body.showdownId();
+    }
+
+    /** Si se puede decir a Showdown que esta fusión es su propia especie (si no, peleará como su cabeza). */
+    public static boolean isUsable(String speciesId) {
+        return !FAILED.contains(speciesId);
     }
 
     /** Se llama justo antes de que Cobblemon arranque el combate en Showdown. */
@@ -49,9 +62,21 @@ public final class FusionShowdown {
                 Pokemon pokemon = battlePokemon.getEffectedPokemon();
                 FormData head = FusionData.headForm(pokemon);
                 FormData body = FusionData.bodyForm(pokemon);
-                if (head != null && body != null) {
-                    String id = speciesId(head, body);
-                    species.computeIfAbsent(id, key -> speciesJson(head, body, key));
+                if (head == null || body == null) {
+                    continue;
+                }
+                String id = speciesId(head, body);
+                if (species.containsKey(id)) {
+                    continue;
+                }
+                // Cada fusión por separado: una que falle no deja sin registrar a las demás
+                try {
+                    species.put(id, speciesJson(head, body, id));
+                    FAILED.remove(id);
+                } catch (RuntimeException e) {
+                    FAILED.add(id);
+                    Fusionmon.LOGGER.error("No se ha podido preparar la fusión {} para Showdown: pelea como su cabeza",
+                            id, e);
                 }
             }
         }
@@ -63,7 +88,8 @@ public final class FusionShowdown {
         try {
             ShowdownService.Companion.getService().sendRegistryData(species, "species");
         } catch (Exception e) {
-            // Si falla, el combate sigue (la fusión pelearía como su cabeza) en vez de romperse
+            // Si falla, el combate sigue (las fusiones pelean como su cabeza) en vez de romperse
+            FAILED.addAll(species.keySet());
             Fusionmon.LOGGER.error("No se han podido registrar las fusiones en Showdown: {}", species.keySet(), e);
         }
     }
