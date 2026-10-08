@@ -116,10 +116,18 @@ public final class FusionService {
 
         body.recall();
 
+        makeFusion(player.registryAccess(), head, body, natureFromBody, abilityFromBody);
+    }
+
+    /**
+     * Lo que convierte head en la fusión, sin jugador: también sirve para fusiones que no son de nadie (salvajes, el
+     * comando de prueba /fusionmon spawn). Los objetos y la entidad del cuerpo los gestiona quien llama.
+     */
+    public static void makeFusion(RegistryAccess registryAccess, Pokemon head, Pokemon body,
+                                  boolean natureFromBody, boolean abilityFromBody) {
         double healthRatio = (double) head.getCurrentHealth() / head.getMaxHealth();
 
         // Las copias se guardan antes de tocar nada: son los originales para desfusionar
-        RegistryAccess registryAccess = player.registryAccess();
         FusionData.write(head, head, body, registryAccess);
         // Si la cabeza tenía una evolución pendiente, era de su especie: a partir de ahora las evoluciones
         // de la fusión son las de sus dos partes (FusionEvolutions) y Cobblemon las volverá a comprobar

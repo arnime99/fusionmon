@@ -16,7 +16,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - Lanzar el juego: lo mismo con `runClient`, o la configuración "Minecraft Client" de IntelliJ. El jugador de desarrollo se llama siempre `Arnau` (`build.gradle` → `loom.runs.client`), para que Cobblemon conserve equipo/PC entre arranques.
 - `git` no está en el PATH: usar el de GitHub Desktop, `%LOCALAPPDATA%\GitHubDesktop\app-*\resources\app\git\cmd\git.exe`.
 - Logs y crashes: `run/logs/latest.log`, `run/crash-reports/`. Showdown desempaquetado en `run/showdown/`.
-- Comandos de prueba en el juego (con trucos): `/fusionmon info <hueco>`, `/fusionmon unfuse <hueco>`, `/pokegive <especie>`, `/spawnpokemon <especie> lvl=N`.
+- Comandos de prueba en el juego (con trucos): `/fusionmon info <hueco>`, `/fusionmon unfuse <hueco>`, `/fusionmon spawn <cabeza> <cuerpo> [n]` (fusiones salvajes en corro; `random`, cuerpo `none` = normales), `/pokegive <especie>`, `/spawnpokemon <especie> lvl=N`.
+- **Medir rendimiento:** mundo sin apariciones (`/gamerule doPokemonSpawning false`, `doMobSpawning false`), FPS ilimitados y sin VSync, F3; 60 normales (`/fusionmon spawn charizard none 60`) frente a 60 fusiones. Perfilador sin instalar nada (JDK 21): `jcmd -l` (el juego es `devlaunchinjector`), `jcmd <pid> JFR.start settings=profile duration=20s filename=...` mientras el usuario mira las fusiones, y `jfr print --events jdk.ExecutionSample` agrupando las muestras del "Render thread". Referencia (2026-10-08, gráfica integrada): 60 Charizard 94 FPS, 60 fusiones Charizard+Pikachu 78 FPS.
 
 ## Dependencia de Cobblemon (no tocar sin motivo)
 
@@ -93,6 +94,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - `PosableModel.context` es `lateinit`: un modelo que nunca se ha pintado por sí mismo crashea al animarlo → asignarle uno (`setContext`). Pintar con `RenderType.entityCutout` como Cobblemon: con `NoCull` los planos de grosor cero hacen z-fighting.
 - Almacenamiento: `PlayerPartyStore.add` ya manda al PC si el equipo está lleno (con mensaje) y devuelve `false` si el PC también lo está; comprobar sitio con `getFirstAvailablePosition()` (null = lleno) **antes** de quitar nada (`FusionService.prepareUnfuse`). `Pokemon.loadFromNBT` lanza excepción si la especie ya no existe (mod quitado): `FusionData.missingSpecies`. Al cargar un PC, Cobblemon lo **redimensiona** a `defaultBoxCount`: no bajar ese valor para probar. Para dar Pokémon desde un bloque de comandos: `pokegiveother @p <especie>` (`pokegive` es solo para uno mismo).
 - Escribir JSON desde PowerShell 5.1 con `Set-Content -Encoding utf8` mete BOM; usar las herramientas de edición o UTF-8 sin BOM.
+- **Rendimiento del graft:** todo lo que se pinta va en el hilo de render, en cada fotograma y por cada fusión. Nada de análisis por nombre de hueso (`split`, `replaceAll`, que compila una regex en cada llamada) en ese camino: `skull()` lo hacía por cada cubo y era el 70 % del tiempo (25 → 78 FPS con 60 fusiones al guardarlo: `CATEGORIES`, `IN_DECORATION`, `ARMS`, `LEG_NAMES`). El montaje de cada fusión se guarda por estado (`GRAFTS`, invalidado con `graftVersion` al cambiar modos o recursos). Lo que queda es inevitable: animar la cabeza pegada (Molang) y más vértices.
+- Mensajes de commit desde PowerShell 5.1: con comillas dobles o líneas que empiezan por "-" el mensaje se rompe (o lo bloquea el filtro de la terminal); escribirlo en un archivo y `git commit -F archivo`.
 
 ## Estado
 

@@ -36,9 +36,12 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 import java.util.WeakHashMap;
 import java.util.function.IntPredicate;
 import java.util.function.Predicate;
@@ -238,6 +241,30 @@ public final class FusionGraft {
     /** Parejas cuyo graft ha fallado al montarse (ver graft): se pintan en modo colores hasta recargar recursos. */
     private static final Set<String> FAILED = new HashSet<>();
 
+    // NAME_RESULTS: lo que se deduce del nombre de un hueso (o de la ruta de un cubo) no cambia nunca, y se pregunta
+    // muchísimo: skull() mira cada cubo de cada cabeza pegada en cada fotograma. Calcularlo cada vez (partir el
+    // nombre, quitar números con expresiones regulares...) era el 70 % del tiempo de pintar 60 fusiones. Se guarda
+    // la respuesta la primera vez (los nombres son pocos: los de los modelos cargados)
+    private static final Map<String, Optional<String>> CATEGORIES = new HashMap<>();
+    private static final Map<String, Boolean> IN_DECORATION = new HashMap<>();
+    private static final Map<String, Boolean> ARMS = new HashMap<>();
+    private static final Map<String, Boolean> LEG_NAMES = new HashMap<>();
+    private static final Pattern TRAILING_DIGITS = Pattern.compile("\\d+$");
+    private static final Pattern STUCK_SIDE_LEG = Pattern.compile("[lr](leg|legs|foot|feet)");
+
+    /** El montaje de una fusión para un estado, y con qué se montó (si algo de eso cambia, se vuelve a montar). */
+    private record CachedGraft(ResourceLocation name, Set<String> aspects, int version, Graft graft) {
+    }
+
+    /**
+     * Montaje guardado por estado (cada Pokémon pintado, en el mundo o en un menú, tiene el suyo). Se pide 4 veces por
+     * fotograma (modelo, textura, capas y al pintar) y montarlo crea listas cada vez: así se monta una sola vez.
+     * Las claves son débiles: al desaparecer el Pokémon se va solo.
+     */
+    private static final Map<PosableState, CachedGraft> GRAFTS = new WeakHashMap<>();
+    /** Sube cuando cambia algo que cambia el montaje (modos de /fusionvisual, recursos): los guardados no valen. */
+    private static int graftVersion;
+
     // Estado "suelto" para pedir la textura original de la cabeza (con el shiny del cuerpo si hace falta)
     private static FloatingState textureState;
 
@@ -341,14 +368,17 @@ public final class FusionGraft {
 
     public static void setTails(boolean value) {
         tails = value;
+        graftVersion++;
     }
 
     public static void setDecorations(boolean value) {
         decorations = value;
+        graftVersion++;
     }
 
     public static void setTops(boolean value) {
         tops = value;
+        graftVersion++;
     }
 
     public static boolean hasTails() {
@@ -452,22 +482,32 @@ public final class FusionGraft {
         if (!enabled && !evenIfDisabled) {
             return null;
         }
-        if (!FAILED.isEmpty() && FAILED.contains(failureKey(name, state))) {
-            return null;
+        Set<String> aspects = state.getCurrentAspects();
+        CachedGraft cached = GRAFTS.get(state);
+        if (cached != null && cached.version() == graftVersion && cached.name().equals(name)
+                && cached.aspects().equals(aspects)) {
+            return cached.graft();
         }
-        try {
-            return buildGraft(name, state);
-        } catch (RuntimeException e) {
-            String key = failureKey(name, state);
-            FAILED.add(key);
-            Fusionmon.LOGGER.warn("No se pudo montar la fusión {}: se pinta solo con colores", key, e);
-            return null;
+        Graft graft = null;
+        if (FAILED.isEmpty() || !FAILED.contains(failureKey(name, state))) {
+            try {
+                graft = buildGraft(name, state);
+            } catch (RuntimeException e) {
+                String key = failureKey(name, state);
+                FAILED.add(key);
+                Fusionmon.LOGGER.warn("No se pudo montar la fusión {}: se pinta solo con colores", key, e);
+            }
         }
+        // También se guarda "sin graft" (null): no es fusión, no se puede o ha fallado
+        GRAFTS.put(state, new CachedGraft(name, Set.copyOf(aspects), graftVersion, graft));
+        return graft;
     }
 
     /** Al recargar recursos: los modelos son otros, así que se vuelve a intentar con las parejas que fallaron. */
     public static void clearFailures() {
         FAILED.clear();
+        // Los modelos son otros: los montajes guardados apuntan a los de antes
+        graftVersion++;
     }
 
     /** Cabeza + aspects (en ellos van la especie y los aspects del cuerpo): identifica la pareja que ha fallado. */
@@ -1241,7 +1281,7 @@ public final class FusionGraft {
 
     private static boolean isFacePart(String name) {
         for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
-            token = stripModifiers(token.replaceAll("\\d+$", ""));
+            token = stripModifiers(withoutNumber(token));
             // También en plural, como en category: las cejas de Pidgey ("brows") se ponían como complemento y, con su
             // pivote lejos de sus cubos, salían flotando encima de los cuerpos sin cabeza
             String singular = token.length() > 3 && token.endsWith("s") ? token.substring(0, token.length() - 1) : token;
@@ -1878,12 +1918,19 @@ public final class FusionGraft {
      * burbuja de Araquanid o el afro de Bouffalant.
      */
     private static boolean inDecoration(String path) {
-        for (String bone : path.split("/")) {
-            if (!bone.isEmpty() && category(bone) != null) {
-                return true;
+        // skull() lo pregunta por cada cubo en cada fotograma: se calcula una vez por ruta (ver NAME_RESULTS)
+        Boolean cached = IN_DECORATION.get(path);
+        if (cached == null) {
+            cached = false;
+            for (String bone : path.split("/")) {
+                if (!bone.isEmpty() && category(bone) != null) {
+                    cached = true;
+                    break;
+                }
             }
+            IN_DECORATION.put(path, cached);
         }
-        return false;
+        return cached;
     }
 
     /**
@@ -2458,7 +2505,7 @@ public final class FusionGraft {
             return true;
         }
         for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
-            String word = stripModifiers(token.replaceAll("\\d+$", ""));
+            String word = stripModifiers(withoutNumber(token));
             if (NOT_TRUNK.contains(word) || word.startsWith("tentacle")) {
                 return true;
             }
@@ -2557,19 +2604,29 @@ public final class FusionGraft {
      * a cada trozo se le quitan también esas palabras por delante y se mira si acaba en anatomía.
      */
     private static String category(String name) {
+        // Se llama muchísimo (también en cada fotograma, desde skull): una vez por nombre (ver NAME_RESULTS)
+        Optional<String> cached = CATEGORIES.get(name);
+        if (cached == null) {
+            cached = Optional.ofNullable(computeCategory(name));
+            CATEGORIES.put(name, cached);
+        }
+        return cached.orElse(null);
+    }
+
+    private static String computeCategory(String name) {
         // Huesos que crea Cobblemon, no el autor del modelo: cubos girados ("%tophalf%0", ver ownBox) y localizadores
         // internos. El cubo girado del torso de Groudon se pegaba como si fuera un adorno
         if (name.startsWith("%") || name.startsWith("internal_locator")) {
             return null;
         }
         for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
-            if (ALWAYS_DECORATION.contains(token.replaceAll("\\d+$", ""))) {
+            if (ALWAYS_DECORATION.contains(withoutNumber(token))) {
                 return "kid";
             }
         }
         String category = null;
         for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
-            token = stripModifiers(token.replaceAll("\\d+$", ""));
+            token = stripModifiers(withoutNumber(token));
             if (token.isEmpty() || NAME_MODIFIERS.contains(token)) {
                 continue;
             }
@@ -2586,12 +2643,16 @@ public final class FusionGraft {
 
     /** ¿Es un brazo ("arm_right", "inner_arm_left", "upperarm", "shoulder_left")? */
     private static boolean isArm(String name) {
+        return ARMS.computeIfAbsent(name, FusionGraft::computeIsArm);
+    }
+
+    private static boolean computeIsArm(String name) {
         // Los huesos de Cobblemon (cubos girados, localizadores) no
         if (name.startsWith("%") || name.startsWith("internal_locator")) {
             return false;
         }
         for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
-            String word = stripModifiers(token.replaceAll("\\d+$", ""));
+            String word = stripModifiers(withoutNumber(token));
             if (word.equals("arm") || word.equals("arms") || word.equals("shoulder")) {
                 return true;
             }
@@ -2759,14 +2820,23 @@ public final class FusionGraft {
 
     /** ¿Es un hueso de pierna o pie ("leg_left", "leftleg", "legs", "foot_front", "lleg")? */
     private static boolean isLegName(String name) {
+        return LEG_NAMES.computeIfAbsent(name, FusionGraft::computeIsLegName);
+    }
+
+    private static boolean computeIsLegName(String name) {
         for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
-            String word = stripModifiers(token.replaceAll("\\d+$", ""));
+            String word = stripModifiers(withoutNumber(token));
             // "lleg", "rfoot" (Groudon de AllTheMons): la l/r pegada; stripModifiers no quita letras sueltas
-            if (LEGS.contains(word) || word.matches("[lr](leg|legs|foot|feet)")) {
+            if (LEGS.contains(word) || STUCK_SIDE_LEG.matcher(word).matches()) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** "spike12" → "spike" (con el patrón compilado una vez: replaceAll lo compila en cada llamada). */
+    private static String withoutNumber(String token) {
+        return TRAILING_DIGITS.matcher(token).replaceAll("");
     }
 
     /**

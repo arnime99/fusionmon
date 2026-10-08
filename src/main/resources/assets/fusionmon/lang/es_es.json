@@ -131,5 +131,7 @@
   "gui.fusionmon.inspect.legend.tail": "cola (el punto: donde se engancha la cola nueva)",
   "gui.fusionmon.inspect.progress": "Revisadas %s de %s (con fallo: %s) · en el filtro: %s",
   "gui.fusionmon.inspect.help": "←/→ especie · V vista · G sexo · F filtro · B bien · X fallo (Intro guarda la nota) · U borrar revisión · C cámara · arrastrar: girar (derecho: mover) · rueda: zoom",
-  "command.fusionmon.unfused": "Fusión deshecha."
+  "command.fusionmon.unfused": "Fusión deshecha.",
+  "command.fusionmon.unknown_species": "Especie desconocida: %s",
+  "command.fusionmon.spawned": "Han aparecido %s Pokémon."
 }
