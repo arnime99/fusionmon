@@ -1,42 +1,27 @@
 package com.arnau.fusionmon.client.screen;
 
+import com.arnau.fusionmon.network.FusionPartView;
 import com.arnau.fusionmon.network.OpenUnfuseScreenPayload;
 import com.arnau.fusionmon.network.UnfuseChoicePayload;
-import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 
 /**
- * Pantalla de confirmación para separar una fusión. Solo muestra y recoge la decisión: la separación la hace el
- * servidor cuando recibe UnfuseChoicePayload.
- *
- * Como la de fusionar pero al revés: la fusión en el centro y las dos partes que saldrán a los lados (ver
- * FusionScreenLayout), con la experiencia que recibirá cada una.
+ * Pantalla de confirmación para separar una fusión: arriba, cabeza ← fusión → cuerpo (FusionScreenBase, como la de
+ * fusionar pero al revés); abajo, la experiencia que recibirá cada parte y los botones. La separación la hace el
+ * servidor cuando recibe UnfuseChoicePayload. Invertir le pide al servidor la pantalla de fusión con las partes al
+ * revés (FusionConfirmScreen en modo invertir).
  */
-public class UnfuseConfirmScreen extends Screen {
+public class UnfuseConfirmScreen extends FusionScreenBase {
 
-    private static final int BUTTON_WIDTH = 110;
-    private static final int GAP = 4;
-    /** Título, textos de debajo de los visores, la línea de experiencia y los botones. */
-    private static final int FIXED_HEIGHT = 12 + 3 + 2 * FusionScreenLayout.LINE + 2
-            + GAP + FusionScreenLayout.LINE
-            + 2 * GAP + FusionScreenLayout.BUTTON;
+    private static final int BUTTON_WIDTH = 100;
+    /** La línea de experiencia y los botones. */
+    private static final int BOTTOM_HEIGHT = GAP + FusionScreenLayout.LINE + 2 * GAP + FusionScreenLayout.BUTTON;
 
     private final OpenUnfuseScreenPayload data;
-    /** true cuando ya se ha mandado la respuesta, para no mandarla dos veces. */
-    private boolean answered;
-
-    private final FusionScreenLayout.Viewports viewports = new FusionScreenLayout.Viewports();
-    private final FloatingState headState = new FloatingState();
-    private final FloatingState fusionState = new FloatingState();
-    private final FloatingState bodyState = new FloatingState();
-
-    private int top;
-    private int labelsY;
-    private int experienceY;
 
     public UnfuseConfirmScreen(OpenUnfuseScreenPayload data) {
         super(Component.translatable("gui.fusionmon.unfuse.title"));
@@ -44,82 +29,72 @@ public class UnfuseConfirmScreen extends Screen {
     }
 
     @Override
-    protected void init() {
-        int box = viewports.place(width, height - 2 * FusionScreenLayout.MARGIN - FIXED_HEIGHT);
-        top = Math.max(FusionScreenLayout.MARGIN, (height - FIXED_HEIGHT - box) / 2);
-        viewports.setTop(top + 12);
-        labelsY = top + 12 + box + 3;
-        experienceY = labelsY + 2 * FusionScreenLayout.LINE + 2 + GAP;
-        int buttonsY = experienceY + FusionScreenLayout.LINE + 2 * GAP;
-
-        int centerX = width / 2;
-        addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.unfuse.accept"), button -> answer(true))
-                .bounds(centerX - BUTTON_WIDTH - GAP / 2, buttonsY, BUTTON_WIDTH, FusionScreenLayout.BUTTON)
-                .build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.confirm.cancel"), button -> answer(false))
-                .bounds(centerX + GAP / 2, buttonsY, BUTTON_WIDTH, FusionScreenLayout.BUTTON)
-                .build());
+    protected FusionPartView head() {
+        return data.head();
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
+    protected FusionPartView fusion() {
+        return data.fusion();
+    }
 
-        int centerX = width / 2;
-        graphics.drawCenteredString(font, title, centerX, top, FusionScreenLayout.WHITE);
+    @Override
+    protected FusionPartView body() {
+        return data.body();
+    }
 
-        // Cabeza ← fusión → cuerpo
-        viewports.render(graphics, font, data.head(), data.fusion(), data.body(), headState, fusionState, bodyState,
-                true, partialTick);
-        viewports.renderLabels(graphics, font, data.head(), data.fusion(), data.body(), labelsY);
+    @Override
+    protected boolean splitting() {
+        return true;
+    }
 
+    @Override
+    protected int bottomHeight(int spaceWithoutBottom) {
+        return BOTTOM_HEIGHT;
+    }
+
+    @Override
+    protected void initBottom(int y) {
+        int buttonsY = y + GAP + FusionScreenLayout.LINE + 2 * GAP;
+        // [Separar] [Invertir] [Cancelar], centrados
+        int x = width / 2 - (3 * BUTTON_WIDTH + 2 * GAP) / 2;
+        Button split = addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.unfuse.accept"),
+                        button -> answer(() -> send(UnfuseChoicePayload.Action.SPLIT)))
+                .bounds(x, buttonsY, BUTTON_WIDTH, FusionScreenLayout.BUTTON)
+                .build());
+        // Sin sitio para el cuerpo no se puede separar (sí invertir): el botón dice por qué
+        if (!data.roomForBody()) {
+            split.active = false;
+            split.setTooltip(Tooltip.create(Component.translatable("message.fusionmon.no_room", data.body().name())));
+        }
+        x += BUTTON_WIDTH + GAP;
+        addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.unfuse.reverse"),
+                        button -> answer(() -> send(UnfuseChoicePayload.Action.REVERSE)))
+                .bounds(x, buttonsY, BUTTON_WIDTH, FusionScreenLayout.BUTTON)
+                .tooltip(Tooltip.create(Component.translatable("gui.fusionmon.unfuse.reverse.tooltip")))
+                .build());
+        x += BUTTON_WIDTH + GAP;
+        addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.confirm.cancel"), button -> answer(this::sendCancel))
+                .bounds(x, buttonsY, BUTTON_WIDTH, FusionScreenLayout.BUTTON)
+                .build());
+    }
+
+    private static void send(UnfuseChoicePayload.Action action) {
+        ClientPlayNetworking.send(new UnfuseChoicePayload(action));
+    }
+
+    @Override
+    protected void renderBottom(GuiGraphics graphics, int y) {
         Component experience = data.experienceGained() > 0
                 ? Component.translatable("gui.fusionmon.unfuse.experience", data.experienceGained())
                 : Component.translatable("gui.fusionmon.unfuse.no_experience");
-        graphics.drawCenteredString(font, experience, centerX, experienceY, FusionScreenLayout.GRAY);
-    }
-
-    // ---- Ratón: cada visor se gira y se acerca por separado ----
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        return super.mouseClicked(mouseX, mouseY, button) || viewports.press(mouseX, mouseY, button);
+        graphics.drawCenteredString(font, experience, width / 2, y + GAP, FusionScreenLayout.GRAY);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        viewports.release();
-        return super.mouseReleased(mouseX, mouseY, button);
-    }
-
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        return viewports.drag(dragX, dragY) || super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-    }
-
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        return viewports.scroll(mouseX, mouseY, scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
-    }
-
-    /** removed() se llama siempre que la pantalla se cierra (Esc, otra pantalla...): cuenta como Cancelar. */
-    @Override
-    public void removed() {
-        if (!answered && ClientPlayNetworking.canSend(UnfuseChoicePayload.TYPE)) {
-            ClientPlayNetworking.send(new UnfuseChoicePayload(false));
+    protected void sendCancel() {
+        if (ClientPlayNetworking.canSend(UnfuseChoicePayload.TYPE)) {
+            send(UnfuseChoicePayload.Action.CANCEL);
         }
-        super.removed();
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        // Sin pausa, las animaciones de los modelos siguen
-        return false;
-    }
-
-    private void answer(boolean accepted) {
-        answered = true;
-        ClientPlayNetworking.send(new UnfuseChoicePayload(accepted));
-        onClose();
     }
 }

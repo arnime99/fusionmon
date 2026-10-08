@@ -47,6 +47,8 @@ public final class FusionSelection {
     private static final Map<UUID, PendingFusion> PENDING_FUSIONS = new HashMap<>();
     /** Fusión esperando respuesta de la pantalla de separar, por jugador. */
     private static final Map<UUID, UUID> PENDING_UNFUSES = new HashMap<>();
+    /** Fusión esperando respuesta de la pantalla de fusión en modo invertir, por jugador. */
+    private static final Map<UUID, UUID> PENDING_REVERSES = new HashMap<>();
 
     private FusionSelection() {
     }
@@ -106,8 +108,14 @@ public final class FusionSelection {
             return;
         }
 
+        PENDING_REVERSES.remove(player.getUUID());
         PENDING_FUSIONS.put(player.getUUID(), new PendingFusion(firstId, secondId));
-        ServerPlayNetworking.send(player, new OpenFusionScreenPayload(
+        ServerPlayNetworking.send(player, fusionScreen(first, second, false));
+    }
+
+    /** La pantalla de fusión con first como cabeza y second como cuerpo (Intercambiar los cambia en el cliente). */
+    private static OpenFusionScreenPayload fusionScreen(Pokemon first, Pokemon second, boolean reverse) {
+        return new OpenFusionScreenPayload(
                 FusionPartView.of(first), FusionPartView.of(second),
                 preview(first, second), preview(second, first),
                 Component.translatable(first.getNature().getDisplayName()),
@@ -117,7 +125,23 @@ public final class FusionSelection {
                 Component.translatable(first.getAbility().getDisplayName()),
                 Component.translatable(second.getAbility().getDisplayName()),
                 Component.translatable(first.getAbility().getDescription()),
-                Component.translatable(second.getAbility().getDescription())));
+                Component.translatable(second.getAbility().getDescription()),
+                reverse);
+    }
+
+    /**
+     * Invertir: la pantalla de fusión con las dos partes de la fusión, el cuerpo como cabeza. Las partes ya llevan la
+     * experiencia ganada como fusión (la recibirán al invertir), así que la vista previa enseña los niveles de verdad.
+     */
+    private static void openReverseConfirmation(ServerPlayer player, Pokemon fused) {
+        FusionService.Parts parts = FusionService.readParts(player, fused);
+        if (parts == null) {
+            return;
+        }
+        FusionService.giveFusionExperience(fused, parts);
+        PENDING_FUSIONS.remove(player.getUUID());
+        PENDING_REVERSES.put(player.getUUID(), fused.getUuid());
+        ServerPlayNetworking.send(player, fusionScreen(parts.body(), parts.head(), true));
     }
 
     /** "+Ataque  −At. Esp." o "Neutra" si la naturaleza no cambia ningún stat. */
@@ -131,6 +155,12 @@ public final class FusionSelection {
     }
 
     public static void handleChoice(ServerPlayer player, FusionChoicePayload choice) {
+        // La misma pantalla sirve para invertir una fusión: lo que esté pendiente dice cuál de las dos era
+        UUID reversing = PENDING_REVERSES.remove(player.getUUID());
+        if (reversing != null) {
+            handleReverseChoice(player, reversing, choice);
+            return;
+        }
         PendingFusion pending = PENDING_FUSIONS.remove(player.getUUID());
         // Sin selección pendiente (respuesta duplicada o de un cliente trucado): se ignora
         if (pending == null || !choice.accepted()) {
@@ -175,8 +205,9 @@ public final class FusionSelection {
             return;
         }
 
-        // Si no se va a poder separar (sin sitio, especie que falta...) se avisa ya, sin abrir la pantalla
-        FusionService.Parts parts = FusionService.prepareUnfuse(player, fused);
+        // Si no se pueden leer las partes (especie que falta...) se avisa ya, sin abrir la pantalla. Sin sitio para
+        // el cuerpo sí se abre: se puede invertir (no necesita sitio), y el botón de separar sale desactivado
+        FusionService.Parts parts = FusionService.readParts(player, fused);
         if (parts == null) {
             return;
         }
@@ -184,12 +215,12 @@ public final class FusionSelection {
         // La fusión con sus tipos y nombre de fusión (PokemonMixin) y su aspecto de fusión (los aspects)
         ServerPlayNetworking.send(player, new OpenUnfuseScreenPayload(
                 FusionPartView.of(fused), FusionPartView.of(parts.head()), FusionPartView.of(parts.body()),
-                FusionData.experienceGained(fused)));
+                FusionData.experienceGained(fused), FusionService.hasRoomForBody(player)));
     }
 
     public static void handleUnfuseChoice(ServerPlayer player, UnfuseChoicePayload choice) {
         UUID fusedId = PENDING_UNFUSES.remove(player.getUUID());
-        if (fusedId == null || !choice.accepted()) {
+        if (fusedId == null || choice.action() == UnfuseChoicePayload.Action.CANCEL) {
             return;
         }
 
@@ -201,6 +232,12 @@ public final class FusionSelection {
         Pokemon fused = findFusion(player, fusedId);
         if (fused == null) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
+            return;
+        }
+
+        // Invertir no gasta nada todavía: abre la pantalla de fusión, y el cristal se gasta al aceptarla
+        if (choice.action() == UnfuseChoicePayload.Action.REVERSE) {
+            openReverseConfirmation(player, fused);
             return;
         }
 
@@ -220,9 +257,53 @@ public final class FusionSelection {
         player.sendSystemMessage(Component.translatable("message.fusionmon.unfused", fusedName));
     }
 
+    /** Respuesta de la pantalla de fusión en modo invertir (ver openReverseConfirmation). */
+    private static void handleReverseChoice(ServerPlayer player, UUID fusedId, FusionChoicePayload choice) {
+        if (!choice.accepted()) {
+            return;
+        }
+
+        if (BattleRegistry.getBattleByParticipatingPlayer(player) != null) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.in_battle"));
+            return;
+        }
+
+        Pokemon fused = findFusion(player, fusedId);
+        if (fused == null) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
+            return;
+        }
+
+        // Copias nuevas de las partes (las de la vista previa no se reutilizan), antes de gastar el cristal
+        FusionService.Parts parts = FusionService.readParts(player, fused);
+        if (parts == null) {
+            return;
+        }
+
+        if (!FusionCrystalItem.consumeOne(player)) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.no_crystal"));
+            return;
+        }
+
+        // En la pantalla, A era el cuerpo de la fusión y B su cabeza; sin intercambiar, A pasa a ser la cabeza
+        Pokemon a = parts.body();
+        Pokemon b = parts.head();
+        Pokemon head = choice.swapped() ? b : a;
+        Pokemon body = choice.swapped() ? a : b;
+        Pokemon natureSource = choice.natureFromB() ? b : a;
+        Pokemon abilitySource = choice.abilityFromB() ? b : a;
+
+        // Los nombres se leen antes: después la cabeza ya es la fusión y se llama como ella
+        Component headName = head.getDisplayName(false);
+        Component bodyName = body.getDisplayName(false);
+        FusionService.reverse(player, fused, parts, choice.swapped(), natureSource == body, abilitySource == body);
+        player.sendSystemMessage(Component.translatable("message.fusionmon.reversed", headName, bodyName));
+    }
+
     public static void forget(ServerPlayer player) {
         PENDING_FUSIONS.remove(player.getUUID());
         PENDING_UNFUSES.remove(player.getUUID());
+        PENDING_REVERSES.remove(player.getUUID());
     }
 
     private static FusionPreview preview(Pokemon head, Pokemon body) {

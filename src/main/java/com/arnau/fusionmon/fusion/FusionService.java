@@ -46,6 +46,70 @@ public final class FusionService {
 
     public static void fuse(ServerPlayer player, Pokemon head, Pokemon body,
                             boolean natureFromBody, boolean abilityFromBody) {
+        combine(player, head, body, natureFromBody, abilityFromBody);
+
+        PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
+        party.remove(body);
+        resendToClient(player, party, head);
+
+        Fusionmon.LOGGER.info("{} ha fusionado {} + {}",
+                player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
+    }
+
+    /**
+     * Invierte una fusión: sus dos partes se vuelven a fusionar con la cabeza y el cuerpo cambiados (o en el mismo
+     * orden, para elegir otra naturaleza o habilidad). Es separar y volver a fusionar en un paso: cada parte recibe la
+     * experiencia ganada como fusión y sale con su % de vida, pero sin pasar por el equipo, así que no hace falta sitio.
+     *
+     * @param parts las partes de readParts (en el mismo tick: el equipo no ha cambiado)
+     */
+    public static void reverse(ServerPlayer player, Pokemon fused, Parts parts, boolean swapped,
+                               boolean natureFromBody, boolean abilityFromBody) {
+        // Por defecto (sin intercambiar) la cabeza nueva es el cuerpo de antes
+        Pokemon head = swapped ? parts.head() : parts.body();
+        Pokemon body = swapped ? parts.body() : parts.head();
+
+        double healthRatio = (double) fused.getCurrentHealth() / fused.getMaxHealth();
+        giveFusionExperience(fused, parts);
+        applyHealthRatio(head, healthRatio);
+        applyHealthRatio(body, healthRatio);
+
+        // Cualquier objeto que se le haya dado a la fusión vuelve al jugador
+        returnHeldItem(player, fused);
+        fused.recall();
+
+        // Se monta la fusión nueva antes de tocar el equipo: si algo fallase, la fusión de antes sigue en su sitio
+        combine(player, head, body, natureFromBody, abilityFromBody);
+        PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
+        int slot = slotOf(party, fused);
+        party.remove(fused);
+        // Colocar un Pokémon manda al cliente el Pokémon entero (con persistentData): no hace falta resendToClient
+        party.set(slot, head);
+
+        Fusionmon.LOGGER.info("{} ha invertido su fusión: ahora {} + {}",
+                player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
+    }
+
+    /**
+     * Las partes leídas de una fusión con la experiencia que han ganado como fusión, como al separarla (para la vista
+     * previa de invertir: así enseña los niveles con los que se volverán a fusionar).
+     */
+    public static void giveFusionExperience(Pokemon fused, Parts parts) {
+        int experienceGained = FusionData.experienceGained(fused);
+        if (experienceGained > 0) {
+            // Sin jugador: no están en el equipo, y addExperienceWithPlayer manda al cliente la animación de
+            // experiencia de un Pokémon que no conoce
+            parts.head().addExperience(EXPERIENCE_SOURCE, experienceGained);
+            parts.body().addExperience(EXPERIENCE_SOURCE, experienceGained);
+        }
+    }
+
+    /**
+     * Convierte head en la fusión de head + body: guarda los originales, medias, movimientos, naturaleza, habilidad y
+     * % de vida. No toca el equipo (lo hace quien llama).
+     */
+    private static void combine(ServerPlayer player, Pokemon head, Pokemon body,
+                                boolean natureFromBody, boolean abilityFromBody) {
         // Primero quitamos los objetos: así no quedan dentro de las copias guardadas y no se duplican al desfusionar
         returnHeldItem(player, head);
         returnHeldItem(player, body);
@@ -78,13 +142,6 @@ public final class FusionService {
 
         // Los PS máximos han cambiado: mantenemos el mismo porcentaje de vida
         applyHealthRatio(head, healthRatio);
-
-        PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
-        party.remove(body);
-        resendToClient(player, party, head);
-
-        Fusionmon.LOGGER.info("{} ha fusionado {} + {}",
-                player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
     }
 
     /** Las dos partes guardadas de una fusión, ya leídas y listas para volver al equipo. */
@@ -97,6 +154,32 @@ public final class FusionService {
      * Hay que llamarlo ANTES de gastar el cristal: así un fallo nunca cuesta un cristal ni, sobre todo, un Pokémon.
      */
     public static Parts prepareUnfuse(ServerPlayer player, Pokemon fused) {
+        Parts parts = readParts(player, fused);
+        if (parts == null) {
+            return null;
+        }
+
+        // Cobblemon manda el cuerpo al PC si el equipo está lleno; si el PC también lo está, se perdería
+        if (!hasRoomForBody(player)) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.no_room",
+                    parts.body().getDisplayName(false)));
+            return null;
+        }
+        return parts;
+    }
+
+    /** Si al separar hay sitio para el cuerpo en el equipo o en el PC (la cabeza ocupa el hueco de la fusión). */
+    public static boolean hasRoomForBody(ServerPlayer player) {
+        PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
+        PCStore pc = Cobblemon.INSTANCE.getStorage().getPC(player);
+        return party.getFirstAvailablePosition() != null || pc.getFirstAvailablePosition() != null;
+    }
+
+    /**
+     * Las dos partes de una fusión, leídas de nuevo (copias nuevas cada vez). Si no se pueden leer, avisa al jugador y
+     * devuelve null; no toca nada. Para separar (prepareUnfuse) e invertir, que no necesita sitio.
+     */
+    public static Parts readParts(ServerPlayer player, Pokemon fused) {
         // La especie de una parte puede venir de un mod que ya no está (p. ej. AllTheMons): la fusión no se toca,
         // y vuelve a funcionar si se reinstala
         String missing = FusionData.missingSpecies(fused);
@@ -105,10 +188,9 @@ public final class FusionService {
             return null;
         }
 
-        Parts parts;
         try {
             RegistryAccess registryAccess = player.registryAccess();
-            parts = new Parts(FusionData.readHead(fused, registryAccess), FusionData.readBody(fused, registryAccess));
+            return new Parts(FusionData.readHead(fused, registryAccess), FusionData.readBody(fused, registryAccess));
         } catch (RuntimeException e) {
             // Datos dañados o de un formato que Cobblemon ya no entiende: mejor no separar que perder una parte
             Fusionmon.LOGGER.error("No se han podido leer las partes de la fusión {} de {}",
@@ -116,16 +198,6 @@ public final class FusionService {
             player.sendSystemMessage(Component.translatable("message.fusionmon.unfuse_failed"));
             return null;
         }
-
-        // Cobblemon manda el cuerpo al PC si el equipo está lleno; si el PC también lo está, se perdería
-        PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
-        PCStore pc = Cobblemon.INSTANCE.getStorage().getPC(player);
-        if (party.getFirstAvailablePosition() == null && pc.getFirstAvailablePosition() == null) {
-            player.sendSystemMessage(Component.translatable("message.fusionmon.no_room",
-                    parts.body().getDisplayName(false)));
-            return null;
-        }
-        return parts;
     }
 
     /** Separa la fusión en las partes que ha devuelto prepareUnfuse (en el mismo tick: el equipo no ha cambiado). */

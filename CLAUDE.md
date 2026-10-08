@@ -27,8 +27,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 ## Arquitectura (`src/main/java/com/arnau/fusionmon`)
 
 - `item/FusionCrystalItem` — clic derecho → `FusionSelection.start` (solo servidor).
-- `fusion/FusionSelection` — flujo: selector de equipo de Cobblemon (`PartySelectCallbacks`). Elegir una fusión → pantalla de separar; elegir un normal → 2.º selector → pantalla de fusión. Guarda la selección pendiente por jugador y **revalida todo** al recibir la respuesta del cliente.
-- `fusion/FusionService` — `fuse` / `unfuse`: objetos al inventario, medias de nivel/IV/EV, naturaleza y habilidad elegidas (habilidad del cuerpo como *forced*), movimientos de ambos a *benched moves*, % de PS, reparto de EXP al separar.
+- `fusion/FusionSelection` — flujo: selector de equipo de Cobblemon (`PartySelectCallbacks`). Elegir una fusión → pantalla de separar (Separar / **Invertir** / Cancelar; sin sitio para el cuerpo, Separar sale desactivado); elegir un normal → 2.º selector → pantalla de fusión. Invertir abre la **misma pantalla de fusión** (`reverse = true`) con las partes de la fusión, el cuerpo como cabeza. Guarda la selección pendiente por jugador (`PENDING_FUSIONS/UNFUSES/REVERSES`) y **revalida todo** al recibir la respuesta del cliente.
+- `fusion/FusionService` — `fuse` / `unfuse` / `reverse` (`combine` = la parte común que convierte la cabeza en la fusión sin tocar el equipo): objetos al inventario, medias de nivel/IV/EV, naturaleza y habilidad elegidas (habilidad del cuerpo como *forced*), movimientos de ambos a *benched moves*, % de PS, reparto de EXP al separar o invertir. `readParts` (leer partes con aviso) / `prepareUnfuse` (+ sitio) **antes** de gastar el cristal.
 - `fusion/FusionData` — datos en `pokemon.persistentData["fusionmon"]`: `version` (2), `head`/`body` (NBT completo de los originales), `headSpecies`/`headForm`/`bodySpecies`/`bodyForm`, `bodyAspects`, `startExperience`. Al cambiarlos llama a `updateAspects()`.
 - `fusion/FusionAspects` — `AspectProvider` de Cobblemon: las fusiones llevan los aspects `fusionmon-fusion`, `fusionmon-body-<especie>` y `fusionmon-bodyaspect-<aspect del cuerpo>`. Cobblemon los sincroniza solo al cliente (entidad, equipo, PC) y los resolvers los usan para elegir modelo/textura (también sirven para resource packs).
 - `fusion/FusionCalculator` — fórmulas puras (stats base ponderados 2/3, regla de tipos, nombre partido). Aquí se retoca el algoritmo.
@@ -40,7 +40,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - `fusion/FusionLevelUp` — `EXPERIENCE_GAINED_EVENT_POST`: Cobblemon solo enseña los movimientos por nivel de la cabeza; aquí se añaden los del cuerpo entre el nivel anterior y el nuevo.
 - `network/*` — payloads de Fabric (servidor↔cliente) de las pantallas de fusionar/separar.
 - `command/FusionCommands` — comandos de prueba.
-- Cliente (`src/client/java/.../client`): `FusionmonClient` (receptores, recarga de recursos) y `screen/FusionConfirmScreen`, `screen/UnfuseConfirmScreen`.
+- Cliente (`src/client/java/.../client`): `FusionmonClient` (receptores, recarga de recursos). Pantallas del cristal: `screen/FusionScreenBase` (lo común: título, fila de tres visores cabeza / fusión / cuerpo con `FusionScreenLayout`, ratón, cerrar = cancelar; **aquí irían sprites de interfaz**) + `FusionConfirmScreen` (fusionar o invertir: ⇄, barras de stats, naturaleza, habilidad) y `UnfuseConfirmScreen`. Se adaptan al alto (escala de interfaz 4 ≈ 480×270). Los datos llegan como `network/FusionPartView` (nombre, nivel, tipos, `RenderablePokemon`).
+- `client/mixin/InfoWidgetMixin` — en el resumen de Cobblemon (pestaña Info), la fila Especie de una fusión dice "cabeza + cuerpo" y tiene tooltip; `SummaryTooltip`/`SummaryMixin` lo pintan al final porque Cobblemon adelanta sus paneles 1000 en Z.
 - `client/texture/FusionPalette` — cambio de paleta puro (píxeles ARGB, sin clases de Minecraft; se puede probar fuera del juego): colores con color de cabeza y cuerpo ordenados por claridad y ponderados por nº de píxeles; cada color de la cabeza toma el del cuerpo en la misma posición. Casi negros/blancos no se tocan nunca; los grises solo si son el color del Pokémon (< 50 % de la textura con color). Aquí se retoca el aspecto.
 - `client/texture/FusionTextures` — genera la textura de la fusión (cabeza recoloreada con la textura del cuerpo, que se pide al resolver del cuerpo con sus aspects) como `DynamicTexture` (`fusionmon:fusion_textures/N`), con caché; se vacía al recargar recursos.
 - `client/texture/FusionBody` — el cuerpo según los aspects (especie, aspects sin prefijo, regla shiny), su resolver y un `FloatingState` con sus aspects.
@@ -67,7 +68,8 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - Con cabeza sobre cuerpo (por defecto): modelo del cuerpo con la cabeza pegada; tamaño (escala, caja de colisión) y montura del cuerpo (si no tiene montura, la de la cabeza).
 - Fórmulas de Infinite Fusion. Nivel, IVs y EVs = media. Naturaleza y habilidad: el jugador elige entre las dos.
 - Mantiene los movimientos de la cabeza; el resto, recordables (benched moves).
-- No hay fusión de fusiones. El mismo cristal fusiona y separa.
+- No hay fusión de fusiones. El mismo cristal fusiona, separa e invierte; cada acción gasta 1 (los cristales son simbólicos: baratos, para usarlos a gusto).
+- Invertir = separar + fusionar al revés en un paso (cada parte recibe la EXP de la fusión), sin necesitar sitio; en su pantalla ⇄ también vale para volver a elegir naturaleza o habilidad.
 - Al separar: cada parte recibe toda la EXP ganada como fusión y el % de PS de la fusión.
 - Evolución: el menú de Cobblemon ofrece las evoluciones de ambas partes; al elegir una, la otra sigue pendiente. Sin animación en el mundo (sonido + mensaje con el nombre de fusión). Evoluciones por intercambio y clic en bloque no se ofrecen a fusiones.
 - Objetivo: multijugador/servidores y publicar en CurseForge.
