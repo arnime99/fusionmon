@@ -4,9 +4,11 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"ClientboundSeatAssignmentPacketHandlerMixin",
+		"InfoWidgetMixin",
 		"PokemonRendererMixin",
 		"PosableModelMixin",
 		"StatWidgetMixin",
+		"SummaryMixin",
 		"VaryingModelRepositoryMixin",
 		"VaryingRenderableResolverMixin"
 	],
