@@ -3,7 +3,6 @@
   "gui.fusionmon.select_first": "Elige un Pokémon (o una fusión para separarla)",
   "gui.fusionmon.select_second": "Elige el 2.º Pokémon",
   "gui.fusionmon.unfuse.title": "¿Separar la fusión?",
-  "gui.fusionmon.unfuse.parts": "→ %s (Nv. %s)  +  %s (Nv. %s)",
   "gui.fusionmon.unfuse.experience": "Cada uno recibe los %s EXP ganados como fusión",
   "gui.fusionmon.unfuse.no_experience": "No ha ganado experiencia como fusión",
   "gui.fusionmon.unfuse.accept": "Separar",

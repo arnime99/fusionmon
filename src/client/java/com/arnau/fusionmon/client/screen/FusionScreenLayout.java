@@ -86,16 +86,17 @@ final class FusionScreenLayout {
             sideY = y + box - side;
         }
 
+        /** @param splitting al separar las flechas salen de la fusión; al fusionar van hacia ella */
         void render(GuiGraphics graphics, Font font, FusionPartView head, FusionPartView fusion, FusionPartView body,
-                    FloatingState headState, FloatingState fusionState, FloatingState bodyState, float partialTick) {
+                    FloatingState headState, FloatingState fusionState, FloatingState bodyState, boolean splitting,
+                    float partialTick) {
             left.render(graphics, head.model(), headState, "", leftX, sideY, side, partialTick, null, null);
             center.render(graphics, fusion.model(), fusionState, "", centerX, centerY, box, partialTick, null, null);
             right.render(graphics, body.model(), bodyState, "", rightX, sideY, side, partialTick, null, null);
 
-            // Las dos partes van hacia la fusión
             int arrowY = sideY + side / 2 - font.lineHeight / 2;
-            graphics.drawCenteredString(font, "→", leftX + side + ARROW_GAP / 2, arrowY, GRAY);
-            graphics.drawCenteredString(font, "←", rightX - ARROW_GAP / 2, arrowY, GRAY);
+            graphics.drawCenteredString(font, splitting ? "←" : "→", leftX + side + ARROW_GAP / 2, arrowY, GRAY);
+            graphics.drawCenteredString(font, splitting ? "→" : "←", rightX - ARROW_GAP / 2, arrowY, GRAY);
             // Qué es cada lado, encima de su visor
             graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.part.head"),
                     leftX + side / 2, sideY - LINE, YELLOW);

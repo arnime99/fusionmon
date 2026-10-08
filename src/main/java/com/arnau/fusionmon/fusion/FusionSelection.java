@@ -180,13 +180,10 @@ public final class FusionSelection {
         if (parts == null) {
             return;
         }
-        Pokemon head = parts.head();
-        Pokemon body = parts.body();
         PENDING_UNFUSES.put(player.getUUID(), fusedId);
+        // La fusión con sus tipos y nombre de fusión (PokemonMixin) y su aspecto de fusión (los aspects)
         ServerPlayNetworking.send(player, new OpenUnfuseScreenPayload(
-                fused.getDisplayName(false),
-                head.getDisplayName(false), head.getLevel(),
-                body.getDisplayName(false), body.getLevel(),
+                FusionPartView.of(fused), FusionPartView.of(parts.head()), FusionPartView.of(parts.body()),
                 FusionData.experienceGained(fused)));
     }
 

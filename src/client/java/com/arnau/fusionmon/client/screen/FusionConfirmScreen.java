@@ -141,7 +141,7 @@ public class FusionConfirmScreen extends Screen {
 
         // Los tres visores: cabeza → fusión ← cuerpo
         FusionPartView fusion = preview.view();
-        viewports.render(graphics, font, head, fusion, body, leftState, centerState, rightState, partialTick);
+        viewports.render(graphics, font, head, fusion, body, leftState, centerState, rightState, false, partialTick);
         viewports.renderLabels(graphics, font, head, fusion, body, labelsY);
 
         FusionScreenLayout.renderStats(graphics, font, preview.baseStats(), centerX, statsY, width);

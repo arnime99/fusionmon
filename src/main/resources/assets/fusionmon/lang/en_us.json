@@ -3,7 +3,6 @@
   "gui.fusionmon.select_first": "Choose a Pokémon (or a fusion to split it)",
   "gui.fusionmon.select_second": "Choose the 2nd Pokémon",
   "gui.fusionmon.unfuse.title": "Split the fusion?",
-  "gui.fusionmon.unfuse.parts": "→ %s (Lv. %s)  +  %s (Lv. %s)",
   "gui.fusionmon.unfuse.experience": "Each one gets the %s EXP earned as a fusion",
   "gui.fusionmon.unfuse.no_experience": "No experience earned as a fusion",
   "gui.fusionmon.unfuse.accept": "Split",
