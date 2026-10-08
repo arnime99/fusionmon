@@ -17,6 +17,11 @@ import java.util.List;
 public record FusionPreview(Component name, List<Component> types, int level, List<Integer> baseStats,
                             RenderablePokemon model) {
 
+    /** La fusión con la misma forma que sus partes, para pintarla en los visores como ellas. */
+    public FusionPartView view() {
+        return new FusionPartView(name, level, types, model);
+    }
+
     public void write(RegistryFriendlyByteBuf buf) {
         ComponentSerialization.STREAM_CODEC.encode(buf, name);
         buf.writeVarInt(types.size());

@@ -13,7 +13,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
  * (A cabeza + B cuerpo, y al revés) para que el botón Intercambiar no necesite preguntar al servidor.
  */
 public record OpenFusionScreenPayload(
-        Component nameA, Component nameB,
+        FusionPartView partA, FusionPartView partB,
         FusionPreview preview, FusionPreview swappedPreview,
         Component natureA, Component natureB,
         Component natureEffectA, Component natureEffectB,
@@ -26,8 +26,8 @@ public record OpenFusionScreenPayload(
             StreamCodec.ofMember(OpenFusionScreenPayload::write, OpenFusionScreenPayload::read);
 
     private void write(RegistryFriendlyByteBuf buf) {
-        writeComponent(buf, nameA);
-        writeComponent(buf, nameB);
+        partA.write(buf);
+        partB.write(buf);
         preview.write(buf);
         swappedPreview.write(buf);
         writeComponent(buf, natureA);
@@ -43,7 +43,7 @@ public record OpenFusionScreenPayload(
     // Java evalúa los argumentos de izquierda a derecha, así que se leen en el mismo orden en que se escribieron
     private static OpenFusionScreenPayload read(RegistryFriendlyByteBuf buf) {
         return new OpenFusionScreenPayload(
-                readComponent(buf), readComponent(buf),
+                FusionPartView.read(buf), FusionPartView.read(buf),
                 FusionPreview.read(buf), FusionPreview.read(buf),
                 readComponent(buf), readComponent(buf),
                 readComponent(buf), readComponent(buf),

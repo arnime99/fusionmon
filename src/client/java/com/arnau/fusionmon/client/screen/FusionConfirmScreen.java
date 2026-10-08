@@ -1,56 +1,46 @@
 package com.arnau.fusionmon.client.screen;
 
-import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.network.FusionChoicePayload;
+import com.arnau.fusionmon.network.FusionPartView;
 import com.arnau.fusionmon.network.FusionPreview;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
-import com.cobblemon.mod.common.client.gui.PokemonGuiUtilsKt;
-import com.cobblemon.mod.common.client.gui.ProfileTransformType;
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState;
-import com.cobblemon.mod.common.entity.PoseType;
-import com.cobblemon.mod.common.pokemon.RenderablePokemon;
-import com.cobblemon.mod.common.util.math.QuaternionUtilsKt;
-import com.mojang.blaze3d.vertex.PoseStack;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.FormattedCharSequence;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
 
 import java.util.List;
 
 /**
- * Pantalla de confirmación de la fusión. Solo muestra y recoge la decisión:
- * la fusión la hace el servidor cuando recibe FusionChoicePayload.
+ * Pantalla de confirmación de la fusión. Solo muestra y recoge la decisión: la fusión la hace el servidor cuando
+ * recibe FusionChoicePayload.
+ *
+ * Arriba, los dos Pokémon a los lados (cabeza a la izquierda, cuerpo a la derecha) y la fusión en el centro, cada uno
+ * en su visor 3D (el mismo que /fusiondex: se gira arrastrando y se acerca con la rueda). Debajo, intercambiar, stats,
+ * naturaleza, habilidad y aceptar. Todo se coloca según el tamaño de la pantalla (FusionScreenLayout): con la escala
+ * de interfaz grande hay muy poco alto y los visores se encogen.
  */
 public class FusionConfirmScreen extends Screen {
 
-    private static final int PANEL_HEIGHT = 258;
     private static final int OPTION_WIDTH = 110;
-    private static final int DESCRIPTION_WIDTH = 2 * 110 + 8;
-    private static final int DESCRIPTION_MAX_LINES = 3;
-    private static final int GAP = 8;
-    private static final int WHITE = 0xFFFFFF;
-    private static final int GRAY = 0xAAAAAA;
-    private static final int YELLOW = 0xFFFF55;
-    private static final int GREEN = 0x55FF55;
+    private static final int DESCRIPTION_WIDTH = 2 * OPTION_WIDTH + 60;
+    private static final int GAP = 4;
 
-    // Visor 3D (mismos valores que el modelo de la pantalla de resumen de Cobblemon, algo más grande)
-    private static final int MODEL_BOX = 110;
-    private static final float MODEL_SCALE = 2.4F;
-    private static final double MODEL_OFFSET_Y = -10;
-    private static final long MODEL_TURN_MILLIS = 8000;
-    private static final int MODEL_LIGHT = 15;
-
-    private static final String[] STAT_KEYS = {
-            "gui.fusionmon.stat.hp", "gui.fusionmon.stat.attack", "gui.fusionmon.stat.defence",
-            "gui.fusionmon.stat.special_attack", "gui.fusionmon.stat.special_defence", "gui.fusionmon.stat.speed"
-    };
+    /**
+     * Alto de todo lo que no son los visores: título, textos de debajo, intercambiar, stats, naturaleza, habilidad y
+     * aceptar (ver init); las líneas de descripción de la habilidad van aparte, solo si hay sitio.
+     */
+    private static final int FIXED_HEIGHT = 12 + 3 + 2 * FusionScreenLayout.LINE + 2
+            + GAP + FusionScreenLayout.BUTTON
+            + GAP + FusionScreenLayout.STATS_HEIGHT
+            + GAP + FusionScreenLayout.BUTTON
+            + GAP + FusionScreenLayout.BUTTON
+            + GAP + FusionScreenLayout.BUTTON;
+    private static final int DESCRIPTION_LINES = 2;
 
     private final OpenFusionScreenPayload data;
     private boolean swapped;
@@ -58,8 +48,19 @@ public class FusionConfirmScreen extends Screen {
     private boolean abilityFromB;
     /** true cuando ya se ha mandado la respuesta (Aceptar o Cancelar), para no mandarla dos veces. */
     private boolean answered;
-    /** Estado de animación del visor 3D (como los de los menús de Cobblemon: sin entidad detrás). */
-    private final FloatingState previewState = new FloatingState();
+
+    private final FusionScreenLayout.Viewports viewports = new FusionScreenLayout.Viewports();
+    /** Estados de animación de los tres visores (como los de los menús de Cobblemon: sin entidad detrás). */
+    private final FloatingState leftState = new FloatingState();
+    private final FloatingState centerState = new FloatingState();
+    private final FloatingState rightState = new FloatingState();
+
+    private int top;
+    private int labelsY;
+    private int statsY;
+    private int natureY;
+    private int abilityY;
+    private int descriptionLines;
 
     private Button natureAButton;
     private Button natureBButton;
@@ -73,11 +74,26 @@ public class FusionConfirmScreen extends Screen {
 
     @Override
     protected void init() {
+        // Visores lo más grandes posible con todo lo demás en pantalla; si no cabe, sin la descripción de la habilidad
+        // (sigue en el tooltip del botón)
+        int free = height - 2 * FusionScreenLayout.MARGIN - FIXED_HEIGHT;
+        descriptionLines = free - DESCRIPTION_LINES * FusionScreenLayout.LINE >= FusionScreenLayout.COMFORT_BOX
+                ? DESCRIPTION_LINES : 0;
+        int box = viewports.place(width, free - descriptionLines * FusionScreenLayout.LINE);
+        int contentHeight = FIXED_HEIGHT + box + descriptionLines * FusionScreenLayout.LINE;
+        top = Math.max(FusionScreenLayout.MARGIN, (height - contentHeight) / 2);
+        viewports.setTop(top + 12);
+
         int centerX = width / 2;
-        int top = top();
+        labelsY = top + 12 + box + 3;
+        int swapY = labelsY + 2 * FusionScreenLayout.LINE + 2 + GAP;
+        statsY = swapY + FusionScreenLayout.BUTTON + GAP;
+        natureY = statsY + FusionScreenLayout.STATS_HEIGHT + GAP;
+        abilityY = natureY + FusionScreenLayout.BUTTON + GAP;
+        int acceptY = abilityY + FusionScreenLayout.BUTTON + descriptionLines * FusionScreenLayout.LINE + GAP;
 
         addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.confirm.swap"), button -> swapped = !swapped)
-                .bounds(centerX - 60, top + 86, 120, 20)
+                .bounds(centerX - 60, swapY, 120, FusionScreenLayout.BUTTON)
                 .build());
 
         int leftX = centerX - OPTION_WIDTH - GAP / 2;
@@ -87,26 +103,26 @@ public class FusionConfirmScreen extends Screen {
         natureAButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             natureFromB = false;
             refreshOptionLabels();
-        }).bounds(leftX, top + 126, OPTION_WIDTH, 20).tooltip(Tooltip.create(data.natureEffectA())).build());
+        }).bounds(leftX, natureY, OPTION_WIDTH, FusionScreenLayout.BUTTON).tooltip(Tooltip.create(data.natureEffectA())).build());
         natureBButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             natureFromB = true;
             refreshOptionLabels();
-        }).bounds(rightX, top + 126, OPTION_WIDTH, 20).tooltip(Tooltip.create(data.natureEffectB())).build());
+        }).bounds(rightX, natureY, OPTION_WIDTH, FusionScreenLayout.BUTTON).tooltip(Tooltip.create(data.natureEffectB())).build());
 
         abilityAButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             abilityFromB = false;
             refreshOptionLabels();
-        }).bounds(leftX, top + 178, OPTION_WIDTH, 20).tooltip(Tooltip.create(data.abilityDescriptionA())).build());
+        }).bounds(leftX, abilityY, OPTION_WIDTH, FusionScreenLayout.BUTTON).tooltip(Tooltip.create(data.abilityDescriptionA())).build());
         abilityBButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             abilityFromB = true;
             refreshOptionLabels();
-        }).bounds(rightX, top + 178, OPTION_WIDTH, 20).tooltip(Tooltip.create(data.abilityDescriptionB())).build());
+        }).bounds(rightX, abilityY, OPTION_WIDTH, FusionScreenLayout.BUTTON).tooltip(Tooltip.create(data.abilityDescriptionB())).build());
 
         addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.confirm.accept"), button -> answer(true))
-                .bounds(leftX, top + 236, OPTION_WIDTH, 20)
+                .bounds(leftX, acceptY, OPTION_WIDTH, FusionScreenLayout.BUTTON)
                 .build());
         addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.confirm.cancel"), button -> answer(false))
-                .bounds(rightX, top + 236, OPTION_WIDTH, 20)
+                .bounds(rightX, acceptY, OPTION_WIDTH, FusionScreenLayout.BUTTON)
                 .build());
 
         refreshOptionLabels();
@@ -117,70 +133,60 @@ public class FusionConfirmScreen extends Screen {
         super.render(graphics, mouseX, mouseY, partialTick);
 
         int centerX = width / 2;
-        int top = top();
         FusionPreview preview = swapped ? data.swappedPreview() : data.preview();
-        Component headName = swapped ? data.nameB() : data.nameA();
-        Component bodyName = swapped ? data.nameA() : data.nameB();
+        FusionPartView head = swapped ? data.partB() : data.partA();
+        FusionPartView body = swapped ? data.partA() : data.partB();
 
-        graphics.drawCenteredString(font, title, centerX, top, WHITE);
-        graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.confirm.parts", headName, bodyName),
-                centerX, top + 16, GRAY);
-        graphics.drawCenteredString(font, Component.literal("→ ").append(preview.name()), centerX, top + 30, YELLOW);
-        graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.confirm.types_level",
-                joinTypes(preview.types()), preview.level()), centerX, top + 44, WHITE);
+        graphics.drawCenteredString(font, title, centerX, top, FusionScreenLayout.WHITE);
 
-        graphics.drawCenteredString(font, statLine(preview.baseStats(), 0), centerX, top + 60, GRAY);
-        graphics.drawCenteredString(font, statLine(preview.baseStats(), 3), centerX, top + 72, GRAY);
+        // Los tres visores: cabeza → fusión ← cuerpo
+        FusionPartView fusion = preview.view();
+        viewports.render(graphics, font, head, fusion, body, leftState, centerState, rightState, partialTick);
+        viewports.renderLabels(graphics, font, head, fusion, body, labelsY);
 
-        graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.confirm.nature"), centerX, top + 114, WHITE);
-        graphics.drawCenteredString(font, natureFromB ? data.natureEffectB() : data.natureEffectA(),
-                centerX, top + 150, GRAY);
+        FusionScreenLayout.renderStats(graphics, font, preview.baseStats(), centerX, statsY, width);
 
-        graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.confirm.ability"), centerX, top + 166, WHITE);
-        // Las descripciones de habilidad pueden ser largas: se parten en varias líneas
+        // Naturaleza y habilidad: el título a la izquierda de sus botones y, a la derecha, el efecto de la elegida
+        int optionsLeft = centerX - OPTION_WIDTH - GAP / 2;
+        int optionsRight = centerX + OPTION_WIDTH + GAP / 2;
+        int textY = (FusionScreenLayout.BUTTON - font.lineHeight) / 2 + 1;
+        Component nature = Component.translatable("gui.fusionmon.confirm.nature");
+        graphics.drawString(font, nature, optionsLeft - GAP - font.width(nature), natureY + textY, FusionScreenLayout.WHITE);
+        graphics.drawString(font, natureFromB ? data.natureEffectB() : data.natureEffectA(),
+                optionsRight + GAP, natureY + textY, FusionScreenLayout.GRAY);
+        Component ability = Component.translatable("gui.fusionmon.confirm.ability");
+        graphics.drawString(font, ability, optionsLeft - GAP - font.width(ability), abilityY + textY, FusionScreenLayout.WHITE);
+
+        // Las descripciones de habilidad pueden ser largas: se parten en líneas (si no caben, solo en el tooltip)
         List<FormattedCharSequence> lines = font.split(
                 abilityFromB ? data.abilityDescriptionB() : data.abilityDescriptionA(), DESCRIPTION_WIDTH);
-        for (int i = 0; i < Math.min(lines.size(), DESCRIPTION_MAX_LINES); i++) {
-            graphics.drawCenteredString(font, lines.get(i), centerX, top + 202 + i * 10, GRAY);
+        for (int i = 0; i < Math.min(lines.size(), descriptionLines); i++) {
+            graphics.drawCenteredString(font, lines.get(i), centerX,
+                    abilityY + FusionScreenLayout.BUTTON + 2 + i * FusionScreenLayout.LINE, FusionScreenLayout.GRAY);
         }
-
-        // A la izquierda del panel (sin salirse de la pantalla si es estrecha)
-        renderModel(graphics, preview, Math.max(4, centerX - DESCRIPTION_WIDTH / 2 - GAP - MODEL_BOX), top + 16,
-                partialTick);
     }
 
-    /**
-     * Visor 3D de la fusión, a la izquierda del panel, girando despacio. Se pinta como cualquier Pokémon de un menú
-     * de Cobblemon (mismos valores que su pantalla de resumen), así que sale como se verá en el juego según el modo
-     * de /fusionvisual. Debajo, si el prototipo cabeza sobre cuerpo encuentra la cabeza de los dos modelos.
-     */
-    private void renderModel(GuiGraphics graphics, FusionPreview preview, int x, int y, float partialTick) {
-        RenderablePokemon model = preview.model();
-        previewState.setCurrentAspects(model.getAspects());
+    // ---- Ratón: cada visor se gira y se acerca por separado ----
 
-        graphics.fill(x - 1, y - 1, x + MODEL_BOX + 1, y + MODEL_BOX + 1, 0xFF555555);
-        graphics.fill(x, y, x + MODEL_BOX, y + MODEL_BOX, 0xFF1E1E1E);
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        return super.mouseClicked(mouseX, mouseY, button) || viewports.press(mouseX, mouseY, button);
+    }
 
-        // Lo que se salga de la caja no se pinta
-        graphics.enableScissor(x, y, x + MODEL_BOX, y + MODEL_BOX);
-        PoseStack pose = graphics.pose();
-        pose.pushPose();
-        pose.translate(x + MODEL_BOX / 2.0, y + MODEL_OFFSET_Y, 0);
-        pose.scale(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
-        float yaw = (System.currentTimeMillis() % MODEL_TURN_MILLIS) * 360F / MODEL_TURN_MILLIS;
-        Quaternionf rotation = QuaternionUtilsKt.fromEulerXYZDegrees(new Quaternionf(), new Vector3f(13F, yaw, 0F));
-        PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, previewState, partialTick,
-                20F, ProfileTransformType.SUMMARY, false, 1F, 1F, 1F, 1F, 0F, 0F, MODEL_LIGHT);
-        pose.popPose();
-        graphics.disableScissor();
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        viewports.release();
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
 
-        boolean graft = FusionGraft.canGraft(model.getSpecies().getResourceIdentifier(), previewState);
-        Component label = Component.translatable(graft ? "gui.fusionmon.confirm.graft_yes" : "gui.fusionmon.confirm.graft_no");
-        List<FormattedCharSequence> labelLines = font.split(label, MODEL_BOX + 16);
-        for (int i = 0; i < labelLines.size(); i++) {
-            graphics.drawCenteredString(font, labelLines.get(i), x + MODEL_BOX / 2, y + MODEL_BOX + 4 + i * 10,
-                    graft ? GREEN : GRAY);
-        }
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        return viewports.drag(dragX, dragY) || super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        return viewports.scroll(mouseX, mouseY, scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     /** removed() se llama siempre que la pantalla se cierra (Esc, otra pantalla...): cuenta como Cancelar. */
@@ -194,6 +200,7 @@ public class FusionConfirmScreen extends Screen {
 
     @Override
     public boolean isPauseScreen() {
+        // Sin pausa, las animaciones de los modelos siguen
         return false;
     }
 
@@ -215,32 +222,5 @@ public class FusionConfirmScreen extends Screen {
 
     private static Component option(Component label, boolean selected) {
         return selected ? Component.literal("✔ ").append(label) : label.copy();
-    }
-
-    private static Component joinTypes(List<Component> types) {
-        MutableComponent result = Component.empty();
-        for (int i = 0; i < types.size(); i++) {
-            if (i > 0) {
-                result.append(" / ");
-            }
-            result.append(types.get(i));
-        }
-        return result;
-    }
-
-    /** Tres stats a partir de "first": "PS 43   Ataque 51   Defensa 45". */
-    private static Component statLine(List<Integer> stats, int first) {
-        MutableComponent line = Component.empty();
-        for (int i = first; i < first + 3 && i < stats.size(); i++) {
-            if (i > first) {
-                line.append("   ");
-            }
-            line.append(Component.translatable(STAT_KEYS[i])).append(" " + stats.get(i));
-        }
-        return line;
-    }
-
-    private int top() {
-        return Math.max(4, height / 2 - PANEL_HEIGHT / 2);
     }
 }

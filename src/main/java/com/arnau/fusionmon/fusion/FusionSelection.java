@@ -2,6 +2,7 @@ package com.arnau.fusionmon.fusion;
 
 import com.arnau.fusionmon.item.FusionCrystalItem;
 import com.arnau.fusionmon.network.FusionChoicePayload;
+import com.arnau.fusionmon.network.FusionPartView;
 import com.arnau.fusionmon.network.FusionPreview;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
 import com.arnau.fusionmon.network.OpenUnfuseScreenPayload;
@@ -107,7 +108,7 @@ public final class FusionSelection {
 
         PENDING_FUSIONS.put(player.getUUID(), new PendingFusion(firstId, secondId));
         ServerPlayNetworking.send(player, new OpenFusionScreenPayload(
-                first.getDisplayName(false), second.getDisplayName(false),
+                FusionPartView.of(first), FusionPartView.of(second),
                 preview(first, second), preview(second, first),
                 Component.translatable(first.getNature().getDisplayName()),
                 Component.translatable(second.getNature().getDisplayName()),
