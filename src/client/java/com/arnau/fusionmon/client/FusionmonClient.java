@@ -9,12 +9,15 @@ import com.arnau.fusionmon.client.screen.UnfuseConfirmScreen;
 import com.arnau.fusionmon.client.texture.FusionTextures;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
 import com.arnau.fusionmon.network.OpenUnfuseScreenPayload;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -30,23 +33,29 @@ public class FusionmonClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(OpenUnfuseScreenPayload.TYPE,
 				(payload, context) -> context.client().setScreen(new UnfuseConfirmScreen(payload)));
 
-		// /fusionvisual colors|graft: elige cómo se ven las fusiones en este cliente (graft = prototipo cabeza
-		// sobre cuerpo, ver FusionGraft); /fusionvisual tail|decor on|off: si se cambia también la cola / se pegan
-		// los adornos de la especie de la cabeza.
+		// Herramientas para afinar los visuales (ajustes finos de /fusionvisual, /fusiondex, /fusioninspect): solo en
+		// desarrollo (runClient). En el mod publicado no están: el visor enseñaría todas las fusiones sin jugar (la
+		// gracia es capturar, probar y ver qué sale) y el inspector lee archivos que solo hay en el proyecto
+		boolean dev = FabricLoader.getInstance().isDevelopmentEnvironment();
+
+		// /fusionvisual colors|graft: elige cómo se ven las fusiones en este cliente (graft = cabeza sobre cuerpo, ver
+		// FusionGraft; colors = la cabeza con los colores del cuerpo), por si alguna sale rara o va lenta.
 		// Es un comando de cliente: no pasa por el servidor ni necesita trucos.
-		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-				dispatcher.register(ClientCommandManager.literal("fusionvisual")
-						.then(ClientCommandManager.literal("colors").executes(context -> {
-							FusionGraft.setEnabled(false);
-							context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.colors"));
-							return 1;
-						}))
-						.then(ClientCommandManager.literal("graft").executes(context -> {
-							FusionGraft.setEnabled(true);
-							context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.graft"));
-							return 1;
-						}))
-						.then(ClientCommandManager.literal("tail")
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+			LiteralArgumentBuilder<FabricClientCommandSource> visual = ClientCommandManager.literal("fusionvisual")
+					.then(ClientCommandManager.literal("colors").executes(context -> {
+						FusionGraft.setEnabled(false);
+						context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.colors"));
+						return 1;
+					}))
+					.then(ClientCommandManager.literal("graft").executes(context -> {
+						FusionGraft.setEnabled(true);
+						context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.graft"));
+						return 1;
+					}));
+			if (dev) {
+				// /fusionvisual tail|decor|top on|off, align pivot|skull|base: para comparar reglas del graft
+				visual.then(ClientCommandManager.literal("tail")
 								.then(ClientCommandManager.literal("on").executes(context -> {
 									FusionGraft.setTails(true);
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.tail.on"));
@@ -98,23 +107,29 @@ public class FusionmonClient implements ClientModInitializer {
 									FusionGraft.setAlign(FusionGraft.Align.BASE);
 									context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.align.base"));
 									return 1;
-								})))));
+								})));
+			}
+			dispatcher.register(visual);
+		});
 
-		// /fusiondex: visor de fusiones (FusionDexScreen). La pantalla se abre en la siguiente vuelta del bucle del
-		// juego: al terminar un comando, Minecraft cierra el chat, y cerraría también una pantalla abierta aquí mismo
-		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-				dispatcher.register(ClientCommandManager.literal("fusiondex").executes(context -> {
-					Minecraft client = context.getSource().getClient();
-					client.tell(() -> client.setScreen(new FusionDexScreen()));
-					return 1;
-				})));
-		// /fusioninspect: inspector de especies (SpeciesInspectorScreen), para revisar una a una lo que detecta el graft
-		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-				dispatcher.register(ClientCommandManager.literal("fusioninspect").executes(context -> {
-					Minecraft client = context.getSource().getClient();
-					client.tell(() -> client.setScreen(new SpeciesInspectorScreen()));
-					return 1;
-				})));
+		if (dev) {
+			// /fusiondex: visor de fusiones (FusionDexScreen). La pantalla se abre en la siguiente vuelta del bucle del
+			// juego: al terminar un comando, Minecraft cierra el chat, y cerraría también una pantalla abierta aquí mismo
+			ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+					dispatcher.register(ClientCommandManager.literal("fusiondex").executes(context -> {
+						Minecraft client = context.getSource().getClient();
+						client.tell(() -> client.setScreen(new FusionDexScreen()));
+						return 1;
+					})));
+			// /fusioninspect: inspector de especies (SpeciesInspectorScreen), para revisar una a una lo que detecta el
+			// graft
+			ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+					dispatcher.register(ClientCommandManager.literal("fusioninspect").executes(context -> {
+						Minecraft client = context.getSource().getClient();
+						client.tell(() -> client.setScreen(new SpeciesInspectorScreen()));
+						return 1;
+					})));
+		}
 
 		// Las texturas de fusión se generan a partir de las de Cobblemon: si se recargan los recursos
 		// (F3+T, otro resource pack), hay que volver a generarlas

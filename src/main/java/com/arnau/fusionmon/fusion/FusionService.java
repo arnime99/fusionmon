@@ -21,6 +21,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
+import com.cobblemon.mod.common.api.pokemon.evolution.Evolution;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -73,6 +75,8 @@ public final class FusionService {
         giveFusionExperience(fused, parts);
         applyHealthRatio(head, healthRatio);
         applyHealthRatio(body, healthRatio);
+        // Lo desbloqueado como fusión vuelve a cada parte, y combine lo pasa a la fusión nueva
+        FusionEvolutions.carryOutOfFusion(fused, parts.head(), parts.body());
 
         // Cualquier objeto que se le haya dado a la fusión vuelve al jugador
         returnHeldItem(player, fused);
@@ -126,6 +130,9 @@ public final class FusionService {
     public static void makeFusion(RegistryAccess registryAccess, Pokemon head, Pokemon body,
                                   boolean natureFromBody, boolean abilityFromBody) {
         double healthRatio = (double) head.getCurrentHealth() / head.getMaxHealth();
+        // Evoluciones ya desbloqueadas (Cable Link, objetos): se pasan a la fusión al final
+        List<Evolution> headUnlocked = FusionEvolutions.unlocked(head);
+        List<Evolution> bodyUnlocked = FusionEvolutions.unlocked(body);
 
         // Las copias se guardan antes de tocar nada: son los originales para desfusionar
         FusionData.write(head, head, body, registryAccess);
@@ -150,6 +157,10 @@ public final class FusionService {
 
         // Los PS máximos han cambiado: mantenemos el mismo porcentaje de vida
         applyHealthRatio(head, healthRatio);
+
+        // Las de nivel las vuelve a comprobar Cobblemon; las desbloqueadas no, así que siguen pendientes, envueltas
+        FusionEvolutions.carryIntoFusion(head, FusionPart.HEAD, headUnlocked);
+        FusionEvolutions.carryIntoFusion(head, FusionPart.BODY, bodyUnlocked);
     }
 
     /** Las dos partes guardadas de una fusión, ya leídas y listas para volver al equipo. */
@@ -218,6 +229,8 @@ public final class FusionService {
         double healthRatio = (double) fused.getCurrentHealth() / fused.getMaxHealth();
         applyHealthRatio(head, healthRatio);
         applyHealthRatio(body, healthRatio);
+        // Lo desbloqueado como fusión (Cable Link usado sobre ella...) vuelve a su parte: no se pierde el objeto
+        FusionEvolutions.carryOutOfFusion(fused, head, body);
 
         // Cualquier objeto que se le haya dado a la fusión vuelve al jugador
         returnHeldItem(player, fused);

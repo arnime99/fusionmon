@@ -10,11 +10,13 @@ import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.cobblemon.mod.common.pokemon.Species;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -53,24 +55,31 @@ public final class FusionCommands {
     }
 
     public static void register() {
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-                dispatcher.register(Commands.literal("fusionmon")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("info")
-                                .then(Commands.argument(SLOT, IntegerArgumentType.integer(1, 6))
-                                        .executes(FusionCommands::info)))
-                        .then(Commands.literal("unfuse")
-                                .then(Commands.argument(SLOT, IntegerArgumentType.integer(1, 6))
-                                        .executes(FusionCommands::unfuse)))
-                        .then(Commands.literal("spawn")
-                                .then(Commands.argument(HEAD, StringArgumentType.word())
-                                        .suggests((context, builder) -> suggestSpecies(builder, false))
-                                        .then(Commands.argument(BODY, StringArgumentType.word())
-                                                .suggests((context, builder) -> suggestSpecies(builder, true))
-                                                .executes(context -> spawn(context, 1))
-                                                .then(Commands.argument(COUNT, IntegerArgumentType.integer(1, MAX_SPAWN))
-                                                        .executes(context -> spawn(context,
-                                                                IntegerArgumentType.getInteger(context, COUNT)))))))));
+        // spawn crea cualquier fusión sin capturar nada: solo en desarrollo (runClient/runServer), como /fusiondex. La
+        // gracia del mod es descubrir las fusiones jugando. info y unfuse se quedan para los admins: arreglan problemas
+        boolean dev = FabricLoader.getInstance().isDevelopmentEnvironment();
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("fusionmon")
+                    .requires(source -> source.hasPermission(2))
+                    .then(Commands.literal("info")
+                            .then(Commands.argument(SLOT, IntegerArgumentType.integer(1, 6))
+                                    .executes(FusionCommands::info)))
+                    .then(Commands.literal("unfuse")
+                            .then(Commands.argument(SLOT, IntegerArgumentType.integer(1, 6))
+                                    .executes(FusionCommands::unfuse)));
+            if (dev) {
+                root.then(Commands.literal("spawn")
+                        .then(Commands.argument(HEAD, StringArgumentType.word())
+                                .suggests((context, builder) -> suggestSpecies(builder, false))
+                                .then(Commands.argument(BODY, StringArgumentType.word())
+                                        .suggests((context, builder) -> suggestSpecies(builder, true))
+                                        .executes(context -> spawn(context, 1))
+                                        .then(Commands.argument(COUNT, IntegerArgumentType.integer(1, MAX_SPAWN))
+                                                .executes(context -> spawn(context,
+                                                        IntegerArgumentType.getInteger(context, COUNT)))))));
+            }
+            dispatcher.register(root);
+        });
     }
 
     private static CompletableFuture<Suggestions> suggestSpecies(SuggestionsBuilder builder, boolean body) {

@@ -14,6 +14,7 @@ import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.cobblemon.mod.common.pokemon.activestate.ShoulderedState;
 import com.cobblemon.mod.common.pokemon.evolution.variants.ItemInteractionEvolution;
 import com.cobblemon.mod.common.pokemon.evolution.variants.LevelUpEvolution;
+import com.cobblemon.mod.common.pokemon.evolution.variants.TradeEvolution;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -145,8 +146,64 @@ public final class FusionEvolutions {
                 into.add(new FusionLevelUpEvolution(part, levelUp));
             } else if (evolution instanceof ItemInteractionEvolution item) {
                 into.add(new FusionItemEvolution(part, item));
+            } else if (evolution instanceof TradeEvolution trade) {
+                into.add(new FusionTradeEvolution(part, trade));
             }
-            // Las de intercambio y de clic en bloque no se ofrecen a las fusiones (de momento)
+            // Las de clic en bloque no se ofrecen a las fusiones (de momento)
+        }
+    }
+
+    /**
+     * Las evoluciones ya desbloqueadas de un Pokémon que no se vuelven a comprobar solas: las de Cable Link,
+     * intercambio u objeto. Las de nivel (pasivas) no hace falta guardarlas: Cobblemon las comprueba cada segundo.
+     */
+    static List<Evolution> unlocked(Pokemon pokemon) {
+        List<Evolution> unlocked = new ArrayList<>();
+        for (Evolution evolution : pokemon.getEvolutionProxy().server()) {
+            if (!(evolution instanceof PassiveEvolution)) {
+                unlocked.add(evolution);
+            }
+        }
+        return unlocked;
+    }
+
+    /**
+     * Al fusionar: las evoluciones desbloqueadas de una parte (de antes de fusionarla, ver unlocked) siguen
+     * pendientes en la fusión, envueltas. Sin esto, un Kadabra con el Cable Link ya usado perdía su evolución (y el
+     * cable) al fusionarlo.
+     */
+    static void carryIntoFusion(Pokemon fusion, FusionPart part, List<Evolution> unlocked) {
+        if (unlocked.isEmpty()) {
+            return;
+        }
+        List<Evolution> fusionEvolutions = evolutionsOf(fusion);
+        if (fusionEvolutions == null) {
+            return;
+        }
+        for (Evolution evolution : unlocked) {
+            for (Evolution candidate : fusionEvolutions) {
+                if (candidate instanceof FusionPartEvolution wrapped && wrapped.part() == part
+                        && wrapped.original().getId().equals(evolution.getId())) {
+                    fusion.getEvolutionProxy().server().add(candidate);
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Al separar o invertir: las evoluciones desbloqueadas de la fusión (Cable Link usado sobre ella...) vuelven,
+     * sin envolver, a la parte de la que son. Si no, se perderían con el objeto gastado.
+     */
+    static void carryOutOfFusion(Pokemon fused, Pokemon head, Pokemon body) {
+        for (Evolution evolution : unlocked(fused)) {
+            if (evolution instanceof FusionPartEvolution wrapped) {
+                Pokemon target = wrapped.part() == FusionPart.HEAD ? head : body;
+                EvolutionController<Evolution, ?> pending = target.getEvolutionProxy().server();
+                if (!pending.contains(wrapped.original())) {
+                    pending.add(wrapped.original());
+                }
+            }
         }
     }
 
