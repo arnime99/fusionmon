@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.arnau.fusionmon.command.FusionCommands;
 import com.arnau.fusionmon.fusion.FusionAspects;
+import com.arnau.fusionmon.fusion.FusionDiscovery;
 import com.arnau.fusionmon.fusion.FusionLevelUp;
 import com.arnau.fusionmon.fusion.FusionStatProvider;
 import com.arnau.fusionmon.item.ModItems;
@@ -34,6 +35,8 @@ public class Fusionmon implements ModInitializer {
 		FusionLevelUp.register();
 		// Etiquetas (aspects) que dicen al cliente que un Pokémon es una fusión y quién es su cuerpo
 		AspectProvider.Companion.register(new FusionAspects());
+		// Registro de fusiones descubiertas de cada jugador (dato guardado con su partida)
+		FusionDiscovery.initialize();
 
 		LOGGER.info("Hello Fabric world!");
 	}

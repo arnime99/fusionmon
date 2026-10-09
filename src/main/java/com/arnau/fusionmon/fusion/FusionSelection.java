@@ -110,14 +110,15 @@ public final class FusionSelection {
 
         PENDING_REVERSES.remove(player.getUUID());
         PENDING_FUSIONS.put(player.getUUID(), new PendingFusion(firstId, secondId));
-        ServerPlayNetworking.send(player, fusionScreen(first, second, false));
+        ServerPlayNetworking.send(player, fusionScreen(player, first, second, false));
     }
 
     /** La pantalla de fusión con first como cabeza y second como cuerpo (Intercambiar los cambia en el cliente). */
-    private static OpenFusionScreenPayload fusionScreen(Pokemon first, Pokemon second, boolean reverse) {
+    private static OpenFusionScreenPayload fusionScreen(ServerPlayer player, Pokemon first, Pokemon second,
+                                                        boolean reverse) {
         return new OpenFusionScreenPayload(
                 FusionPartView.of(first), FusionPartView.of(second),
-                preview(first, second), preview(second, first),
+                preview(player, first, second), preview(player, second, first),
                 Component.translatable(first.getNature().getDisplayName()),
                 Component.translatable(second.getNature().getDisplayName()),
                 natureEffect(first.getNature()),
@@ -141,7 +142,7 @@ public final class FusionSelection {
         FusionService.giveFusionExperience(fused, parts);
         PENDING_FUSIONS.remove(player.getUUID());
         PENDING_REVERSES.put(player.getUUID(), fused.getUuid());
-        ServerPlayNetworking.send(player, fusionScreen(parts.body(), parts.head(), true));
+        ServerPlayNetworking.send(player, fusionScreen(player, parts.body(), parts.head(), true));
     }
 
     /** "+Ataque  −At. Esp." o "Neutra" si la naturaleza no cambia ningún stat. */
@@ -306,7 +307,7 @@ public final class FusionSelection {
         PENDING_REVERSES.remove(player.getUUID());
     }
 
-    private static FusionPreview preview(Pokemon head, Pokemon body) {
+    private static FusionPreview preview(ServerPlayer player, Pokemon head, Pokemon body) {
         FormData headForm = head.getForm();
         FormData bodyForm = body.getForm();
 
@@ -330,7 +331,8 @@ public final class FusionSelection {
                 types,
                 (head.getLevel() + body.getLevel()) / 2,
                 baseStats,
-                model);
+                model,
+                FusionDiscovery.isDiscovered(player, FusionDiscovery.key(head, body)));
     }
 
     /** El Pokémon con ese UUID si sigue en el equipo y no es una fusión; si no, null. */

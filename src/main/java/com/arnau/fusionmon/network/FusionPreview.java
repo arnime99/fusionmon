@@ -13,9 +13,11 @@ import java.util.List;
  * baseStats en orden: PS, Ataque, Defensa, At. Esp., Def. Esp., Velocidad.
  * model: lo justo para pintarla (especie de la cabeza + aspects de fusión, ver FusionAspects), como hace
  * Cobblemon con los Pokémon de los menús.
+ * discovered: si el jugador ya ha creado esta pareja (FusionDiscovery). Si no, la pantalla la enseña como silueta, sin
+ * nombre, tipos ni stats; los datos van igual porque la animación de fusión los revela en cuanto se acepta.
  */
 public record FusionPreview(Component name, List<Component> types, int level, List<Integer> baseStats,
-                            RenderablePokemon model) {
+                            RenderablePokemon model, boolean discovered) {
 
     /** La fusión con la misma forma que sus partes, para pintarla en los visores como ellas. */
     public FusionPartView view() {
@@ -34,6 +36,7 @@ public record FusionPreview(Component name, List<Component> types, int level, Li
             buf.writeVarInt(stat);
         }
         model.saveToBuffer(buf);
+        buf.writeBoolean(discovered);
     }
 
     public static FusionPreview read(RegistryFriendlyByteBuf buf) {
@@ -50,6 +53,7 @@ public record FusionPreview(Component name, List<Component> types, int level, Li
             baseStats.add(buf.readVarInt());
         }
         RenderablePokemon model = RenderablePokemon.Companion.loadFromBuffer(buf);
-        return new FusionPreview(name, types, level, baseStats, model);
+        boolean discovered = buf.readBoolean();
+        return new FusionPreview(name, types, level, baseStats, model, discovered);
     }
 }

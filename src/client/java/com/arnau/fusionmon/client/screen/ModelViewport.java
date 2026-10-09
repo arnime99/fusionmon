@@ -60,6 +60,15 @@ final class ModelViewport {
      */
     void render(GuiGraphics graphics, RenderablePokemon model, FloatingState state, String fitExtra, int x, int y,
                 int box, float partialTick, Runnable before, Runnable after) {
+        render(graphics, model, state, fitExtra, x, y, box, partialTick, before, after, false);
+    }
+
+    /**
+     * @param silhouette pintarlo todo negro ("¿Quién es ese Pokémon?"): una fusión sin descubrir. Es el color por el
+     *                   que Cobblemon multiplica la textura, así que vale también para lo que pega el graft
+     */
+    void render(GuiGraphics graphics, RenderablePokemon model, FloatingState state, String fitExtra, int x, int y,
+                int box, float partialTick, Runnable before, Runnable after, boolean silhouette) {
         state.setCurrentAspects(model.getAspects());
         graphics.fill(x - 1, y - 1, x + box + 1, y + box + 1, 0xFF555555);
         graphics.fill(x, y, x + box, y + box, 0xFF1E1E1E);
@@ -84,8 +93,9 @@ final class ModelViewport {
             if (before != null) {
                 before.run();
             }
+            float shade = silhouette ? 0F : 1F;
             PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, state, partialTick,
-                    PROFILE_SCALE, ProfileTransformType.NONE, false, 1F, 1F, 1F, 1F, 0F, 0F, MODEL_LIGHT);
+                    PROFILE_SCALE, ProfileTransformType.NONE, false, shade, shade, shade, 1F, 0F, 0F, MODEL_LIGHT);
         } finally {
             // Pase lo que pase: "after" deshace lo de "before" (el inspector apaga la inspección)
             pose.popPose();

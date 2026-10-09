@@ -47,6 +47,11 @@ abstract class FusionScreenBase extends Screen {
     /** Al separar, las flechas salen de la fusión; al fusionar (o invertir), van hacia ella. */
     protected abstract boolean splitting();
 
+    /** Si la fusión aún no se ha descubierto: se pinta como silueta (ver FusionDiscovery). */
+    protected boolean silhouette() {
+        return false;
+    }
+
     /**
      * Alto de la parte de abajo. Recibe el alto que quedaría para los visores sin ella, por si la pantalla quiere
      * enseñar algo más (descripciones) solo cuando hay sitio.
@@ -85,7 +90,7 @@ abstract class FusionScreenBase extends Screen {
         FusionPartView fusion = fusion();
         FusionPartView body = body();
         viewports.render(graphics, font, head, fusion, body, headState, fusionState, bodyState, splitting(),
-                partialTick);
+                silhouette(), partialTick);
         viewports.renderLabels(graphics, font, head, fusion, body, labelsY);
         renderBottom(graphics, bottomY);
     }

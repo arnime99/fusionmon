@@ -48,11 +48,14 @@ public final class FusionService {
 
     public static void fuse(ServerPlayer player, Pokemon head, Pokemon body,
                             boolean natureFromBody, boolean abilityFromBody) {
+        // La clave antes de fusionar: después, la cabeza ya es la fusión
+        String discovered = FusionDiscovery.key(head, body);
         combine(player, head, body, natureFromBody, abilityFromBody);
 
         PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
         party.remove(body);
         resendToClient(player, party, head);
+        FusionDiscovery.register(player, discovered);
 
         Fusionmon.LOGGER.info("{} ha fusionado {} + {}",
                 player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
@@ -83,12 +86,14 @@ public final class FusionService {
         fused.recall();
 
         // Se monta la fusión nueva antes de tocar el equipo: si algo fallase, la fusión de antes sigue en su sitio
+        String discovered = FusionDiscovery.key(head, body);
         combine(player, head, body, natureFromBody, abilityFromBody);
         PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
         int slot = slotOf(party, fused);
         party.remove(fused);
         // Colocar un Pokémon manda al cliente el Pokémon entero (con persistentData): no hace falta resendToClient
         party.set(slot, head);
+        FusionDiscovery.register(player, discovered);
 
         Fusionmon.LOGGER.info("{} ha invertido su fusión: ahora {} + {}",
                 player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());

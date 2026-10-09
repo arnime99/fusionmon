@@ -86,12 +86,16 @@ final class FusionScreenLayout {
             sideY = y + box - side;
         }
 
-        /** @param splitting al separar las flechas salen de la fusión; al fusionar van hacia ella */
+        /**
+         * @param splitting  al separar las flechas salen de la fusión; al fusionar van hacia ella
+         * @param silhouette la fusión aún sin descubrir: en negro (ver FusionDiscovery)
+         */
         void render(GuiGraphics graphics, Font font, FusionPartView head, FusionPartView fusion, FusionPartView body,
                     FloatingState headState, FloatingState fusionState, FloatingState bodyState, boolean splitting,
-                    float partialTick) {
+                    boolean silhouette, float partialTick) {
             left.render(graphics, head.model(), headState, "", leftX, sideY, side, partialTick, null, null);
-            center.render(graphics, fusion.model(), fusionState, "", centerX, centerY, box, partialTick, null, null);
+            center.render(graphics, fusion.model(), fusionState, "", centerX, centerY, box, partialTick, null, null,
+                    silhouette);
             right.render(graphics, body.model(), bodyState, "", rightX, sideY, side, partialTick, null, null);
 
             int arrowY = sideY + side / 2 - font.lineHeight / 2;
@@ -175,6 +179,12 @@ final class FusionScreenLayout {
      * verde alto), centradas en centerX.
      */
     static void renderStats(GuiGraphics graphics, Font font, List<Integer> stats, int centerX, int y, int screenWidth) {
+        renderStats(graphics, font, stats, centerX, y, screenWidth, false);
+    }
+
+    /** @param hidden fusión sin descubrir: barras vacías y "?" en vez de los valores */
+    static void renderStats(GuiGraphics graphics, Font font, List<Integer> stats, int centerX, int y, int screenWidth,
+                            boolean hidden) {
         int labelWidth = 0;
         for (String key : STAT_KEYS) {
             labelWidth = Math.max(labelWidth, font.width(Component.translatable(key)));
@@ -191,6 +201,10 @@ final class FusionScreenLayout {
             int barX = x + labelWidth + 4;
             int barY = rowY + (font.lineHeight - STAT_BAR_HEIGHT) / 2 - 1;
             graphics.fill(barX, barY, barX + barWidth, barY + STAT_BAR_HEIGHT, 0xFF333333);
+            if (hidden) {
+                graphics.drawString(font, "?", barX + barWidth + 4, rowY, GRAY);
+                continue;
+            }
             int filled = Math.round(barWidth * Math.min(1F, value / STAT_FULL));
             graphics.fill(barX, barY, barX + filled, barY + STAT_BAR_HEIGHT, 0xFF000000 | statColor(value));
             graphics.drawString(font, String.valueOf(value), barX + barWidth + 4, rowY, WHITE);

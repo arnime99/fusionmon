@@ -61,7 +61,18 @@ public class FusionConfirmScreen extends FusionScreenBase {
 
     @Override
     protected FusionPartView fusion() {
-        return preview().view();
+        FusionPartView view = preview().view();
+        if (preview().discovered()) {
+            return view;
+        }
+        // Sin descubrir: ni nombre ni tipos (el modelo va en silueta, ver silhouette)
+        Component unknown = Component.translatable("gui.fusionmon.confirm.unknown");
+        return new FusionPartView(unknown, view.level(), List.of(unknown), view.model());
+    }
+
+    @Override
+    protected boolean silhouette() {
+        return !preview().discovered();
     }
 
     @Override
@@ -119,8 +130,9 @@ public class FusionConfirmScreen extends FusionScreenBase {
 
         Component accept = Component.translatable(data.reverse() ? "gui.fusionmon.reverse.accept" : "gui.fusionmon.confirm.accept");
         addRenderableWidget(Button.builder(accept, button -> {
-                    // Lo que se ve ahora (con el intercambio elegido) es lo que se anima
-                    FusionAnimationScreen animation = new FusionAnimationScreen(head(), body(), fusion());
+                    // Lo que se ve ahora (con el intercambio elegido) es lo que se anima, ya sin misterio: la
+                    // animación es donde se descubre
+                    FusionAnimationScreen animation = new FusionAnimationScreen(head(), body(), preview().view());
                     answer(() -> ClientPlayNetworking.send(
                             new FusionChoicePayload(true, swapped, natureFromB, abilityFromB)));
                     // answer ya ha cerrado esta pantalla (sin contar como cancelar): ahora la animación
@@ -138,7 +150,8 @@ public class FusionConfirmScreen extends FusionScreenBase {
     @Override
     protected void renderBottom(GuiGraphics graphics, int y) {
         int centerX = width / 2;
-        FusionScreenLayout.renderStats(graphics, font, preview().baseStats(), centerX, statsY, width);
+        FusionScreenLayout.renderStats(graphics, font, preview().baseStats(), centerX, statsY, width,
+                !preview().discovered());
 
         // Naturaleza y habilidad: el título a la izquierda de sus botones y, a la derecha, el efecto de la elegida
         int optionsLeft = centerX - OPTION_WIDTH - GAP / 2;
