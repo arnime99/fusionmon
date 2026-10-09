@@ -131,6 +131,16 @@ function IsArm([string]$name) {
     }
     $false
 }
+# Mano suelta: "mano" es lo primero del nombre ("hands", "left_hand"; no "tail_hand" ni "locator_hand_primary")
+function IsHand([string]$name) {
+    if ($name.StartsWith('%') -or $name.StartsWith('internal_locator')) { return $false }
+    foreach ($tok in $name.ToLower().Split('_')) {
+        $w = StripModifiers ($tok -replace '\d+$','')
+        if ($w -eq '' -or $NAME_MODIFIERS -contains $w) { continue }
+        return ($w -eq 'hand' -or $w -eq 'hands')
+    }
+    $false
+}
 function IsLegName([string]$name) {
     foreach ($tok in $name.ToLower().Split('_')) {
         $w = StripModifiers ($tok -replace '\d+$','')
@@ -360,7 +370,7 @@ function FindDecorations($headPath, $heads, $tail, $cluster) {
             if ($tail) { foreach ($r in $tail.roots) { if (Holds $n $r.part) { $held = $true } } }
             if ($held) { continue }
             $cat = Category $n
-            if (-not $cat -and (IsArm $n)) { $cat = 'arm' }
+            if (-not $cat -and ((IsArm $n) -or (IsHand $n))) { $cat = 'arm' }
             if (-not $cat) { continue }
             [void]$found.Add(@{ name = $n; category = $cat; neck = $neck })
         }
@@ -441,7 +451,8 @@ function Analyze($geoText) {
             [void]$heads.Add(@{ part = $part; path = $p })
         }
     }
-    $tail = if ($headless) { $null } else { FindTail $heads }
+    # En un cuerpo-cabeza (sin cabeza o todo cabeza) vale cualquier cola, también la de dentro de su "cabeza" (Clefairy)
+    $tail = if ($headless -or $whole) { FindTail @() } else { FindTail $heads }
     if ($tail) { $r.tail = (($tail.roots | ForEach-Object { $_.part }) -join ', ') + $(if ($tail.tip) { ' (punta)' } else { '' }) }
 
     if ($headless -or $heads.Count -eq 0) {

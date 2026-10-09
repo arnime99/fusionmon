@@ -110,6 +110,10 @@ public final class FusionGraft {
     private static final float SERPENT_TAIL_SHARE = 0.25F;
     private static final Set<String> LEGS = Set.of("leg", "legs", "foot", "feet");
 
+    /** Piezas cuyas "manos" son parte de ellas y no brazos (ver holdsHands): Aerodactyl, Lugia, Metagross. */
+    private static final Set<String> HAND_HOLDERS = Set.of("wing", "wings", "leg", "legs", "foot", "feet", "toe",
+            "toes", "fin", "fins", "flipper", "flippers", "claw", "claws");
+
     /** Clase de "adorno" de los brazos (ver findDecorations y graft). */
     private static final String ARM = "arm";
 
@@ -335,11 +339,12 @@ public final class FusionGraft {
      * @param whole si es un cuerpo-cabeza, un Pokémon cuyo cuerpo es su cabeza (sin cabeza, como Voltorb, o "todo
      *              cabeza", como Gengar): como CABEZA se pega entero; como CUERPO se queda entero, con su cara, y lleva
      *              los complementos de la otra especie
-     * @param limbs al pegar el modelo entero, extremidades que no se pintan: las de moverse que quedan fuera de su
-     *              "cabeza" (los tentáculos de Tentacool, la cola de Haunter) y los brazos (Gengar): el cuerpo ya pone
-     *              los suyos. Las manos sueltas de Haunter no son brazos y se quedan.
-     *              Hueso → su ruta tal como la da ModelPart.visit ("/tentacool/body/tentacle_left")
-     * @param tail  la cola del modelo (ver findTail), o null
+     * @param limbs al pegar el modelo entero, piezas que no se pintan (ver withoutParts): las extremidades para
+     *              moverse que quedan fuera de su "cabeza" (los tentáculos de Tentacool), los brazos y manos sueltas
+     *              (Gengar, Haunter: el cuerpo ya pone los suyos) y la cola (va aparte, con la norma de las colas).
+     *              Hueso → su ruta tal como la da ModelPart.visit ("/body/tentacle_left")
+     * @param tail  la cola del modelo (ver findTail), o null. En un cuerpo-cabeza, también la de dentro de su
+     *              "cabeza" (Clefairy)
      * @param trunk el tronco del modelo (ver findTrunk), o null
      * @param decorations los adornos que cuelgan del camino hasta la cabeza principal (ver findDecorations)
      * @param spineEnd el principio del cuello (ver findSpineEnd), o null
@@ -586,11 +591,12 @@ public final class FusionGraft {
                     (decoration.neck ? neckDecorations : trunkDecorations).add(decoration);
                 }
             }
-            // Si el cuerpo no tiene cola no hay una donde engancharla: se coloca sobre su tronco como un adorno
-            if (tails && heads.tail() != null && bodyHeads.tail() == null) {
-                for (HeadBone root : heads.tail().roots()) {
-                    trunkDecorations.add(new Decoration(TAIL, root, false));
-                }
+        }
+        // Si el cuerpo no tiene cola no hay una donde engancharla: se coloca sobre su tronco como un adorno. También
+        // la de un cuerpo-cabeza pegado entero, que no la lleva consigo (ver withoutParts)
+        if (tails && heads.tail() != null && bodyHeads.tail() == null) {
+            for (HeadBone root : heads.tail().roots()) {
+                trunkDecorations.add(new Decoration(TAIL, root, false));
             }
         }
         // Un cuerpo-cabeza sin brazos lleva los de la especie de la cabeza (Charizard + Voltorb, Gengar + Voltorb).
@@ -2127,7 +2133,7 @@ public final class FusionGraft {
             // Su "head" lo lleva todo, patas incluidas (Corsola, Sunkern, Inkay, Gulpin, Nihilego: solo esos 6 en
             // Cobblemon y AllTheMons). Como cuerpo, ocultarla dejaba solo la cabeza nueva: es un cuerpo sin cabeza,
             // como Voltorb (conserva sus ramas y lleva los complementos). Como cabeza, se pega entero
-            return headless(root, armsAsLimbs(root, Map.of()), null, arms);
+            return headless(root, Map.of(), arms);
         }
         if (primary == null) {
             primary = firstPath(root, "locator_head"::equals);
@@ -2137,18 +2143,17 @@ public final class FusionGraft {
                 primary = withSkull(withFace(root, primary));
                 // En los modelos sin hueso "head" ese padre casi siempre es casi todo el cuerpo ("torso", "body").
                 // Como cabeza: se pega el modelo entero (bien apoyado, ver groundOffset), sin sus extremidades
-                // para moverse (las manos de Haunter sí se quedan).
+                // para moverse, sus brazos (también manos sueltas, como las de Haunter) ni su cola (ver withoutParts).
                 // Como cuerpo se mira otra cosa: si al ocultarlo queda algo. El volumen no sirve para eso
                 // (los tentáculos de Tentacool son finos: poco volumen, pero son lo que se ve de su cuerpo)
                 ModelPart part = primary.get(primary.size() - 1);
                 whole = volume(part) >= WHOLE_MODEL_SHARE * volume(root);
                 if (cubes(part) == cubes(root)) {
-                    return headless(root, armsAsLimbs(root, Map.of()), null, arms);
+                    return headless(root, Map.of(), arms);
                 }
                 if (whole) {
                     limbs = new LinkedHashMap<>();
                     collectLimbs(root, part, "", limbs);
-                    limbs = armsAsLimbs(root, limbs);
                 }
             }
         }
@@ -2168,14 +2173,19 @@ public final class FusionGraft {
             }
             heads.add(new HeadBone(part, path));
         }
-        Tail tail = findTail(root, heads);
         if (heads.isEmpty()) {
-            return headless(root, armsAsLimbs(root, limbs), tail, arms);
+            return headless(root, limbs, arms);
         }
+        // En un cuerpo-cabeza la "cabeza" es su cuerpo: la cola de dentro también es cola (la de Clefairy cuelga de
+        // "torso", el padre de "locator_head"), no un mechón de pelo
+        Tail tail = findTail(root, whole ? List.of() : heads);
         List<ModelPart> headPath = heads.get(0).path;
         HeadBone trunk = findTrunk(headPath, heads, tail);
         if (tail == null && trunk != null) {
             tail = chainTail(root, trunk);
+        }
+        if (whole) {
+            limbs = withoutParts(limbs, arms, tail);
         }
         // Varias cabezas sin cuello, que cuelgan juntas del mismo hueso (Exeggutor: "head", "head2" y "head3" de
         // "upperHead"): son un racimo que va entero con la principal, no cabezas con cuello como las de Dodrio
@@ -2196,54 +2206,75 @@ public final class FusionGraft {
      * Un modelo sin cabeza (cuerpo-cabeza): como CABEZA se pega entero; como CUERPO se queda entero y lleva los
      * complementos de la otra especie (ver findTop, renderOnBody).
      */
-    private static ModelHeads headless(ModelPart root, Map<ModelPart, String> limbs, Tail tail, List<HeadBone> arms) {
-        return new ModelHeads(List.of(), true, limbs, tail, null, List.of(), null, List.of(), List.of(), findTop(root),
-                arms);
+    private static ModelHeads headless(ModelPart root, Map<ModelPart, String> limbs, List<HeadBone> arms) {
+        // Sin cabeza no hay pelo que confundir con una cola: vale cualquiera
+        Tail tail = findTail(root, List.of());
+        return new ModelHeads(List.of(), true, withoutParts(limbs, arms, tail), tail, null, List.of(), null, List.of(),
+                List.of(), findTop(root), arms);
+    }
+
+    /**
+     * Lo que no se pinta al pegar un cuerpo-cabeza entero como cabeza: sus extremidades, sus brazos (también los de
+     * dentro de la "cabeza": los de Gengar salen de su cuerpo-cabeza; y las manos sueltas de Haunter) y su cola. El
+     * cuerpo ya pone sus brazos; la cola va aparte, con la norma de las colas (cambia la del cuerpo o se añade en su
+     * tronco), y así no salen dos ni una cola pegada a la cabeza (Clefairy).
+     */
+    private static Map<ModelPart, String> withoutParts(Map<ModelPart, String> limbs, List<HeadBone> arms, Tail tail) {
+        Map<ModelPart, String> all = new LinkedHashMap<>(limbs);
+        for (HeadBone arm : arms) {
+            all.putIfAbsent(arm.part, visitPath(arm.path));
+        }
+        if (tail != null) {
+            for (HeadBone root : tail.roots()) {
+                all.putIfAbsent(root.part, visitPath(root.path));
+            }
+        }
+        return all;
+    }
+
+    /** Ruta de un hueso como la construye ModelPart.visit desde la raíz del camino ("/body/torso/tail"). */
+    private static String visitPath(List<ModelPart> path) {
+        StringBuilder result = new StringBuilder();
+        for (int i = 1; i < path.size(); i++) {
+            for (Map.Entry<String, Bone> entry : ((Bone) (Object) path.get(i - 1)).getChildren().entrySet()) {
+                if ((Object) entry.getValue() == path.get(i)) {
+                    result.append('/').append(entry.getKey());
+                    break;
+                }
+            }
+        }
+        return result.toString();
     }
 
     /**
      * Los brazos de un modelo: los huesos de brazo u hombro de más arriba (ver isArm), cada uno con lo que cuelga.
-     * Las manos sueltas no lo son (las de Haunter flotan aparte: "hands", "hand_right1").
+     * También las manos sueltas que cuelgan del cuerpo (ver isHand: las de Haunter flotan aparte, "hands" →
+     * "hand_right1"; Dusclops, Mimikyu, Whismur...), pero no las de dentro de un ala, pata, cola o aleta (las "manos"
+     * de las alas de Aerodactyl y Lugia, las patas de Metagross).
      */
     private static List<HeadBone> findArms(ModelPart root) {
-        List<List<ModelPart>> paths = new ArrayList<>();
+        List<HeadBone> arms = new ArrayList<>();
         List<ModelPart> current = new ArrayList<>();
         current.add(root);
-        collectPaths(root, FusionGraft::isArm, current, paths);
-        List<HeadBone> arms = new ArrayList<>();
-        Set<ModelPart> found = new HashSet<>();
-        for (List<ModelPart> path : paths) {
-            // Solo el de más arriba de cada grupo: "arms" y no también "arm_left", que va dentro
-            if (path.stream().limit(path.size() - 1L).noneMatch(found::contains)) {
-                found.add(path.getLast());
-                arms.add(new HeadBone(path.getLast(), new ArrayList<>(path)));
-            }
-        }
+        collectArms(root, current, false, arms);
         return arms;
     }
 
-    /**
-     * Las extremidades que no se pintan al pegar el modelo entero, más sus brazos (también los de dentro de la
-     * "cabeza": los de Gengar salen de su cuerpo-cabeza). Pegado en el sitio de una cabeza, el cuerpo ya pone los suyos.
-     */
-    private static Map<ModelPart, String> armsAsLimbs(ModelPart root, Map<ModelPart, String> limbs) {
-        Map<ModelPart, String> all = new LinkedHashMap<>(limbs);
-        collectArms(root, "", all);
-        return all;
-    }
-
-    /** Recorre el modelo apuntando cada brazo (ver isArm) con su ruta, sin bajar por dentro de él. */
-    private static void collectArms(ModelPart node, String path, Map<ModelPart, String> limbs) {
+    /** Recorre el modelo apuntando cada brazo con su camino, sin bajar por dentro de él (solo el de más arriba). */
+    private static void collectArms(ModelPart node, List<ModelPart> current, boolean inLimb, List<HeadBone> arms) {
         for (Map.Entry<String, Bone> child : ((Bone) (Object) node).getChildren().entrySet()) {
             if (!((Object) child.getValue() instanceof ModelPart part)) {
                 continue;
             }
-            String childPath = path + "/" + child.getKey();
-            if (isArm(child.getKey())) {
-                limbs.putIfAbsent(part, childPath);
+            current.add(part);
+            String name = child.getKey();
+            // "arms" y no también "arm_left", que va dentro
+            if (isArm(name) || !inLimb && isHand(name)) {
+                arms.add(new HeadBone(part, new ArrayList<>(current)));
             } else {
-                collectArms(part, childPath, limbs);
+                collectArms(part, current, inLimb || holdsHands(name), arms);
             }
+            current.remove(current.size() - 1);
         }
     }
 
@@ -2556,8 +2587,9 @@ public final class FusionGraft {
                     continue;
                 }
                 String category = category(child.getKey());
-                // Los brazos son anatomía, pero se apuntan: un cuerpo sin cabeza puede llevarlos (ver graft)
-                if (category == null && isArm(child.getKey())) {
+                // Los brazos (y las manos sueltas) son anatomía, pero se apuntan: un cuerpo sin cabeza puede llevarlos
+                // (ver graft)
+                if (category == null && (isArm(child.getKey()) || isHand(child.getKey()))) {
                     category = ARM;
                 }
                 if (category == null) {
@@ -2640,6 +2672,36 @@ public final class FusionGraft {
         for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
             String word = stripModifiers(withoutNumber(token));
             if (word.equals("arm") || word.equals("arms") || word.equals("shoulder")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * ¿Es una mano ("hands", "hand_right1", "left_hand", "lefthand")? Solo si "mano" es lo primero del nombre: en
+     * "tail_hand" (Aipom), "claw_hand" (Sinistea), "seamitar_hand" (Samurott) o "shuriken_hand" (Ash-Greninja) es la
+     * forma de otra pieza. Los localizadores ("locator_hand_primary") no lo son.
+     */
+    private static boolean isHand(String name) {
+        if (name.startsWith("%") || name.startsWith("internal_locator")) {
+            return false;
+        }
+        for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
+            String word = stripModifiers(withoutNumber(token));
+            if (word.isEmpty() || NAME_MODIFIERS.contains(word)) {
+                continue;
+            }
+            return word.equals("hand") || word.equals("hands");
+        }
+        return false;
+    }
+
+    /** ¿Es una pieza cuyas "manos" son suyas, no brazos (ala, pata, cola, aleta, tentáculo, pinza)? */
+    private static boolean holdsHands(String name) {
+        for (String token : name.toLowerCase(Locale.ROOT).split("_")) {
+            String word = stripModifiers(withoutNumber(token));
+            if (HAND_HOLDERS.contains(word) || word.startsWith("tail") || word.startsWith("tentacle")) {
                 return true;
             }
         }

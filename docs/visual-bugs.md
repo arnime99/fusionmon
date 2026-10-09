@@ -35,8 +35,10 @@ Feedback del usuario tras probarlo (pendiente de resolver en el nuevo chat):
 7. Machoke + Voltorb: bien. Pero en cuerpos-cabeza **con** brazos propios (Clefairy) no se aplica nada de la cabeza
    (sale Clefairy recoloreado). Idea del usuario: a los cuerpo-cabeza ponerles **brazos y patas de la especie de la
    cabeza** (cambiar los suyos, como la cola), porque el cuerpo se queda entero y así se nota la otra especie.
-   Excepción comentada: Geodude ya queda bien con la norma actual. Concretar con el usuario: ¿se cambian siempre los
-   brazos/patas del cuerpo-cabeza por los de la cabeza, o solo si la cabeza tiene y el cuerpo es "pequeño"?
+   **Decidido (2026-10-09): siempre.** Un cuerpo-cabeza como cuerpo recibe brazos, patas y todos los adornos de la
+   especie de la cabeza; si tiene los suyos, se cambian por los de la cabeza (como la cola). Geodude es la excepción
+   que gusta (hoy sale como bípedo: se cambia la cabeza y se quedan sus brazos, icónico); ojo al hacer el paso 2, que
+   lo metería en la familia.
 8. Tentacool, Venusaur + Lunatone, Pikachu + Voltorb...: bien.
 
 Pendiente del plan:
@@ -126,6 +128,26 @@ sin tronco (mirar aparte).
 ## Cambios sin commit (pendientes de probar)
 
 (ninguno)
+
+## Hecho y probado: puntos 5 + 6 de la familia cuerpo-cabeza (2026-10-09)
+
+**Punto de colas pendiente** (el usuario lo quiere tratar aparte): una cola pequeña que sustituye a una larga sale
+mal. Gengar + Pikachu: la colita de Gengar en el sitio del rayo de Pikachu se escala para igualar su largo
+(`renderTail`: `bodyLength / headLength` cuando no hay troncos que comparar) y sale como una losa morada enorme y
+torcida. Junto con "tipos de cola" (pequeña / larga / serpiente) y equilibrar tamaños (ver "Siguiente" más abajo).
+
+Lo que se hizo:
+- Manos sueltas = brazos (`isHand`: "mano" lo primero del nombre, `hands`, `hand_right`, `left_hand`; no dentro de
+  alas, patas, colas, aletas o pinzas, `holdsHands`; no `tail_hand`, `claw_hand`, `locator_hand_*`). Al pegar un
+  cuerpo-cabeza como cabeza no van (el cuerpo pone sus brazos); a un cuerpo-cabeza sin brazos se le ponen. Modelos
+  con manos sueltas: Haunter, Butterfree, Dusclops, Mimikyu, Jirachi, Kricketot, Fuecoco, Whismur, Vivillon...
+- Cola de un cuerpo-cabeza: también la de dentro de su "cabeza" (Clefairy, Gengar, Marill, Gible, Mankey, Poliwag,
+  Darumaka... 18 "todo cabeza"). Pegado como cabeza ya no la lleva consigo: va por la norma de colas (cambia la del
+  cuerpo o se añade a su tronco). Como cuerpo, la cola de la cabeza cambia la suya (antes se añadía otra en el tronco:
+  Pikachu + Gengar, punto 2, debería quedar en su sitio).
+- Probar: Haunter + Pikachu (sin manos, cola de Haunter en vez de la de Pikachu), Haunter + Voltorb (con manos),
+  Clefairy + Charizard (cola de Clefairy en vez de la de Charizard), Charizard + Clefairy (antes dos colas, ahora una),
+  Pikachu + Gengar (cola), Gengar + Pikachu, Clefairy + Voltorb, Butterfree + Voltorb (manos de Butterfree).
 
 ## Abiertos
 
