@@ -129,6 +129,25 @@ sin tronco (mirar aparte).
 
 (ninguno)
 
+## Hecho y probado: punto 7 (2026-10-09)
+
+**Pendiente:** el adorno del cuello de Eevee (su pelo, `neckDecorations`) sobre un cuerpo-cabeza grande sale a veces
+demasiado grande y muy abajo. En un cuerpo-cabeza los adornos del cuello van con los complementos (`renderOnBody`),
+escalados como el cráneo respecto al cuerpo entero (`ACCESSORY_SCALE * size(top) / size(head)`) y colocados en
+proporción cráneo → cuerpo: con un cuerpo enorme, el pelo crece con él y, como nace debajo del cráneo, acaba abajo.
+Idea: escalarlos y colocarlos como el tronco (cuello → parte de arriba del cuerpo), o limitar su escala.
+
+**Punto 7: cuerpo-cabeza como cuerpo lleva brazos y patas de la cabeza**:
+- Brazos (`heads.arms`): siempre que la especie de la cabeza tenga; los suyos se ocultan (`replacedLimbs`). Si la
+  cabeza no tiene, conserva los suyos.
+- Patas (`findLegs`, `LEG`): igual; se colocan como los brazos (sitio proporcional en `ballSpace`, giro de su
+  modelo, escala `trunkScale`). El modelo entero se sube o baja para apoyarse en ellas (`Graft.lift`,
+  `measureLift`: lo más bajo con patas nuevas respecto a lo más bajo del original; medido una vez, en el primer
+  fotograma; se aplica moviendo la raíz en `beforeRender` y se deshace en `afterRender`, `restoreLift`).
+- Probar: Charizard + Voltorb (ahora con patas), Eevee + Voltorb (4 patas), Pikachu + Clefairy, Pikachu + Gengar,
+  Gengar + Clefairy, Haunter + Gengar (manos de Haunter en vez de brazos; patas de Gengar), Butterfree + Voltorb
+  (solo manos).
+
 ## Hecho y probado: puntos 5 + 6 de la familia cuerpo-cabeza (2026-10-09)
 
 **Punto de colas pendiente** (el usuario lo quiere tratar aparte): una cola pequeña que sustituye a una larga sale
