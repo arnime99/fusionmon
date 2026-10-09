@@ -12,6 +12,42 @@
 
 Nada de código por especie: si hiciera falta un caso a mano, sería con datos (JSON de ajustes por especie).
 
+## Familia cuerpo-cabeza (2026-10-09): SIGUIENTE CHAT EMPIEZA AQUÍ
+
+Idea del usuario: no arreglar especie a especie, sino **normas por familia de estructura y por pieza** (brazos,
+piernas, cola, alas, orejas/cuernos/pelo, cara). Primer paso hecho y probado (ver CLAUDE.md, "Familia cuerpo-cabeza"):
+cuerpo-cabeza = sin cabeza + "todo cabeza". Como cabeza, se pega entero sin brazos; como cuerpo, se queda entero y
+lleva complementos, cola, alas y los brazos de la cabeza si no tiene; cuerpo-cabeza + cuerpo-cabeza = complementos y
+brazos, sin modelo hundido encima.
+
+Feedback del usuario tras probarlo (pendiente de resolver en el nuevo chat):
+1. Charizard + Voltorb: bien.
+2. Pikachu + Gengar: bien; la cola de Pikachu queda un poco alta (encima).
+3. Gengar + Pikachu: bien.
+4. Gengar + Voltorb: perfecto. Al revés (Voltorb + Gengar) solo cambian los colores (Voltorb no aporta piezas) y
+   **no aparece el blanco** de Voltorb: probablemente la regla de FusionPalette de no tocar casi blancos/negros.
+   Mirarlo.
+5. **Haunter (cabeza) + Pikachu: sus manos sueltas NO deben ir** sobre un cuerpo con brazos (Pikachu). Al revés que
+   lo que se hizo: las manos de Haunter cuentan como brazos. Fuera al pegarlo como cabeza en cuerpos con brazos; sí
+   se ponen en cuerpos-cabeza sin brazos. Hoy `isArm` no reconoce `hands`/`hand_*`, y se quedan siempre.
+6. Clefairy ↔ Charizard: bien, pero **Clefairy como cabeza lleva su cola** (su `tail` cuelga de `torso`, que es su
+   "cabeza": `collectLimbs` no mira dentro de la cabeza). Quitarla al pegarla entera, como los brazos.
+7. Machoke + Voltorb: bien. Pero en cuerpos-cabeza **con** brazos propios (Clefairy) no se aplica nada de la cabeza
+   (sale Clefairy recoloreado). Idea del usuario: a los cuerpo-cabeza ponerles **brazos y patas de la especie de la
+   cabeza** (cambiar los suyos, como la cola), porque el cuerpo se queda entero y así se nota la otra especie.
+   Excepción comentada: Geodude ya queda bien con la norma actual. Concretar con el usuario: ¿se cambian siempre los
+   brazos/patas del cuerpo-cabeza por los de la cabeza, o solo si la cabeza tiene y el cuerpo es "pequeño"?
+8. Tentacool, Venusaur + Lunatone, Pikachu + Voltorb...: bien.
+
+Pendiente del plan:
+- **Paso 2: detectar mejor la familia cuerpo-cabeza**: medir la cabeza sin contar brazos, piernas, cola, alas ni
+  orejas ("cabeza ≥ X % del resto"); hoy Geodude (`head` = la roca, brazos colgando de `torso`) y Jigglypuff salen
+  como bípedos. Simular sobre todos los modelos y enseñar al usuario qué modelos cambian de familia antes de aplicarlo.
+- **Tema colas** (apuntado, sin decidir): "tipos de cola" (pequeña como la de Gengar, larga, de serpiente...) y quién
+  la lleva. Por ahora como está: si los dos tienen cola, va la de la cabeza.
+- Después: tabla de normas por pieza para todas las familias (`docs/`), y fichas de corrección por modelo (Fase B:
+  solo correcciones, editor con lista de huesos en el inspector) para lo que las normas no cubran.
+
 ## Estado (2026-10-07)
 
 Hecho y probado: tabla automática (`docs/species/`), inspector, **A + B** (tronco al lado: `trunkBeside`),
