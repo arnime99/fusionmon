@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.network;
 
+import com.arnau.fusionmon.fusion.FusionDiscovery;
 import com.arnau.fusionmon.fusion.FusionSelection;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -14,6 +15,7 @@ public final class ModNetworking {
     public static void initialize() {
         PayloadTypeRegistry.playS2C().register(OpenFusionScreenPayload.TYPE, OpenFusionScreenPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(OpenUnfuseScreenPayload.TYPE, OpenUnfuseScreenPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(OpenFusionDexPayload.TYPE, OpenFusionDexPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(FusionChoicePayload.TYPE, FusionChoicePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(UnfuseChoicePayload.TYPE, UnfuseChoicePayload.CODEC);
 
@@ -25,5 +27,8 @@ public final class ModNetworking {
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 FusionSelection.forget(handler.getPlayer()));
+        // Las fusiones creadas antes de que existiera el registro cuentan como descubiertas (una vez por jugador)
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+                FusionDiscovery.registerExisting(handler.getPlayer()));
     }
 }

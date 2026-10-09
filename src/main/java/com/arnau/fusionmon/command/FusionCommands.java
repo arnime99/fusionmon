@@ -1,6 +1,7 @@
 package com.arnau.fusionmon.command;
 
 import com.arnau.fusionmon.fusion.FusionData;
+import com.arnau.fusionmon.fusion.FusionDiscovery;
 import com.arnau.fusionmon.fusion.FusionService;
 import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.CobblemonEntities;
@@ -79,6 +80,13 @@ public final class FusionCommands {
                                                         IntegerArgumentType.getInteger(context, COUNT)))))));
             }
             dispatcher.register(root);
+
+            // /fusiondex: el FusionDex del jugador (sus fusiones descubiertas), para todos; como Shift + clic con el
+            // cristal
+            dispatcher.register(Commands.literal("fusiondex").executes(context -> {
+                FusionDiscovery.open(context.getSource().getPlayerOrException());
+                return 1;
+            }));
         });
     }
 
