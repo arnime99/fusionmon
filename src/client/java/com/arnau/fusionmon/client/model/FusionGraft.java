@@ -92,6 +92,24 @@ public final class FusionGraft {
      * lo que mide su tronco. La de Groudon es tan larga como todo su cuerpo: en proporción salía gigante.
      */
     private static final float TAIL_GROWTH = 1.5F;
+    /**
+     * Mínimo de una cola que sustituye a otra: al menos TAIL_MIN de su largo, para que se note (la colita de Gengar en
+     * el sitio del rayo de Pikachu). Pero creciendo como mucho TAIL_BOOST veces lo que le toca en proporción: una cola
+     * corta y gruesa estirada hasta el largo de la otra era una losa.
+     */
+    private static final float TAIL_MIN = 0.5F;
+    private static final float TAIL_BOOST = 2F;
+    /**
+     * Brazos y patas en un cuerpo-cabeza (ver anchor), en proporción a su bloque principal: los hombros, en el centro
+     * de cada cara lateral subidos ARM_RAISE de su alto; las caderas, en la cara de abajo separadas LEG_SPREAD de su
+     * ancho (y de su fondo, con cuatro patas) del centro. Cada uno, como mucho ARM_SIZE/LEG_SIZE del lado mayor del
+     * bloque. Un hueso a menos de SIDE_EPSILON (bloques) del centro no tiene lado.
+     */
+    private static final float ARM_RAISE = 0.15F;
+    private static final float LEG_SPREAD = 0.3F;
+    private static final float ARM_SIZE = 0.8F;
+    private static final float LEG_SIZE = 0.7F;
+    private static final float SIDE_EPSILON = 1 / 32F;
     /** Una cola puesta en un cuerpo sin cola sale de la franja central espalda-barriga: sin este margen arriba/abajo. */
     private static final float TAIL_BAND = 0.25F;
     /** Cuánto puede ajustarse un adorno a la forma de cada eje del cuerpo, respecto a su escala normal. */
@@ -119,8 +137,6 @@ public final class FusionGraft {
 
     /** Clase de adorno de las colas puestas en un cuerpo sin cola. */
     private static final String TAIL = "tail";
-    /** Clase de "adorno" de las patas puestas en un cuerpo-cabeza (ver graft). */
-    private static final String LEG = "leg";
     /** Trozos de nombre que hacen adorno a un hueso aunque lleve anatomía en el nombre: la cría de Kangaskhan ("torso_kid"). */
     private static final Set<String> ALWAYS_DECORATION = Set.of("kid", "baby", "child");
     /**
@@ -295,6 +311,7 @@ public final class FusionGraft {
      *                    complementos (ver renderOnBody); si no, null
      * @param headTop     si la especie de la cabeza es un cuerpo-cabeza sin tronco: su pieza principal, que hace de
      *                    tronco para colocar sus brazos (ver ballSpace); si no, null
+     * @param attachedLimbs brazos y patas de la especie de la cabeza que se ponen en un cuerpo-cabeza (ver renderLimbs)
      * @param lift        si al cuerpo-cabeza se le ponen patas: cuánto hay que subir el modelo entero para que quede
      *                    apoyado en ellas, en bloques; NaN hasta medirlo (ver measureLift). Si no, null
      */
@@ -304,7 +321,16 @@ public final class FusionGraft {
                          List<Decoration> trunkDecorations, List<Decoration> neckDecorations, HeadBone headTrunk,
                          HeadBone bodyTrunk, HeadBone headSpine, HeadBone bodySpine, List<ModelPart> hidden,
                          List<HeadBone> chains, List<HeadBone> companions, HeadBone top, HeadBone headTop,
-                         float[] lift) {
+                         List<Limb> attachedLimbs, float[] lift) {
+    }
+
+    /**
+     * Un brazo o una pata de la especie de la cabeza que se pone en un cuerpo-cabeza (ver attachedLimbs).
+     *
+     * @param side  de qué lado está en su modelo: -1 o 1 (X), 0 en medio
+     * @param depth en patas de cuadrúpedo, delante o detrás (Z): -1 o 1; si no, 0
+     */
+    private record Limb(HeadBone bone, boolean leg, int side, int depth) {
     }
 
     /**
@@ -597,6 +623,11 @@ public final class FusionGraft {
                     if (decoration.neck && allHeads) {
                         continue;
                     }
+                    // En un cuerpo-cabeza no hay cuello ni cabeza pegada con la que llevarlos: no van (el pelo de
+                    // Eevee salía como un babero enorme)
+                    if (decoration.neck && top != null) {
+                        continue;
+                    }
                     (decoration.neck ? neckDecorations : trunkDecorations).add(decoration);
                 }
             }
@@ -612,20 +643,18 @@ public final class FusionGraft {
         // Voltorb), también si tiene los suyos: se cambian, como la cola. Como se queda entero, es lo que hace que se
         // note la otra especie (Pikachu + Clefairy era un Clefairy recoloreado). Si la cabeza no tiene, conserva los
         // suyos
+        // Van en puntos fijos de su bloque principal (ver renderLimbs): no hace falta tronco
         List<ModelPart> replacedLimbs = new ArrayList<>();
+        List<Limb> limbs = new ArrayList<>();
         if (decorations && top != null) {
             if (!heads.arms().isEmpty()) {
-                for (HeadBone arm : heads.arms()) {
-                    trunkDecorations.add(new Decoration(ARM, arm, false));
-                }
+                limbs.addAll(attachedLimbs(heads.arms(), false));
                 for (HeadBone arm : bodyHeads.arms()) {
                     replacedLimbs.add(arm.part);
                 }
             }
             if (!heads.legs().isEmpty()) {
-                for (HeadBone leg : heads.legs()) {
-                    trunkDecorations.add(new Decoration(LEG, leg, false));
-                }
+                limbs.addAll(attachedLimbs(heads.legs(), true));
                 for (HeadBone leg : bodyHeads.legs()) {
                     replacedLimbs.add(leg.part);
                 }
@@ -634,7 +663,6 @@ public final class FusionGraft {
         // Sin tronco en algún lado no hay dónde colocarlos
         if (!trunks) {
             trunkDecorations.clear();
-            replacedLimbs.clear();
         }
 
         List<ModelPart> hidden = new ArrayList<>(replacedLimbs);
@@ -666,9 +694,8 @@ public final class FusionGraft {
         return new Graft(body, headResolver, bodyResolver, headModel, bodyModel, head, whole, heads.limbs(), bodies,
                 swapTail ? heads.tail() : null, swapTail ? bodyHeads.tail() : null, trunkDecorations,
                 neckDecorations, heads.trunk(), bodyHeads.trunk(), heads.spineEnd(), bodyHeads.spineEnd(), hidden,
-                allHeads ? heads.chains() : List.of(), companions, top, headTop,
-                trunkDecorations.stream().anyMatch(decoration -> decoration.category.equals(LEG))
-                        ? new float[] {Float.NaN} : null);
+                allHeads ? heads.chains() : List.of(), companions, top, headTop, limbs,
+                limbs.stream().anyMatch(Limb::leg) ? new float[] {Float.NaN} : null);
     }
 
     /** El modelo entero como si fuera una cabeza (su raíz, con todos sus huesos). */
@@ -1191,6 +1218,9 @@ public final class FusionGraft {
         if (!graft.trunkDecorations.isEmpty()) {
             renderDecorations(graft, consumer, poseStack, light, overlay, color);
         }
+        if (!graft.attachedLimbs.isEmpty()) {
+            renderLimbs(graft, consumer, poseStack, light, overlay, color);
+        }
         if (!graft.chains.isEmpty()) {
             renderChains(graft, consumer, poseStack, light, overlay, color);
         }
@@ -1345,18 +1375,15 @@ public final class FusionGraft {
 
     /**
      * Cuerpo sin cabeza (Voltorb, Lunatone...) con una cabeza normal: el cuerpo hace también de cabeza, con su cara,
-     * y se le ponen los complementos de la cabeza (orejas, pelo, crin...) y los adornos de su cuello. Cada uno va al
+     * y se le ponen los complementos de la cabeza (orejas, pelo, crin...). Cada uno va al
      * mismo sitio proporcional: respecto al cráneo en su modelo y respecto al cuerpo entero aquí (las orejas de
-     * Pikachu, encima de la Voltorb). Se escalan como el cráneo respecto al cuerpo. Los adornos del tronco y la cola
-     * van aparte, como siempre (renderDecorations, con el cuerpo como tronco: ver ballSpace).
+     * Pikachu, encima de la Voltorb). Se escalan como el cráneo respecto al cuerpo. Los adornos del tronco, brazos,
+     * patas y la cola van aparte (renderDecorations, con el cuerpo como tronco: ver ballSpace); los del cuello no van.
      */
     private static void renderOnBody(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light,
                                      int overlay, int color) {
         HeadExtras extras = EXTRAS.computeIfAbsent(graft.head.part, part -> findExtras(graft.head));
-        List<HeadBone> pieces = new ArrayList<>(extras.accessories);
-        for (Decoration decoration : graft.neckDecorations) {
-            pieces.add(decoration.bone);
-        }
+        List<HeadBone> pieces = extras.accessories;
         float[] skull = boxInModel(extras.skull);
         float[] body = coreBox(graft.top.part);
         if (pieces.isEmpty() || skull[0] > skull[3] || body[0] > body[3]) {
@@ -1510,9 +1537,9 @@ public final class FusionGraft {
      */
     private static void renderDecorations(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light,
                                           int overlay, int color) {
-        TrunkSpace head = graft.headTop != null ? ballSpace(graft.headTop) : trunkSpace(graft.headTrunk, graft.headSpine);
-        TrunkSpace body = graft.top != null ? ballSpace(graft.top) : trunkSpace(graft.bodyTrunk, graft.bodySpine);
-        if (head.box[0] > head.box[3] || body.box[0] > body.box[3]) {
+        TrunkSpace head = headSpace(graft);
+        TrunkSpace body = bodySpace(graft);
+        if (head == null || body == null || head.box[0] > head.box[3] || body.box[0] > body.box[3]) {
             return;
         }
         float trunkScale = trunkScale(head, body);
@@ -1521,9 +1548,6 @@ public final class FusionGraft {
         Quaternionf frameChange = new Quaternionf().setFromNormalized(
                 new Matrix3f(body.frame).mul(new Matrix3f(head.frame).transpose()));
         Matrix3f toHeadFrame = new Matrix3f(head.frame).transpose();
-        // Patas puestas sin medir aún cuánto subir el modelo: se mide ahora, con el modelo sin subir (ver measureLift)
-        boolean measuring = graft.lift != null && Float.isNaN(graft.lift[0]);
-        float newLegsLowest = Float.NEGATIVE_INFINITY;
 
         for (Decoration decoration : graft.trunkDecorations) {
             ModelPart part = decoration.bone.part;
@@ -1547,13 +1571,6 @@ public final class FusionGraft {
                     remap(pivot.z, head.box, body.box, 2, dorsalMin, 1F - dorsalMin))).add(body.origin);
             Quaternionf own = matrix.getNormalizedRotation(new Quaternionf());
             Quaternionf rotation = new Quaternionf(frameChange).mul(own);
-            boolean arm = decoration.category.equals(ARM);
-            boolean leg = decoration.category.equals(LEG);
-            if (arm || leg) {
-                // Un brazo (o una pata) cuelga como en su modelo: con los ejes de un cuerpo sin cabeza (cuadrúpedo, ver
-                // ballSpace), el de un bípedo acababa apuntando hacia atrás
-                rotation = own;
-            }
             if (tail) {
                 // Una cola, a medio camino entre su giro respecto al Pokémon entero y el que le toca con los ejes del
                 // cuerpo: la de un cuadrúpedo en un bípedo acababa apuntando al suelo con los ejes, y la de un bípedo
@@ -1569,7 +1586,7 @@ public final class FusionGraft {
                 if (tailLength > 0) {
                     axes.set(Math.min(trunkScale, bodyTrunkLength / tailLength));
                 }
-            } else if (!arm && !leg) {
+            } else {
                 // Los adornos se ajustan algo a la forma de cada eje del cuerpo: el caparazón de Lapras se hundía en
                 // Dragonite, mucho más grueso de delante a atrás. Sin pasarse, o una pieza se deformaría
                 for (int axis = 0; axis < 3; axis++) {
@@ -1593,12 +1610,65 @@ public final class FusionGraft {
                 part.setPos(0, 0, 0);
                 part.setRotation(0, 0, 0);
                 part.render(poseStack, consumer, light, overlay, color);
-                if (measuring && leg) {
+            } finally {
+                part.loadPose(saved);
+                poseStack.popPose();
+            }
+        }
+    }
+
+    /**
+     * Pinta los brazos y patas de la especie de la cabeza en un cuerpo-cabeza, en puntos fijos de su bloque principal
+     * (ver coreBox y anchor): los brazos en el centro de cada cara lateral, algo por encima; las patas en la cara de
+     * abajo, separadas del centro. Cada uno cuelga como en su modelo (su giro, con el del cuerpo menos el de rodar).
+     * Colocados en proporción a su tronco no servía: los hombros y caderas de cada modelo están en sitios muy
+     * distintos (dentro del tronco, en un grupo "arms" en el centro...) y acababan dentro de la bola o encima.
+     */
+    private static void renderLimbs(Graft graft, VertexConsumer consumer, PoseStack poseStack, int light, int overlay,
+                                    int color) {
+        float[] block = coreBox(graft.top.part);
+        if (block[0] > block[3]) {
+            return;
+        }
+        Vector3f origin = matrixAlong(graft.top.path).getTranslation(new Vector3f());
+        Quaternionf turn = withoutRoll(rotationAlong(graft.top.path));
+        Matrix3f frame = new Matrix3f().rotation(turn);
+        float trunkScale = trunkScale(graft);
+        float longest = longestSide(block);
+        // Patas puestas sin medir aún cuánto subir el modelo: se mide ahora, con el modelo sin subir (ver measureLift)
+        boolean measuring = graft.lift != null && Float.isNaN(graft.lift[0]);
+        float newLegsLowest = Float.NEGATIVE_INFINITY;
+
+        for (Limb limb : graft.attachedLimbs) {
+            ModelPart part = limb.bone.part;
+            if (!part.visible) {
+                continue;
+            }
+            Vector3f placed = frame.transform(anchor(limb, block)).add(origin);
+            Quaternionf rotation = new Quaternionf(turn)
+                    .mul(matrixAlong(limb.bone.path).getNormalizedRotation(new Quaternionf()));
+            // En proporción a su cuerpo, pero de un tamaño razonable para el bloque: los de Groudon eran más grandes
+            // que Gengar
+            float length = length(part);
+            float cap = length > 0 ? (limb.leg ? LEG_SIZE : ARM_SIZE) * longest / length : Float.MAX_VALUE;
+            float scale = trunkScale > 0 ? Math.min(trunkScale, cap) : Math.min(1F, cap);
+
+            PartPose saved = part.storePose();
+            poseStack.pushPose();
+            try {
+                poseStack.translate(placed.x, placed.y, placed.z);
+                poseStack.mulPose(rotation);
+                poseStack.scale(scale, scale, scale);
+                // Su posición y giro ya van arriba
+                part.setPos(0, 0, 0);
+                part.setRotation(0, 0, 0);
+                part.render(poseStack, consumer, light, overlay, color);
+                if (measuring && limb.leg) {
                     // Lo mismo que se acaba de pintar, en el marco del modelo
                     PoseStack placement = new PoseStack();
                     placement.translate(placed.x, placed.y, placed.z);
-                    placement.mulPose(new Matrix4f(stretch));
                     placement.mulPose(rotation);
+                    placement.scale(scale, scale, scale);
                     newLegsLowest = Math.max(newLegsLowest, lowestPoint(part, placement, List.of()));
                 }
             } finally {
@@ -1609,6 +1679,90 @@ public final class FusionGraft {
         if (measuring && newLegsLowest > Float.NEGATIVE_INFINITY) {
             graft.lift[0] = measureLift(graft, newLegsLowest);
         }
+    }
+
+    /**
+     * Punto del bloque del cuerpo (en su propio marco; en los modelos la Y crece hacia abajo y delante es -Z) donde va
+     * el hombro o la cadera de un brazo o una pata.
+     */
+    private static Vector3f anchor(Limb limb, float[] block) {
+        float centerX = (block[0] + block[3]) / 2F;
+        float centerY = (block[1] + block[4]) / 2F;
+        float centerZ = (block[2] + block[5]) / 2F;
+        if (limb.leg) {
+            // En la cara de abajo, separadas del centro a los lados (y delante/detrás si son cuatro)
+            return new Vector3f(centerX + limb.side * LEG_SPREAD * (block[3] - block[0]), block[4],
+                    centerZ + limb.depth * LEG_SPREAD * (block[5] - block[2]));
+        }
+        // En el centro de su cara lateral, algo más arriba. Uno en medio (sin lado), en el centro de la cara de delante
+        float y = centerY - ARM_RAISE * (block[4] - block[1]);
+        if (limb.side == 0) {
+            return new Vector3f(centerX, y, block[2]);
+        }
+        return new Vector3f(limb.side < 0 ? block[0] : block[3], y, centerZ);
+    }
+
+    /**
+     * Brazos o patas de la especie de la cabeza que se ponen en un cuerpo-cabeza, cada uno por separado: un grupo
+     * ("arms" con "arm_left" y "arm_right") se parte en sus hijos. El lado de cada uno sale de dónde están sus cubos en
+     * su modelo (no del nombre): X para izquierda/derecha y, con tres patas o más, Z para delante/detrás.
+     */
+    private static List<Limb> attachedLimbs(List<HeadBone> found, boolean leg) {
+        List<HeadBone> parts = new ArrayList<>();
+        for (HeadBone bone : found) {
+            splitLimb(bone, leg, parts);
+        }
+        List<Vector3f> centers = new ArrayList<>();
+        float meanZ = 0;
+        for (HeadBone part : parts) {
+            Vector3f center = modelCenter(part);
+            centers.add(center);
+            meanZ += center.z / parts.size();
+        }
+        List<Limb> limbs = new ArrayList<>();
+        for (int i = 0; i < parts.size(); i++) {
+            Vector3f center = centers.get(i);
+            int side = Math.abs(center.x) < SIDE_EPSILON ? 0 : center.x < 0 ? -1 : 1;
+            int depth = 0;
+            if (leg && parts.size() >= 3 && Math.abs(center.z - meanZ) >= SIDE_EPSILON) {
+                depth = center.z < meanZ ? -1 : 1;
+            }
+            limbs.add(new Limb(parts.get(i), leg, side, depth));
+        }
+        return limbs;
+    }
+
+    /** Si un brazo o pata es un grupo con varios dentro ("legs" → "leg_left", "leg_right"), sus hijos; si no, él. */
+    private static void splitLimb(HeadBone bone, boolean leg, List<HeadBone> found) {
+        List<HeadBone> children = new ArrayList<>();
+        for (Map.Entry<String, Bone> child : ((Bone) (Object) bone.part).getChildren().entrySet()) {
+            String name = child.getKey();
+            if ((Object) child.getValue() instanceof ModelPart part && cubes(part) > 0
+                    && (leg ? isLegName(name) : isArm(name) || isHand(name))) {
+                List<ModelPart> path = new ArrayList<>(bone.path);
+                path.add(part);
+                children.add(new HeadBone(part, path));
+            }
+        }
+        if (children.size() < 2) {
+            found.add(bone);
+            return;
+        }
+        for (HeadBone child : children) {
+            splitLimb(child, leg, found);
+        }
+    }
+
+    /** Centro de los cubos de un hueso y sus hijos, en el modelo (con la postura de ahora). */
+    private static Vector3f modelCenter(HeadBone bone) {
+        float[] box = emptyBox();
+        PoseStack stack = new PoseStack();
+        stack.mulPose(matrixAlong(parentPath(bone)));
+        bone.part.visit(stack, (pose, path, index, cube) -> includeCube(box, pose, cube));
+        if (box[0] > box[3]) {
+            return new Vector3f();
+        }
+        return new Vector3f((box[0] + box[3]) / 2F, (box[1] + box[4]) / 2F, (box[2] + box[5]) / 2F);
     }
 
     /**
@@ -1794,10 +1948,31 @@ public final class FusionGraft {
 
     /** trunkScale de una fusión, o 0 si a algún modelo le falta tronco o cuello con los que medirlo. */
     private static float trunkScale(Graft graft) {
-        if (graft.headTrunk == null || graft.bodyTrunk == null || graft.headSpine == null || graft.bodySpine == null) {
-            return 0;
+        TrunkSpace head = headSpace(graft);
+        TrunkSpace body = bodySpace(graft);
+        return head == null || body == null ? 0 : trunkScale(head, body);
+    }
+
+    /**
+     * El tronco de la especie de la cabeza para colocar y escalar sus piezas: el suyo o, en un cuerpo-cabeza, su pieza
+     * principal (ver ballSpace); null si no tiene. Lo mismo para todas (cola, adornos, brazos, patas): con la cola
+     * medida de otra forma, la colita de Gengar en Pikachu se estiraba hasta el largo del rayo y salía una losa.
+     */
+    private static TrunkSpace headSpace(Graft graft) {
+        if (graft.headTop != null) {
+            return ballSpace(graft.headTop);
         }
-        return trunkScale(trunkSpace(graft.headTrunk, graft.headSpine), trunkSpace(graft.bodyTrunk, graft.bodySpine));
+        return graft.headTrunk == null || graft.headSpine == null ? null
+                : trunkSpace(graft.headTrunk, graft.headSpine);
+    }
+
+    /** Igual con el cuerpo (ver headSpace). */
+    private static TrunkSpace bodySpace(Graft graft) {
+        if (graft.top != null) {
+            return ballSpace(graft.top);
+        }
+        return graft.bodyTrunk == null || graft.bodySpine == null ? null
+                : trunkSpace(graft.bodyTrunk, graft.bodySpine);
     }
 
     private static float longestSide(float[] box) {
@@ -1826,14 +2001,16 @@ public final class FusionGraft {
         HeadBone bodyAnchor = graft.bodyTail.anchor();
         float headLength = length(headAnchor.part);
         float bodyLength = length(bodyAnchor.part);
+        // La escala que iguala los largos de las dos colas
+        float fit = headLength <= 0 || bodyLength <= 0 ? 0 : bodyLength / headLength;
         float scale = trunkScale(graft);
         if (scale <= 0) {
-            // Sin troncos con los que comparar (modelos "todo cabeza"): igualar el largo de las colas
-            scale = headLength <= 0 || bodyLength <= 0 ? 1F
-                    : Math.clamp(soften(bodyLength / headLength), MIN_SCALE, MAX_SCALE);
-        } else if (headLength > 0 && bodyLength > 0) {
-            // Tope: no mucho más larga que la que sustituye (la de Groudon salía gigante)
-            scale = Math.min(scale, TAIL_GROWTH * bodyLength / headLength);
+            // Sin troncos con los que comparar: igualar el largo de las colas
+            scale = fit <= 0 ? 1F : Math.clamp(soften(fit), MIN_SCALE, MAX_SCALE);
+        } else if (fit > 0) {
+            // En proporción a su cuerpo, pero ni mucho más larga que la que sustituye (la de Groudon salía gigante)
+            // ni tan corta que no se note (ver TAIL_MIN)
+            scale = Math.clamp(scale, Math.min(TAIL_MIN * fit, TAIL_BOOST * scale), TAIL_GROWTH * fit);
         }
         scale *= INFLATE;
         Quaternionf correction = rotationAlong(bodyAnchor.path).conjugate().mul(rotationAlong(headAnchor.path));

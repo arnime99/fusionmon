@@ -108,7 +108,9 @@ Patrones (por orden de cuántas especies arreglan):
 - **H. Cabeza con otro nombre** (8): Blacephalon (`head_ball`), Skeledirge (`head_top`), Wo-Chien (`top_head` es
   caparazón; la cabeza es otro bloque), Dondozo, Silvally, Dhelmise (`wheel`), Nihilego, Magnemite.
 - **Únicos, dejar o JSON**: Aegislash, Archaludon, Cofagrigus, Duraludon, Eternatus, Miraidon, Tatsugiri, Malamar,
-  Magnezone, Applin, Enamorus, Yveltal, Hoopa.
+  Magnezone, Applin, Enamorus, Yveltal, Hoopa. **Groudon** (2026-10-09): sale roto con las normas de brazos/patas de
+  cuerpo-cabeza; es el modelo de AllTheMons, con casi todos los cubos girados (huesos `%hueso%n`) y un grupo `hands`
+  que contiene los brazos. Sin investigar; puede que sea mejor arreglarlo con su ficha JSON.
 - **Avisos que sobran**: "cara fuera de la cabeza" casi siempre está bien (Jirachi, Mimikyu, Shiftry, Palpitoad,
   Slowbro, Ogerpon, Sinistcha, Tapu Fini, Cosmoem, Crabominable); "adorno mayor que el tronco" con alas (Altaria,
   Swablu, Swanna, Talonflame, Togekiss, Fearow) está bien.
@@ -128,6 +130,30 @@ sin tronco (mirar aparte).
 ## Cambios sin commit (pendientes de probar)
 
 (ninguno)
+
+## Hecho y probado: colas, pelo de Eevee, brazos y patas en cuerpo-cabeza (2026-10-09)
+
+El usuario: "ha mejorado muchísimo, ninguna pata dentro del modelo y la colocación perfecta". Solo Groudon sale roto
+(ver "Únicos" en la revisión 1).
+
+**Colas y pelo de Eevee**:
+- La losa de Gengar + Pikachu: Gengar no tiene tronco, así que la cola cambiada no tenía con qué escalarse e igualaba
+  largos (×3 la colita). Ahora cola, adornos, brazos y patas usan el mismo tronco (`headSpace`/`bodySpace`: el suyo o,
+  en un cuerpo-cabeza, su pieza principal, `ballSpace`).
+- Norma nueva de cola que sustituye a otra (`renderTail`): en proporción a su cuerpo, entre `TAIL_MIN` (0,5) y
+  `TAIL_GROWTH` (1,5) del largo de la sustituida, pero creciendo como mucho `TAIL_BOOST` (2×) lo proporcional.
+  Afecta a todas las fusiones con las dos colas: las colas pequeñas en cuerpos de cola larga crecen algo.
+- Adornos del cuello en un cuerpo-cabeza (pelo de Eevee): **no van** (decisión del usuario tras probarlo como adorno
+  del tronco: salía como un babero enorme).
+- Brazos y patas en un cuerpo-cabeza (Groudon + Gengar: brazos enormes encima de la bola; en proporción a su tronco
+  se metían dentro o se iban arriba): **puntos fijos en el bloque principal** (`coreBox`), idea del usuario
+  (`renderLimbs`, `anchor`). Cada uno por separado (`attachedLimbs`/`splitLimb`: un grupo `arms` se parte en sus
+  hijos), con su lado por dónde están sus cubos (`modelCenter`). Hombros: centro de cada cara lateral, subidos
+  `ARM_RAISE` (15 %) del alto. Caderas: cara de abajo, a `LEG_SPREAD` (30 %) del ancho del centro (y del fondo, con
+  4 patas). Cada uno cuelga con el giro de su modelo; tamaño en proporción a los troncos con tope `ARM_SIZE`/`LEG_SIZE`
+  del lado mayor del bloque.
+- Probar: Gengar + Pikachu (cola), Eevee + Voltorb / Eevee + Lunatone / Eevee + Gengar (pelo), Lapras + Charizard,
+  Pikachu + Charizard (colas pequeñas en cola larga), Charizard + Pikachu, Groudon + Pikachu (que no salga gigante).
 
 ## Hecho y probado: punto 7 (2026-10-09)
 
