@@ -118,8 +118,14 @@ public class FusionConfirmScreen extends FusionScreenBase {
         }).bounds(rightX, abilityY, OPTION_WIDTH, FusionScreenLayout.BUTTON).tooltip(Tooltip.create(data.abilityDescriptionB())).build());
 
         Component accept = Component.translatable(data.reverse() ? "gui.fusionmon.reverse.accept" : "gui.fusionmon.confirm.accept");
-        addRenderableWidget(Button.builder(accept, button -> answer(() ->
-                        ClientPlayNetworking.send(new FusionChoicePayload(true, swapped, natureFromB, abilityFromB))))
+        addRenderableWidget(Button.builder(accept, button -> {
+                    // Lo que se ve ahora (con el intercambio elegido) es lo que se anima
+                    FusionAnimationScreen animation = new FusionAnimationScreen(head(), body(), fusion());
+                    answer(() -> ClientPlayNetworking.send(
+                            new FusionChoicePayload(true, swapped, natureFromB, abilityFromB)));
+                    // answer ya ha cerrado esta pantalla (sin contar como cancelar): ahora la animación
+                    minecraft.setScreen(animation);
+                })
                 .bounds(leftX, acceptY, OPTION_WIDTH, FusionScreenLayout.BUTTON)
                 .build());
         addRenderableWidget(Button.builder(Component.translatable("gui.fusionmon.confirm.cancel"), button -> answer(this::sendCancel))

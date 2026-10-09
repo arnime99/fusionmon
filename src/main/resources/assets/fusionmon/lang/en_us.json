@@ -23,6 +23,8 @@
   "gui.fusionmon.confirm.ability": "Ability",
   "gui.fusionmon.confirm.accept": "Accept",
   "gui.fusionmon.confirm.cancel": "Cancel",
+  "gui.fusionmon.animation.fused": "%s and %s fused into %s!",
+  "gui.fusionmon.animation.continue": "Click to continue",
   "gui.fusionmon.confirm.graft_yes": "✔ Head on body",
   "gui.fusionmon.confirm.graft_no": "✘ Colours only (no head found)",
   "gui.fusionmon.nature.effect": "+%s   −%s",

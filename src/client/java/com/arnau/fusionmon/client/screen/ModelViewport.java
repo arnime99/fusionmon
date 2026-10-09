@@ -97,6 +97,31 @@ final class ModelViewport {
     }
 
     /**
+     * Pinta el modelo libre, sin marco ni recorte (para la animación de fusión): centrado en (centerX, centerY) y
+     * ocupando size píxeles, girado yaw grados sobre la vertical.
+     */
+    void renderAt(GuiGraphics graphics, RenderablePokemon model, FloatingState state, float centerX, float centerY,
+                  float size, float yaw, float partialTick) {
+        state.setCurrentAspects(model.getAspects());
+        measure(model, state, "");
+        Quaternionf rotation = QuaternionUtilsKt.fromEulerXYZDegrees(new Quaternionf(), new Vector3f(pitch, yaw, 0F));
+        float pixels = size / (2 * fitRadius);
+        Vector3f center = rotation.transform(new Vector3f(fitCenter));
+        PoseStack pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(centerX, centerY, 0);
+        float scale = pixels / PROFILE_SCALE;
+        pose.scale(scale, scale, scale);
+        pose.translate(-center.x * PROFILE_SCALE, -center.y * PROFILE_SCALE, -center.z * PROFILE_SCALE);
+        try {
+            PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, state, partialTick,
+                    PROFILE_SCALE, ProfileTransformType.NONE, false, 1F, 1F, 1F, 1F, 0F, 0F, MODEL_LIGHT);
+        } finally {
+            pose.popPose();
+        }
+    }
+
+    /**
      * Mide el modelo que se va a pintar (su caja con todos sus cubos, en bloques) cuando cambia el modelo o un modo.
      * Solo entonces: medido en cada fotograma, el encuadre bailaría con las animaciones.
      */
