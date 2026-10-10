@@ -14,5 +14,5 @@ public class ModItemIds {
         );
     }
 
-    public static final ResourceKey<Item> FUSION_CRYSTAL = create("fusion_crystal");
+    public static final ResourceKey<Item> FUSION_INJECTOR = create("fusion_injector");
 }

@@ -7,7 +7,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Base de las pantallas del cristal (fusionar, invertir, separar): arriba lo común, el título y la fila de tres visores
+ * Base de las pantallas del inyector (fusionar, invertir, separar): arriba lo común, el título y la fila de tres visores
  * (cabeza, fusión, cuerpo) con sus textos; abajo, lo de cada pantalla. Todo lo que se dibuje igual en todas (un fondo
  * o un marco con sprites propios, el día que los haya) va aquí, y vale para las tres.
  *

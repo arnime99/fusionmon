@@ -175,7 +175,7 @@ public final class FusionService {
     /**
      * Comprueba que se puede separar la fusión: que se pueden leer sus dos partes y que hay sitio para el cuerpo
      * (la cabeza ocupa el hueco de la fusión). No toca nada. Si algo lo impide, avisa al jugador y devuelve null.
-     * Hay que llamarlo ANTES de gastar el cristal: así un fallo nunca cuesta un cristal ni, sobre todo, un Pokémon.
+     * Hay que llamarlo ANTES de gastar el inyector: así un fallo nunca cuesta un inyector ni, sobre todo, un Pokémon.
      */
     public static Parts prepareUnfuse(ServerPlayer player, Pokemon fused) {
         Parts parts = readParts(player, fused);

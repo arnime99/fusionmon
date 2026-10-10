@@ -34,7 +34,7 @@ public class FusionmonClient implements ClientModInitializer {
 				(payload, context) -> context.client().setScreen(new FusionConfirmScreen(payload)));
 		ClientPlayNetworking.registerGlobalReceiver(OpenUnfuseScreenPayload.TYPE,
 				(payload, context) -> context.client().setScreen(new UnfuseConfirmScreen(payload)));
-		// El Fusion Album del jugador (Shift + clic con el cristal, o /fusionalbum)
+		// El Fusion Album del jugador (Shift + clic con el inyector, o /fusionalbum)
 		ClientPlayNetworking.registerGlobalReceiver(OpenFusionAlbumPayload.TYPE,
 				(payload, context) -> context.client().setScreen(new FusionAlbumScreen(payload.discovered())));
 

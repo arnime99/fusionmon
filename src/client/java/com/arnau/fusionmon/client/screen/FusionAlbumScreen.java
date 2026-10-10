@@ -32,7 +32,7 @@ import java.util.Set;
  * izquierda la lista con un buscador; a la derecha la elegida en 3D (se gira y se acerca como en la pantalla de
  * fusionar), con su nombre, tipos, de qué cabeza y cuerpo sale y sus stats base.
  *
- * La lista la manda el servidor al abrirla (Shift + clic con el cristal, o /fusionalbum); lo demás se calcula aquí, igual
+ * La lista la manda el servidor al abrirla (Shift + clic con el inyector, o /fusionalbum); lo demás se calcula aquí, igual
  * que el visor de desarrollo (FusionDexScreen): la fusión se pinta con los aspects de fusión y pasa por el mismo graft
  * que en el mundo.
  */

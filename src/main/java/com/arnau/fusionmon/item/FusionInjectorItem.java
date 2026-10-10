@@ -11,9 +11,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
-public class FusionCrystalItem extends Item {
+public class FusionInjectorItem extends Item {
 
-    public FusionCrystalItem(Properties properties) {
+    public FusionInjectorItem(Properties properties) {
         super(properties);
     }
 
@@ -22,7 +22,7 @@ public class FusionCrystalItem extends Item {
         ItemStack stack = player.getItemInHand(hand);
 
         // use() se ejecuta en el cliente y en el servidor; la lógica de Pokémon vive solo en el servidor.
-        // El cristal no se gasta aquí: el jugador aún puede cancelar en las pantallas
+        // El inyector no se gasta aquí: el jugador aún puede cancelar en las pantallas
         if (player instanceof ServerPlayer serverPlayer) {
             // Agachado: el Fusion Album (las fusiones descubiertas); si no, elegir Pokémon para fusionar o separar
             if (serverPlayer.isShiftKeyDown()) {
@@ -36,31 +36,31 @@ public class FusionCrystalItem extends Item {
     }
 
     /**
-     * Gasta un cristal del jugador; false si ya no tiene ninguno.
+     * Gasta un inyector del jugador; false si ya no tiene ninguno.
      * Se llama al confirmar la fusión/separación: mientras las pantallas estaban abiertas
      * pudo soltarlo o guardarlo, así que se busca primero en las manos y luego en todo el inventario.
      * En creativo no se resta (ItemStack.consume ya lo comprueba).
      */
     public static boolean consumeOne(ServerPlayer player) {
-        ItemStack crystal = findCrystal(player);
-        if (crystal == null) {
+        ItemStack injector = findInjector(player);
+        if (injector == null) {
             return false;
         }
-        crystal.consume(1, player);
+        injector.consume(1, player);
         return true;
     }
 
-    private static ItemStack findCrystal(Player player) {
+    private static ItemStack findInjector(Player player) {
         for (InteractionHand hand : InteractionHand.values()) {
             ItemStack stack = player.getItemInHand(hand);
-            if (stack.is(ModItems.FUSION_CRYSTAL)) {
+            if (stack.is(ModItems.FUSION_INJECTOR)) {
                 return stack;
             }
         }
         Inventory inventory = player.getInventory();
         for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
             ItemStack stack = inventory.getItem(slot);
-            if (stack.is(ModItems.FUSION_CRYSTAL)) {
+            if (stack.is(ModItems.FUSION_INJECTOR)) {
                 return stack;
             }
         }

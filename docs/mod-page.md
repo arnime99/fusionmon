@@ -27,25 +27,25 @@ Fuse any two Pokémon in Cobblemon into a brand-new one: combined looks, name, t
 
 ## ✨ Features
 
-- 🔮 **Fusion Crystal:** right-click it, pick two Pokémon from your party and see a 3D preview of the result before you confirm.
+- 🔮 **Fusion Injector:** right-click it, pick two Pokémon from your party and see a 3D preview of the result before you confirm.
 - 🎨 **A new look for every pair:** the head is attached to the body's model and recoloured with the body's palette. Tails, wings, manes and other details carry over too.
 - 📊 **Infinite Fusion formulas:** fused name, types and base stats are calculated from both parts. Level, IVs and EVs are averaged, and you choose which **nature** and **ability** to keep.
 - ⚔️ **Real battles:** fusions fight in Cobblemon battles with their fused types and stats.
 - 🌱 **Evolution:** a fusion can evolve through *either* part, and it learns level-up moves from both.
 - ✨ **Shiny:** if either part is shiny, the fusion is shiny.
 - 🐎 **Size and riding:** the fusion has the body's size, and you can ride it like the body.
-- ✂️ **Split it back:** use the crystal on a fusion to separate it. Both Pokémon keep all the experience earned as a fusion.
+- ✂️ **Split it back:** use the injector on a fusion to separate it. Both Pokémon keep all the experience earned as a fusion.
 - 🔍 **Fusion viewer (`/fusiondex`):** browse every possible fusion in 3D without catching anything. Pick or randomise the head and body, swap them, try shiny and gender.
 - 🧩 **Works with modded Pokémon:** species added by other mods and resource packs fuse too (tested with AllTheMons).
 - 🌐 **Multiplayer ready:** works on dedicated servers.
 
-[GIF: fusing two Pokémon with the crystal, preview screen]
+[GIF: fusing two Pokémon with the injector, preview screen]
 
-## 🔮 Fusion Crystal
+## 🔮 Fusion Injector
 
-Craft it with **redstone** (bottom-left), **lapis lazuli** (center) and a **copper, iron, gold or netherite ingot or a diamond** (top-right). Fusing or splitting consumes one crystal (not in creative).
+Craft it with **redstone** (bottom-left), **lapis lazuli** (center) and a **copper, iron, gold or netherite ingot or a diamond** (top-right). Fusing or splitting consumes one injector (not in creative).
 
-Pack makers can change the accepted materials with the item tag `fusionmon:fusion_crystal_materials`.
+Pack makers can change the accepted materials with the item tag `fusionmon:fusion_injector_materials`.
 
 [IMAGE: crafting recipe]
 
@@ -61,7 +61,7 @@ Install it on **both the client and the server**.
 
 **Can I fuse a fusion?** No, fusions of fusions are not allowed.
 
-**Can I undo a fusion?** Yes. Use the Fusion Crystal on the fusion and choose to split it.
+**Can I undo a fusion?** Yes. Use the Fusion Injector on the fusion and choose to split it.
 
 **Does every Pokémon have a fusion model?** Every species with a 3D model in Cobblemon (or in your resource packs) does. Species without a model show up with the body's colours instead.
 

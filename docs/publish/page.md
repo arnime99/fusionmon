@@ -24,7 +24,7 @@ Entorno: cliente y servidor (los dos).]
 <!-- [GIF de la animación de fusión aquí: es lo primero que tiene que ver la gente] -->
 
 **Fusionmon** brings Pokémon fusions to **Cobblemon**, inspired by *Pokémon Infinite Fusion*. Pick any two of your
-Pokémon, use a **Fusion Crystal**, and watch them become something new.
+Pokémon, use a **Fusion Injector**, and watch them become something new.
 
 There is no list of hand-made fusions: every pair is built on the fly, so **any two species can be fused**. With
 Cobblemon's models that is close to **800,000 combinations**, and over **a million** with model packs like AllTheMons.
@@ -40,23 +40,23 @@ Cobblemon's models that is close to **800,000 combinations**, and over **a milli
   averaged, and you choose which nature and ability to keep.
 - **Discover them as you play.** A fusion you have never made appears as a **silhouette** with hidden stats. Confirm it
   and a **fusion animation** reveals it.
-- **Fusion Album.** Every fusion you create is recorded. Sneak + right-click with the Fusion Crystal (or `/fusionalbum`) to
+- **Fusion Album.** Every fusion you create is recorded. Sneak + right-click with the Fusion Injector (or `/fusionalbum`) to
   browse your discoveries in 3D.
 - **Battle with them.** Fusions fight in Cobblemon battles with their fused types and stats.
 - **Ride them.** A fusion has the size and the ride of its body.
 - **Evolve them.** Both parts can evolve, by level, items or trade (the Link Cable works on fusions). Fusions learn
   level-up moves from both parts.
-- **Split or swap anytime.** The same crystal splits a fusion back into its two Pokémon (both keep all the experience
+- **Split or swap anytime.** The same injector splits a fusion back into its two Pokémon (both keep all the experience
   earned as a fusion) or swaps head and body in one step.
 - **Multiplayer ready.** Works on servers; each player has their own discoveries.
 
 ### How to use it
 
-1. Craft a **Fusion Crystal**: redstone in the bottom-left corner, lapis lazuli in the center and a copper, iron, gold
+1. Craft a **Fusion Injector**: redstone in the bottom-left corner, lapis lazuli in the center and a copper, iron, gold
    or netherite ingot or a diamond in the top-right corner.
-2. Right-click with the crystal and pick two Pokémon from your party.
-3. Choose head and body, nature and ability, and confirm. Each fusion, split or swap uses one crystal.
-4. Right-click again with the crystal and pick a fusion to split or swap it.
+2. Right-click with the injector and pick two Pokémon from your party.
+3. Choose head and body, nature and ability, and confirm. Each fusion, split or swap uses one injector.
+4. Right-click again with the injector and pick a fusion to split or swap it.
 5. Sneak + right-click (or `/fusionalbum`) to open your Fusion Album.
 
 If a fusion looks odd or your game runs slow with many fusions around, `/fusionvisual colors` switches to a simpler

@@ -82,7 +82,7 @@ public final class FusionCommands {
             dispatcher.register(root);
 
             // /fusionalbum: el Fusion Album del jugador (sus fusiones descubiertas), para todos; como Shift + clic con el
-            // cristal
+            // inyector
             dispatcher.register(Commands.literal("fusionalbum").executes(context -> {
                 FusionDiscovery.open(context.getSource().getPlayerOrException());
                 return 1;

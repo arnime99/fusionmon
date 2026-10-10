@@ -26,9 +26,9 @@ public class ModItems {
         return item;
     }
 
-    public static final Item FUSION_CRYSTAL = register(
-            ModItemIds.FUSION_CRYSTAL,
-            FusionCrystalItem::new,
+    public static final Item FUSION_INJECTOR = register(
+            ModItemIds.FUSION_INJECTOR,
+            FusionInjectorItem::new,
             new Item.Properties()
     );
 
@@ -36,7 +36,7 @@ public class ModItems {
 
         ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.INGREDIENTS)
                 .register(entries -> {
-                    entries.accept(FUSION_CRYSTAL);
+                    entries.accept(FUSION_INJECTOR);
                 });
     }
 }

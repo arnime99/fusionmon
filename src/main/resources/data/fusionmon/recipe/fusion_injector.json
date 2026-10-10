@@ -14,11 +14,11 @@
       "item": "minecraft:lapis_lazuli"
     },
     "M": {
-      "tag": "fusionmon:fusion_crystal_materials"
+      "tag": "fusionmon:fusion_injector_materials"
     }
   },
   "result": {
-    "id": "fusionmon:fusion_crystal",
+    "id": "fusionmon:fusion_injector",
     "count": 1
   }
 }

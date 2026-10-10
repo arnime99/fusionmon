@@ -1,6 +1,6 @@
 package com.arnau.fusionmon.fusion;
 
-import com.arnau.fusionmon.item.FusionCrystalItem;
+import com.arnau.fusionmon.item.FusionInjectorItem;
 import com.arnau.fusionmon.network.FusionChoicePayload;
 import com.arnau.fusionmon.network.FusionPartView;
 import com.arnau.fusionmon.network.FusionPreview;
@@ -32,7 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Flujo del Cristal de Fusión (solo servidor):
+ * Flujo del Inyector de Fusión (solo servidor):
  * 1. selector de equipo de Cobblemon → un Pokémon normal o una fusión
  * 2a. fusión → pantalla "¿Separar?" → se separa (FusionService.unfuse)
  * 2b. normal → segundo selector → pantalla de confirmación (orden, naturaleza, habilidad) → se fusiona
@@ -181,9 +181,9 @@ public final class FusionSelection {
             return;
         }
 
-        // El cristal se gasta al confirmar, no al abrir el selector (se puede cancelar)
-        if (!FusionCrystalItem.consumeOne(player)) {
-            player.sendSystemMessage(Component.translatable("message.fusionmon.no_crystal"));
+        // El inyector se gasta al confirmar, no al abrir el selector (se puede cancelar)
+        if (!FusionInjectorItem.consumeOne(player)) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.no_injector"));
             return;
         }
 
@@ -236,20 +236,20 @@ public final class FusionSelection {
             return;
         }
 
-        // Invertir no gasta nada todavía: abre la pantalla de fusión, y el cristal se gasta al aceptarla
+        // Invertir no gasta nada todavía: abre la pantalla de fusión, y el inyector se gasta al aceptarla
         if (choice.action() == UnfuseChoicePayload.Action.REVERSE) {
             openReverseConfirmation(player, fused);
             return;
         }
 
-        // Otra vez: mientras la pantalla estaba abierta el PC podría haberse llenado. Antes de gastar el cristal
+        // Otra vez: mientras la pantalla estaba abierta el PC podría haberse llenado. Antes de gastar el inyector
         FusionService.Parts parts = FusionService.prepareUnfuse(player, fused);
         if (parts == null) {
             return;
         }
 
-        if (!FusionCrystalItem.consumeOne(player)) {
-            player.sendSystemMessage(Component.translatable("message.fusionmon.no_crystal"));
+        if (!FusionInjectorItem.consumeOne(player)) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.no_injector"));
             return;
         }
 
@@ -275,14 +275,14 @@ public final class FusionSelection {
             return;
         }
 
-        // Copias nuevas de las partes (las de la vista previa no se reutilizan), antes de gastar el cristal
+        // Copias nuevas de las partes (las de la vista previa no se reutilizan), antes de gastar el inyector
         FusionService.Parts parts = FusionService.readParts(player, fused);
         if (parts == null) {
             return;
         }
 
-        if (!FusionCrystalItem.consumeOne(player)) {
-            player.sendSystemMessage(Component.translatable("message.fusionmon.no_crystal"));
+        if (!FusionInjectorItem.consumeOne(player)) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.no_injector"));
             return;
         }
 

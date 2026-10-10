@@ -24,7 +24,7 @@
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
-        "recipe": "fusionmon:fusion_crystal"
+        "recipe": "fusionmon:fusion_injector"
       }
     }
   },
@@ -37,7 +37,7 @@
   ],
   "rewards": {
     "recipes": [
-      "fusionmon:fusion_crystal"
+      "fusionmon:fusion_injector"
     ]
   }
 }
