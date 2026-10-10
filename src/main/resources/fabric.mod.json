@@ -3,7 +3,7 @@
 	"id": "fusionmon",
 	"version": "${version}",
 	"name": "Fusionmon",
-	"description": "Fuse your Cobblemon Pokémon, Infinite Fusion style: combined names, types and stats, battles, evolution and splitting back apart with the Fusion Crystal.",
+	"description": "Fuse any two Cobblemon, Pokémon Infinite Fusion style: every pair gets its own model, name, types and stats. Discover fusions as you play, battle with them, ride them and evolve them.",
 	"authors": [
 		"Rupikola"
 	],
@@ -31,10 +31,10 @@
 		}
 	],
 	"depends": {
-		"fabricloader": ">=0.19.5",
+		"fabricloader": ">=0.17.2",
 		"minecraft": "~1.21.1",
 		"java": ">=21",
-		"fabric-api": "*",
+		"fabric-api": ">=0.116.6",
 		"cobblemon": "~1.8.1"
 	}
 }
