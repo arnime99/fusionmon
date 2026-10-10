@@ -44,15 +44,13 @@ public final class FusionBodyForm {
     }
 
     /**
-     * Montura de la fusión: la del cuerpo (es su modelo, y sus asientos están pensados para él). Si el cuerpo no se
-     * puede montar, la de la cabeza.
+     * Montura de la fusión: SOLO la del cuerpo (es su modelo, y sus asientos y su forma de moverse están pensados para
+     * él). Si el cuerpo no se puede montar, la fusión tampoco. Antes, entonces, se usaba la de la cabeza: Charizard +
+     * Pikachu volaba como Charizard con el modelo de Pikachu, el modelo iba por un lado y el jinete por otro, y no se
+     * podía bajar hasta tocar el suelo (decisión del usuario, 2026-10-10).
      */
     public static RidingProperties riding(FormData body, RidingProperties head) {
-        if (body == null) {
-            return head;
-        }
-        RidingProperties riding = body.getRiding();
-        return riding.getSeats().isEmpty() ? head : riding;
+        return body == null ? head : body.getRiding();
     }
 
     private static FormData fromAspects(Set<String> aspects) {

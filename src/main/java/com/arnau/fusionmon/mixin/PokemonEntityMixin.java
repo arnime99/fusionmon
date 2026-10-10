@@ -10,6 +10,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.world.entity.EntityDimensions;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -49,15 +50,36 @@ public abstract class PokemonEntityMixin {
         return body == null ? hitbox : body.getHitbox();
     }
 
+    /** El cuerpo con el que se preparó la montura (ver fusionmon$refreshBody); null si no es una fusión. */
+    @Unique
+    private FormData fusionmon$ridingBody;
+
     /**
      * Minecraft guarda la caja y solo la recalcula cuando se le pide. En el cliente los aspects (de donde sale el
      * cuerpo) llegan después de crear la entidad, y en el servidor cambian al fusionar o separar con el Pokémon
      * fuera: al cambiar, la recalculamos.
+     *
+     * Con la montura pasa lo mismo: Cobblemon prepara su controlador (estilo, velocidades) una sola vez, al crear la
+     * entidad (refreshRiding). En el cliente aún no se sabía que era una fusión y salía la montura de la CABEZA: si
+     * la cabeza no se podía montar no había montura, y si se podía, el cliente la movía con la de la cabeza y el
+     * servidor con la del cuerpo (velocidades distintas: el modelo se iba sin el jinete). Cuando cambia el cuerpo, se
+     * vuelve a preparar. Solo entonces: refreshRiding baja a los jinetes.
      */
     @Inject(method = {"onSyncedDataUpdated", "method_5674"}, at = @At("TAIL"))
-    private void fusionmon$refreshBodyDimensions(EntityDataAccessor<?> data, CallbackInfo ci) {
-        if (PokemonEntity.Companion.getASPECTS().equals(data)) {
-            ((PokemonEntity) (Object) this).refreshDimensions();
+    private void fusionmon$refreshBody(EntityDataAccessor<?> data, CallbackInfo ci) {
+        if (!PokemonEntity.Companion.getASPECTS().equals(data)) {
+            return;
+        }
+        PokemonEntity self = (PokemonEntity) (Object) this;
+        self.refreshDimensions();
+        // Mientras se construye la entidad aún no tiene Pokémon (y refreshRiding lo necesita)
+        if (self.getPokemon() == null) {
+            return;
+        }
+        FormData body = FusionBodyForm.of(self);
+        if (body != fusionmon$ridingBody) {
+            fusionmon$ridingBody = body;
+            self.refreshRiding();
         }
     }
 }

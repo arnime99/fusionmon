@@ -43,7 +43,7 @@ Cobblemon's models that is close to **800,000 combinations**, and over **a milli
 - **Fusion Album.** Every fusion you create is recorded. Sneak + right-click with the Fusion Injector (or `/fusionalbum`) to
   browse your discoveries in 3D.
 - **Battle with them.** Fusions fight in Cobblemon battles with their fused types and stats.
-- **Ride them.** A fusion has the size and the ride of its body.
+- **Ride them.** A fusion has the size of its body, and you can ride it if its body can be ridden.
 - **Evolve them.** Both parts can evolve, by level, items or trade (the Link Cable works on fusions). Fusions learn
   level-up moves from both parts.
 - **Split or swap anytime.** The same injector splits a fusion back into its two Pokémon (both keep all the experience
