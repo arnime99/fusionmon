@@ -40,7 +40,7 @@ Cobblemon's models that is close to **800,000 combinations**, and over **a milli
   averaged, and you choose which nature and ability to keep.
 - **Discover them as you play.** A fusion you have never made appears as a **silhouette** with hidden stats. Confirm it
   and a **fusion animation** reveals it.
-- **FusionDex.** Every fusion you create is recorded. Sneak + right-click with the Fusion Crystal (or `/fusiondex`) to
+- **Fusion Album.** Every fusion you create is recorded. Sneak + right-click with the Fusion Crystal (or `/fusionalbum`) to
   browse your discoveries in 3D.
 - **Battle with them.** Fusions fight in Cobblemon battles with their fused types and stats.
 - **Ride them.** A fusion has the size and the ride of its body.
@@ -57,12 +57,12 @@ Cobblemon's models that is close to **800,000 combinations**, and over **a milli
 2. Right-click with the crystal and pick two Pokémon from your party.
 3. Choose head and body, nature and ability, and confirm. Each fusion, split or swap uses one crystal.
 4. Right-click again with the crystal and pick a fusion to split or swap it.
-5. Sneak + right-click (or `/fusiondex`) to open your FusionDex.
+5. Sneak + right-click (or `/fusionalbum`) to open your Fusion Album.
 
 If a fusion looks odd or your game runs slow with many fusions around, `/fusionvisual colors` switches to a simpler
 look (the head recolored with the body's palette) and `/fusionvisual graft` switches back.
 
-<!-- [Capturas aquí: pantalla de fusionar con silueta, un grupo de fusiones, combate, montando una, FusionDex] -->
+<!-- [Capturas aquí: pantalla de fusionar con silueta, un grupo de fusiones, combate, montando una, Fusion Album] -->
 
 ### Requirements
 

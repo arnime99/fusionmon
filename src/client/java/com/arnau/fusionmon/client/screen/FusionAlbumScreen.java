@@ -28,15 +28,15 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * FusionDex: las fusiones que ha descubierto el jugador (FusionDiscovery), de la más reciente a la más antigua. A la
+ * Fusion Album: las fusiones que ha descubierto el jugador (FusionDiscovery), de la más reciente a la más antigua. A la
  * izquierda la lista con un buscador; a la derecha la elegida en 3D (se gira y se acerca como en la pantalla de
  * fusionar), con su nombre, tipos, de qué cabeza y cuerpo sale y sus stats base.
  *
- * La lista la manda el servidor al abrirla (Shift + clic con el cristal, o /fusiondex); lo demás se calcula aquí, igual
+ * La lista la manda el servidor al abrirla (Shift + clic con el cristal, o /fusionalbum); lo demás se calcula aquí, igual
  * que el visor de desarrollo (FusionDexScreen): la fusión se pinta con los aspects de fusión y pasa por el mismo graft
  * que en el mundo.
  */
-public class DiscoveredDexScreen extends Screen {
+public class FusionAlbumScreen extends Screen {
 
     private static final int MARGIN = 8;
     private static final int GAP = 6;
@@ -78,8 +78,8 @@ public class DiscoveredDexScreen extends Screen {
     private int detailCenter;
     private int detailWidth;
 
-    public DiscoveredDexScreen(List<String> discovered) {
-        super(Component.translatable("gui.fusionmon.fusiondex.title"));
+    public FusionAlbumScreen(List<String> discovered) {
+        super(Component.translatable("gui.fusionmon.album.title"));
         for (String key : discovered) {
             Entry entry = entry(key);
             // Una especie que ya no existe (un mod que se ha quitado) no se puede enseñar
@@ -96,8 +96,8 @@ public class DiscoveredDexScreen extends Screen {
         listX = MARGIN;
         listWidth = Mth.clamp(width / 3, 110, 180);
         searchBox = addRenderableWidget(new EditBox(font, listX, TOP, listWidth, SEARCH_HEIGHT,
-                Component.translatable("gui.fusionmon.fusiondex.search")));
-        searchBox.setHint(Component.translatable("gui.fusionmon.fusiondex.search"));
+                Component.translatable("gui.fusionmon.album.search")));
+        searchBox.setHint(Component.translatable("gui.fusionmon.album.search"));
         searchBox.setResponder(this::filter);
         listTop = TOP + SEARCH_HEIGHT + 4;
         listRows = Math.max(1, (height - MARGIN - listTop) / ROW);
@@ -116,11 +116,11 @@ public class DiscoveredDexScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
         graphics.drawString(font, title, MARGIN, 8, FusionScreenLayout.YELLOW);
-        Component count = Component.translatable("gui.fusionmon.fusiondex.count", all.size());
+        Component count = Component.translatable("gui.fusionmon.album.count", all.size());
         graphics.drawString(font, count, width - MARGIN - font.width(count), 8, FusionScreenLayout.GRAY);
 
         if (all.isEmpty()) {
-            graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.fusiondex.empty"), width / 2,
+            graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.album.empty"), width / 2,
                     height / 2, FusionScreenLayout.GRAY);
             return;
         }
@@ -166,7 +166,7 @@ public class DiscoveredDexScreen extends Screen {
         graphics.drawCenteredString(font, FusionScreenLayout.fit(font, name, detailWidth), detailCenter, y,
                 FusionScreenLayout.WHITE);
         y += FusionScreenLayout.LINE;
-        Component parts = Component.translatable("gui.fusionmon.fusiondex.parts",
+        Component parts = Component.translatable("gui.fusionmon.album.parts",
                 selected.head.getSpecies().getTranslatedName(), selected.body.getSpecies().getTranslatedName());
         graphics.drawCenteredString(font, parts, detailCenter, y, FusionScreenLayout.GRAY);
         y += FusionScreenLayout.LINE + 4;

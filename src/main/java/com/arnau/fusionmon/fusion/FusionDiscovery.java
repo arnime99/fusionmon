@@ -1,7 +1,7 @@
 package com.arnau.fusionmon.fusion;
 
 import com.arnau.fusionmon.Fusionmon;
-import com.arnau.fusionmon.network.OpenFusionDexPayload;
+import com.arnau.fusionmon.network.OpenFusionAlbumPayload;
 import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
@@ -76,7 +76,7 @@ public final class FusionDiscovery {
 
     /**
      * Una vez por jugador: las fusiones que ya tiene en el equipo o el PC cuentan como descubiertas (se crearon antes
-     * de que existiera el registro y, si no, no saldrían en su FusionDex).
+     * de que existiera el registro y, si no, no saldrían en su Fusion Album).
      */
     public static void registerExisting(ServerPlayer player) {
         if (player.getAttachedOrCreate(EXISTING_REGISTERED)) {
@@ -91,7 +91,7 @@ public final class FusionDiscovery {
                 registerFusion(player, pokemon);
             }
         } catch (RuntimeException e) {
-            // No es grave: solo faltarían en su FusionDex. Que nunca impida entrar al mundo
+            // No es grave: solo faltarían en su Fusion Album. Que nunca impida entrar al mundo
             Fusionmon.LOGGER.warn("No se han podido apuntar las fusiones de {}", player.getName().getString(), e);
         }
     }
@@ -104,10 +104,10 @@ public final class FusionDiscovery {
         }
     }
 
-    /** Abre el FusionDex del jugador: sus fusiones descubiertas, de la más reciente a la más antigua. */
+    /** Abre el Fusion Album del jugador: sus fusiones descubiertas, de la más reciente a la más antigua. */
     public static void open(ServerPlayer player) {
         List<String> discovered = new ArrayList<>(player.getAttachedOrCreate(DISCOVERED));
         Collections.reverse(discovered);
-        ServerPlayNetworking.send(player, new OpenFusionDexPayload(discovered));
+        ServerPlayNetworking.send(player, new OpenFusionAlbumPayload(discovered));
     }
 }

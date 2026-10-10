@@ -2,13 +2,13 @@ package com.arnau.fusionmon.client;
 
 import com.arnau.fusionmon.Fusionmon;
 import com.arnau.fusionmon.client.model.FusionGraft;
-import com.arnau.fusionmon.client.screen.DiscoveredDexScreen;
+import com.arnau.fusionmon.client.screen.FusionAlbumScreen;
 import com.arnau.fusionmon.client.screen.FusionConfirmScreen;
 import com.arnau.fusionmon.client.screen.FusionDexScreen;
 import com.arnau.fusionmon.client.screen.SpeciesInspectorScreen;
 import com.arnau.fusionmon.client.screen.UnfuseConfirmScreen;
 import com.arnau.fusionmon.client.texture.FusionTextures;
-import com.arnau.fusionmon.network.OpenFusionDexPayload;
+import com.arnau.fusionmon.network.OpenFusionAlbumPayload;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
 import com.arnau.fusionmon.network.OpenUnfuseScreenPayload;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -34,11 +34,11 @@ public class FusionmonClient implements ClientModInitializer {
 				(payload, context) -> context.client().setScreen(new FusionConfirmScreen(payload)));
 		ClientPlayNetworking.registerGlobalReceiver(OpenUnfuseScreenPayload.TYPE,
 				(payload, context) -> context.client().setScreen(new UnfuseConfirmScreen(payload)));
-		// El FusionDex del jugador (Shift + clic con el cristal, o /fusiondex)
-		ClientPlayNetworking.registerGlobalReceiver(OpenFusionDexPayload.TYPE,
-				(payload, context) -> context.client().setScreen(new DiscoveredDexScreen(payload.discovered())));
+		// El Fusion Album del jugador (Shift + clic con el cristal, o /fusionalbum)
+		ClientPlayNetworking.registerGlobalReceiver(OpenFusionAlbumPayload.TYPE,
+				(payload, context) -> context.client().setScreen(new FusionAlbumScreen(payload.discovered())));
 
-		// Herramientas para afinar los visuales (ajustes finos de /fusionvisual, /fusiondex, /fusioninspect): solo en
+		// Herramientas para afinar los visuales (ajustes finos de /fusionvisual, /fusionviewer, /fusioninspect): solo en
 		// desarrollo (runClient). En el mod publicado no están: el visor enseñaría todas las fusiones sin jugar (la
 		// gracia es capturar, probar y ver qué sale) y el inspector lee archivos que solo hay en el proyecto
 		boolean dev = FabricLoader.getInstance().isDevelopmentEnvironment();
@@ -118,7 +118,7 @@ public class FusionmonClient implements ClientModInitializer {
 		});
 
 		if (dev) {
-			// /fusionviewer: visor de TODAS las fusiones (FusionDexScreen), para probar visuales. No se llama /fusiondex:
+			// /fusionviewer: visor de TODAS las fusiones (FusionDexScreen), para probar visuales. No se llama /fusionalbum:
 			// ese es el del jugador, con solo sus fusiones descubiertas (y un comando de cliente taparía al del servidor).
 			// La pantalla se abre en la siguiente vuelta del bucle del juego: al terminar un comando, Minecraft cierra el
 			// chat, y cerraría también una pantalla abierta aquí mismo

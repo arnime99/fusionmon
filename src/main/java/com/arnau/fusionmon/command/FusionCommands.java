@@ -56,7 +56,7 @@ public final class FusionCommands {
     }
 
     public static void register() {
-        // spawn crea cualquier fusión sin capturar nada: solo en desarrollo (runClient/runServer), como /fusiondex. La
+        // spawn crea cualquier fusión sin capturar nada: solo en desarrollo (runClient/runServer), como /fusionviewer. La
         // gracia del mod es descubrir las fusiones jugando. info y unfuse se quedan para los admins: arreglan problemas
         boolean dev = FabricLoader.getInstance().isDevelopmentEnvironment();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -81,9 +81,9 @@ public final class FusionCommands {
             }
             dispatcher.register(root);
 
-            // /fusiondex: el FusionDex del jugador (sus fusiones descubiertas), para todos; como Shift + clic con el
+            // /fusionalbum: el Fusion Album del jugador (sus fusiones descubiertas), para todos; como Shift + clic con el
             // cristal
-            dispatcher.register(Commands.literal("fusiondex").executes(context -> {
+            dispatcher.register(Commands.literal("fusionalbum").executes(context -> {
                 FusionDiscovery.open(context.getSource().getPlayerOrException());
                 return 1;
             }));

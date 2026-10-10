@@ -15,7 +15,7 @@ public final class ModNetworking {
     public static void initialize() {
         PayloadTypeRegistry.playS2C().register(OpenFusionScreenPayload.TYPE, OpenFusionScreenPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(OpenUnfuseScreenPayload.TYPE, OpenUnfuseScreenPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(OpenFusionDexPayload.TYPE, OpenFusionDexPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(OpenFusionAlbumPayload.TYPE, OpenFusionAlbumPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(FusionChoicePayload.TYPE, FusionChoicePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(UnfuseChoicePayload.TYPE, UnfuseChoicePayload.CODEC);
 

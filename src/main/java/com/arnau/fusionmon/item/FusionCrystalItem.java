@@ -24,7 +24,7 @@ public class FusionCrystalItem extends Item {
         // use() se ejecuta en el cliente y en el servidor; la lógica de Pokémon vive solo en el servidor.
         // El cristal no se gasta aquí: el jugador aún puede cancelar en las pantallas
         if (player instanceof ServerPlayer serverPlayer) {
-            // Agachado: el FusionDex (las fusiones descubiertas); si no, elegir Pokémon para fusionar o separar
+            // Agachado: el Fusion Album (las fusiones descubiertas); si no, elegir Pokémon para fusionar o separar
             if (serverPlayer.isShiftKeyDown()) {
                 FusionDiscovery.open(serverPlayer);
             } else {

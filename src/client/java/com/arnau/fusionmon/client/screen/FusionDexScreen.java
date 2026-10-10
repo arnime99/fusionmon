@@ -33,7 +33,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 
 /**
- * Visor de fusiones (/fusiondex): elige cabeza y cuerpo entre todas las especies con modelo y enseña la fusión en 3D,
+ * Visor de todas las fusiones (/fusionviewer, solo en desarrollo): elige cabeza y cuerpo entre todas las especies con modelo y enseña la fusión en 3D,
  * con su nombre, tipos y stats. Todo en el cliente: no crea ningún Pokémon ni pasa por el servidor.
  *
  * La fusión se pinta como un Pokémon de un menú de Cobblemon (igual que la vista previa de FusionConfirmScreen), con

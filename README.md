@@ -10,7 +10,7 @@ Every pair is built on the fly, so any two species can be fused: their own model
 - **Fused model**: the body's model with the head grafted on, recolored with the head's palette. Tails, wings, horns, arms and legs are mixed too. Shiny if either part is shiny.
 - **Infinite Fusion stats**: name, types and base stats follow Infinite Fusion's formulas. Level, IVs and EVs are averaged; you choose which nature and ability to keep.
 - **Discovery**: a fusion you have never made appears as a silhouette with hidden stats; confirming it plays a fusion animation that reveals it.
-- **FusionDex**: sneak + right-click with the crystal (or `/fusiondex`) to browse the fusions you have discovered.
+- **Fusion Album**: sneak + right-click with the crystal (or `/fusionalbum`) to browse the fusions you have discovered.
 - Fusions battle with their fused types and stats, have the size and ride of their body, evolve through either part (level, items and trade with the Link Cable) and learn level-up moves from both.
 - Splitting gives both Pokémon all the experience earned as a fusion.
 
@@ -20,7 +20,7 @@ Fusion Crystal (crafting table): redstone in the bottom-left corner, lapis lazul
 
 ## Commands
 
-- `/fusiondex`: open your FusionDex.
+- `/fusionalbum`: open your Fusion Album.
 - `/fusionvisual graft|colors`: how fusions look on your screen (fused model, or just the head recolored).
 - `/fusionmon info|unfuse <slot>` (operators): inspect or split the fusion in one of your party slots.
 
