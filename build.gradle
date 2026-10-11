@@ -29,6 +29,9 @@ loom {
 			// Sin esto Loom usa un nombre aleatorio (Player123) en cada arranque, y como Cobblemon
 			// guarda el equipo y el PC por jugador, cada arranque parecía un jugador nuevo
 			programArgs "--username", "Arnau"
+			// Sin argumentos Java usaba G1 con el heap creciendo desde 512 MB: una pausa de ~9 ms cada ~7 s,
+			// que a 240 Hz son 2-3 frames perdidos. Heap fijo + ZGC generacional: pausas < 1 ms. Solo afecta a runClient
+			vmArgs "-Xms8G", "-Xmx8G", "-XX:+UseZGC", "-XX:+ZGenerational"
 		}
 		server {
 			// Carpeta propia: cliente y servidor se lanzan a la vez y si no compartirían
