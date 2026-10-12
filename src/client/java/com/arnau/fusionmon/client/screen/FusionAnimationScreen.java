@@ -4,6 +4,7 @@ import com.arnau.fusionmon.network.FusionPartView;
 import com.cobblemon.mod.common.CobblemonSounds;
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
@@ -66,6 +67,25 @@ public class FusionAnimationScreen extends Screen {
      * @param speed cuánto se aleja respecto a las demás (unas llegan más lejos que otras)
      */
     private record Spark(float angle, float speed, float size, int color) {
+    }
+
+    /**
+     * La animación de la fusión recién aceptada, esperando la respuesta del servidor (FusionResultPayload): solo él
+     * sabe si los dos Pokémon están fuera y cerca (animación en el mundo) o si la fusión ha fallado (ninguna).
+     */
+    private static FusionAnimationScreen pending;
+
+    public static void await(FusionAnimationScreen animation) {
+        pending = animation;
+    }
+
+    /** Respuesta del servidor: la animación de pantalla, o ninguna si la fusión se ve en el mundo. */
+    public static void onResult(Minecraft client, boolean inWorld) {
+        FusionAnimationScreen animation = pending;
+        pending = null;
+        if (animation != null && !inWorld) {
+            client.setScreen(animation);
+        }
     }
 
     public FusionAnimationScreen(FusionPartView head, FusionPartView body, FusionPartView fusion) {

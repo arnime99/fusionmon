@@ -4,6 +4,7 @@ import com.arnau.fusionmon.item.FusionInjectorItem;
 import com.arnau.fusionmon.network.FusionChoicePayload;
 import com.arnau.fusionmon.network.FusionPartView;
 import com.arnau.fusionmon.network.FusionPreview;
+import com.arnau.fusionmon.network.FusionResultPayload;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
 import com.arnau.fusionmon.network.OpenUnfuseScreenPayload;
 import com.arnau.fusionmon.network.UnfuseChoicePayload;
@@ -195,8 +196,12 @@ public final class FusionSelection {
         // Los nombres se leen antes de fusionar: después el cuerpo ya no está en el equipo
         Component headName = head.getDisplayName(false);
         Component bodyName = body.getDisplayName(false);
+        // Se mira antes de fusionar: al fusionar el cuerpo vuelve a su Poké Ball
+        boolean inWorld = FusionWorldAnimation.canPlay(player, head, body);
         FusionService.fuse(player, head, body, natureSource == body, abilitySource == body);
         player.sendSystemMessage(Component.translatable("message.fusionmon.fused", headName, bodyName));
+        // El cliente espera esta respuesta para saber qué animación toca (la de pantalla, o ninguna si va en el mundo)
+        ServerPlayNetworking.send(player, new FusionResultPayload(inWorld));
     }
 
     private static void openUnfuseConfirmation(ServerPlayer player, UUID fusedId) {
@@ -299,6 +304,8 @@ public final class FusionSelection {
         Component bodyName = body.getDisplayName(false);
         FusionService.reverse(player, fused, parts, choice.swapped(), natureSource == body, abilitySource == body);
         player.sendSystemMessage(Component.translatable("message.fusionmon.reversed", headName, bodyName));
+        // Invertir siempre se anima en la pantalla
+        ServerPlayNetworking.send(player, new FusionResultPayload(false));
     }
 
     public static void forget(ServerPlayer player) {

@@ -131,12 +131,12 @@ public class FusionConfirmScreen extends FusionScreenBase {
         Component accept = Component.translatable(data.reverse() ? "gui.fusionmon.reverse.accept" : "gui.fusionmon.confirm.accept");
         addRenderableWidget(Button.builder(accept, button -> {
                     // Lo que se ve ahora (con el intercambio elegido) es lo que se anima, ya sin misterio: la
-                    // animación es donde se descubre
-                    FusionAnimationScreen animation = new FusionAnimationScreen(head(), body(), preview().view());
+                    // animación es donde se descubre. Se pone cuando el servidor confirma la fusión, y solo si no
+                    // se anima en el mundo (FusionResultPayload)
+                    FusionAnimationScreen.await(new FusionAnimationScreen(head(), body(), preview().view()));
+                    // answer cierra esta pantalla (sin contar como cancelar)
                     answer(() -> ClientPlayNetworking.send(
                             new FusionChoicePayload(true, swapped, natureFromB, abilityFromB)));
-                    // answer ya ha cerrado esta pantalla (sin contar como cancelar): ahora la animación
-                    minecraft.setScreen(animation);
                 })
                 .bounds(leftX, acceptY, OPTION_WIDTH, FusionScreenLayout.BUTTON)
                 .build());

@@ -3,11 +3,13 @@ package com.arnau.fusionmon.client;
 import com.arnau.fusionmon.Fusionmon;
 import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.client.screen.FusionAlbumScreen;
+import com.arnau.fusionmon.client.screen.FusionAnimationScreen;
 import com.arnau.fusionmon.client.screen.FusionConfirmScreen;
 import com.arnau.fusionmon.client.screen.FusionDexScreen;
 import com.arnau.fusionmon.client.screen.SpeciesInspectorScreen;
 import com.arnau.fusionmon.client.screen.UnfuseConfirmScreen;
 import com.arnau.fusionmon.client.texture.FusionTextures;
+import com.arnau.fusionmon.network.FusionResultPayload;
 import com.arnau.fusionmon.network.OpenFusionAlbumPayload;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
 import com.arnau.fusionmon.network.OpenUnfuseScreenPayload;
@@ -37,6 +39,9 @@ public class FusionmonClient implements ClientModInitializer {
 		// El Fusion Album del jugador (Shift + clic con el inyector, o /fusionalbum)
 		ClientPlayNetworking.registerGlobalReceiver(OpenFusionAlbumPayload.TYPE,
 				(payload, context) -> context.client().setScreen(new FusionAlbumScreen(payload.discovered())));
+		// La fusión aceptada ya está hecha: animación de pantalla, o ninguna si se ve en el mundo
+		ClientPlayNetworking.registerGlobalReceiver(FusionResultPayload.TYPE,
+				(payload, context) -> FusionAnimationScreen.onResult(context.client(), payload.inWorld()));
 
 		// Herramientas para afinar los visuales (ajustes finos de /fusionvisual, /fusionviewer, /fusioninspect): solo en
 		// desarrollo (runClient). En el mod publicado no están: el visor enseñaría todas las fusiones sin jugar (la
