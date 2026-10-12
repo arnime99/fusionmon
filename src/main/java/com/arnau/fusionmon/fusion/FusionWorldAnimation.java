@@ -2,6 +2,7 @@ package com.arnau.fusionmon.fusion;
 
 import com.arnau.fusionmon.Fusionmon;
 import com.cobblemon.mod.common.CobblemonSounds;
+import com.cobblemon.mod.common.battles.BattleRegistry;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -94,11 +95,19 @@ public final class FusionWorldAnimation {
         return isNear(player, head.getEntity()) && isNear(player, body.getEntity());
     }
 
+    /**
+     * Fuera, vivo, cerca y libre: ni montado ni con jinete (la animación lo mueve a mano y la fusión cambia la
+     * montura), ni en combate ni evolucionando (Cobblemon ya lo está moviendo). Si no, animación de pantalla.
+     */
     private static boolean isNear(ServerPlayer player, PokemonEntity entity) {
         return entity != null
                 && entity.isAlive()
                 && entity.level() == player.level()
-                && entity.distanceTo(player) <= MAX_DISTANCE;
+                && entity.distanceTo(player) <= MAX_DISTANCE
+                && !entity.isVehicle()
+                && !entity.isPassenger()
+                && entity.getBattleId() == null
+                && !entity.isEvolving();
     }
 
     /** Si el jugador tiene una fusión animándose ahora (mientras, no puede empezar otra). */
@@ -125,7 +134,7 @@ public final class FusionWorldAnimation {
             Animation animation = iterator.next();
             if (animation.playerId.equals(player.getUUID())) {
                 iterator.remove();
-                animation.finishNow();
+                finishSafely(animation);
             }
         }
     }
@@ -133,15 +142,32 @@ public final class FusionWorldAnimation {
     private static void finishAll() {
         List<Animation> running = new ArrayList<>(RUNNING);
         RUNNING.clear();
-        running.forEach(Animation::finishNow);
+        running.forEach(FusionWorldAnimation::finishSafely);
     }
 
     private static void tickAll() {
         // Copia: al terminar una animación se quita de la lista mientras se recorre
         for (Animation animation : new ArrayList<>(RUNNING)) {
-            if (!animation.tick()) {
+            boolean running;
+            try {
+                running = animation.tick();
+            } catch (RuntimeException e) {
+                // Un fallo aquí tiraría el servidor entero (esto va en su tick): se corta la animación y se fusiona
+                Fusionmon.LOGGER.error("Fallo en la animación de fusión en el mundo", e);
+                finishSafely(animation);
+                running = false;
+            }
+            if (!running) {
                 RUNNING.remove(animation);
             }
+        }
+    }
+
+    private static void finishSafely(Animation animation) {
+        try {
+            animation.finishNow();
+        } catch (RuntimeException e) {
+            Fusionmon.LOGGER.error("No se ha podido terminar la animación de fusión en el mundo", e);
         }
     }
 
@@ -198,8 +224,10 @@ public final class FusionWorldAnimation {
 
         /** Un tick; false cuando ha terminado. */
         private boolean tick() {
-            if (!fused && (!head.isAlive() || !body.isAlive() || head.level() != level || body.level() != level)) {
-                // Cortada antes del destello (uno ha vuelto a su Poké Ball, se ha desmayado...): se fusiona ya
+            if (!fused && (!head.isAlive() || !body.isAlive() || head.level() != level || body.level() != level
+                    || playerInBattle())) {
+                // Cortada antes del destello (uno ha vuelto a su Poké Ball, se ha desmayado, ha empezado un
+                // combate...): se fusiona ya, o se devuelve el inyector si ya no se puede (en combate)
                 finishNow();
                 return false;
             }
@@ -271,6 +299,11 @@ public final class FusionWorldAnimation {
                 fused = true;
                 fuse.getAsBoolean();
             }
+        }
+
+        private boolean playerInBattle() {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(playerId);
+            return player != null && BattleRegistry.getBattleByParticipatingPlayer(player) != null;
         }
 
         private void lookAtEachOther() {
