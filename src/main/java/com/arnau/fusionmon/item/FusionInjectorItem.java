@@ -50,6 +50,17 @@ public class FusionInjectorItem extends Item {
         return true;
     }
 
+    /**
+     * Devuelve el inyector gastado al confirmar si al final la fusión no se ha podido hacer (fusión en el mundo: se
+     * hace unos segundos después de confirmar, ver FusionWorldAnimation). En creativo no se gastó, así que no se
+     * devuelve. Si no cabe en el inventario, cae al suelo junto al jugador.
+     */
+    public static void refundOne(ServerPlayer player) {
+        if (!player.getAbilities().instabuild) {
+            player.getInventory().placeItemBackInInventory(new ItemStack(ModItems.FUSION_INJECTOR));
+        }
+    }
+
     private static ItemStack findInjector(Player player) {
         for (InteractionHand hand : InteractionHand.values()) {
             ItemStack stack = player.getItemInHand(hand);

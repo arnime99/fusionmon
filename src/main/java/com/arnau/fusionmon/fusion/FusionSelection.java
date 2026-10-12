@@ -59,6 +59,11 @@ public final class FusionSelection {
             player.sendSystemMessage(Component.translatable("message.fusionmon.in_battle"));
             return;
         }
+        // Hasta el destello los dos siguen en el equipo sin fusionar: no se pueden volver a elegir
+        if (FusionWorldAnimation.isPlaying(player)) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.fusion_in_progress"));
+            return;
+        }
 
         List<Pokemon> party = partyOf(player);
         long unfused = party.stream().filter(pokemon -> !FusionData.isFusion(pokemon)).count();
@@ -192,16 +197,47 @@ public final class FusionSelection {
         Pokemon body = choice.swapped() ? first : second;
         Pokemon natureSource = choice.natureFromB() ? second : first;
         Pokemon abilitySource = choice.abilityFromB() ? second : first;
+        boolean natureFromBody = natureSource == body;
+        boolean abilityFromBody = abilitySource == body;
+        // El cliente espera FusionResultPayload para saber qué animación toca (la de pantalla, o ninguna si va en el
+        // mundo)
+        if (FusionWorldAnimation.canPlay(player, head, body)) {
+            // La fusión se hace en el destello de la animación, unos segundos después: entonces se vuelve a comprobar
+            UUID headId = head.getUuid();
+            UUID bodyId = body.getUuid();
+            FusionWorldAnimation.start(player, head, body,
+                    () -> fuseAfterAnimation(player, headId, bodyId, natureFromBody, abilityFromBody));
+            ServerPlayNetworking.send(player, new FusionResultPayload(true));
+            return;
+        }
+        fuseNow(player, head, body, natureFromBody, abilityFromBody);
+        ServerPlayNetworking.send(player, new FusionResultPayload(false));
+    }
 
+    private static void fuseNow(ServerPlayer player, Pokemon head, Pokemon body,
+                                boolean natureFromBody, boolean abilityFromBody) {
         // Los nombres se leen antes de fusionar: después el cuerpo ya no está en el equipo
         Component headName = head.getDisplayName(false);
         Component bodyName = body.getDisplayName(false);
-        // Se mira antes de fusionar: al fusionar el cuerpo vuelve a su Poké Ball
-        boolean inWorld = FusionWorldAnimation.canPlay(player, head, body);
-        FusionService.fuse(player, head, body, natureSource == body, abilitySource == body);
+        FusionService.fuse(player, head, body, natureFromBody, abilityFromBody);
         player.sendSystemMessage(Component.translatable("message.fusionmon.fused", headName, bodyName));
-        // El cliente espera esta respuesta para saber qué animación toca (la de pantalla, o ninguna si va en el mundo)
-        ServerPlayNetworking.send(player, new FusionResultPayload(inWorld));
+    }
+
+    /**
+     * La fusión al final de la animación en el mundo. Durante la animación el equipo pudo cambiar (dejar uno en el PC,
+     * entrar en combate): si ya no se puede, se devuelve el inyector. False si no se ha fusionado.
+     */
+    private static boolean fuseAfterAnimation(ServerPlayer player, UUID headId, UUID bodyId,
+                                              boolean natureFromBody, boolean abilityFromBody) {
+        Pokemon head = findValid(player, headId);
+        Pokemon body = findValid(player, bodyId);
+        if (head == null || body == null || BattleRegistry.getBattleByParticipatingPlayer(player) != null) {
+            FusionInjectorItem.refundOne(player);
+            player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
+            return false;
+        }
+        fuseNow(player, head, body, natureFromBody, abilityFromBody);
+        return true;
     }
 
     private static void openUnfuseConfirmation(ServerPlayer player, UUID fusedId) {

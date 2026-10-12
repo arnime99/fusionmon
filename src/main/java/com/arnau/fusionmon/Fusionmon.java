@@ -11,6 +11,7 @@ import com.arnau.fusionmon.fusion.FusionAspects;
 import com.arnau.fusionmon.fusion.FusionDiscovery;
 import com.arnau.fusionmon.fusion.FusionLevelUp;
 import com.arnau.fusionmon.fusion.FusionStatProvider;
+import com.arnau.fusionmon.fusion.FusionWorldAnimation;
 import com.arnau.fusionmon.item.ModItems;
 import com.arnau.fusionmon.network.ModNetworking;
 import com.cobblemon.mod.common.Cobblemon;
@@ -37,6 +38,8 @@ public class Fusionmon implements ModInitializer {
 		AspectProvider.Companion.register(new FusionAspects());
 		// Registro de fusiones descubiertas de cada jugador (dato guardado con su partida)
 		FusionDiscovery.initialize();
+		// Fusión animada en el mundo cuando los dos Pokémon están fuera (avanza en cada tick del servidor)
+		FusionWorldAnimation.initialize();
 
 		LOGGER.info("Hello Fabric world!");
 	}

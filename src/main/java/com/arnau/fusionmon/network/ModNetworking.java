@@ -2,6 +2,7 @@ package com.arnau.fusionmon.network;
 
 import com.arnau.fusionmon.fusion.FusionDiscovery;
 import com.arnau.fusionmon.fusion.FusionSelection;
+import com.arnau.fusionmon.fusion.FusionWorldAnimation;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -26,8 +27,11 @@ public final class ModNetworking {
         ServerPlayNetworking.registerGlobalReceiver(UnfuseChoicePayload.TYPE,
                 (payload, context) -> FusionSelection.handleUnfuseChoice(context.player(), payload));
 
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
-                FusionSelection.forget(handler.getPlayer()));
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            FusionSelection.forget(handler.getPlayer());
+            // Una fusión animándose en el mundo se hace ya: el inyector está gastado
+            FusionWorldAnimation.finishFor(handler.getPlayer());
+        });
         // Las fusiones creadas antes de que existiera el registro cuentan como descubiertas (una vez por jugador)
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 FusionDiscovery.registerExisting(handler.getPlayer()));

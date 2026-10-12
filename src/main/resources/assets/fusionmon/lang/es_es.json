@@ -42,6 +42,7 @@
   "gui.fusionmon.stat.special_defence": "Def. Esp.",
   "gui.fusionmon.stat.speed": "Velocidad",
   "message.fusionmon.in_battle": "No puedes fusionar Pokémon durante un combate.",
+  "message.fusionmon.fusion_in_progress": "Espera a que termine la fusión.",
   "message.fusionmon.not_enough_pokemon": "Necesitas 2 Pokémon sin fusionar, o una fusión para separarla.",
   "message.fusionmon.unfused": "¡%s se ha separado!",
   "message.fusionmon.selection_changed": "Tu equipo ha cambiado durante la selección. Vuelve a intentarlo.",
