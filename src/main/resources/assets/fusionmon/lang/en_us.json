@@ -141,5 +141,6 @@
   "gui.fusionmon.inspect.help": "←/→ species · V view · G gender · F filter · B OK · X wrong (Enter saves the note) · U clear review · C camera · drag: rotate (right: move) · wheel: zoom",
   "command.fusionmon.unfused": "Fusion undone.",
   "command.fusionmon.unknown_species": "Unknown species: %s",
-  "command.fusionmon.spawned": "Spawned %s Pokémon."
+  "command.fusionmon.spawned": "Spawned %s Pokémon.",
+  "command.fusionmon.forgotten": "Fusion Album cleared: %s fusions are back to silhouettes."
 }

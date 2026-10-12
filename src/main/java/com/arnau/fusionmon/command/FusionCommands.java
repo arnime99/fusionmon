@@ -40,6 +40,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * /fusionmon spawn <cabeza> <cuerpo> [n]  hace aparecer n fusiones salvajes alrededor ("random" = especie al azar en
  *                            cada una; cuerpo "none" = Pokémon normales, para comparar). Para medir rendimiento con
  *                            muchas fusiones a la vista, y para grabar contenido
+ * /fusionmon forget          vacía tu Fusion Album: todas las parejas vuelven a salir en silueta (para regrabar clips)
+ * spawn y forget solo existen en desarrollo.
  */
 public final class FusionCommands {
 
@@ -78,6 +80,8 @@ public final class FusionCommands {
                                         .then(Commands.argument(COUNT, IntegerArgumentType.integer(1, MAX_SPAWN))
                                                 .executes(context -> spawn(context,
                                                         IntegerArgumentType.getInteger(context, COUNT)))))));
+                // forget borra el Fusion Album propio: las parejas vuelven a salir en silueta, para regrabar la revelación
+                root.then(Commands.literal("forget").executes(FusionCommands::forget));
             }
             dispatcher.register(root);
 
@@ -129,6 +133,12 @@ public final class FusionCommands {
             level.addFreshEntity(entity);
         }
         context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.spawned", count), false);
+        return count;
+    }
+
+    private static int forget(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        int count = FusionDiscovery.forgetAll(context.getSource().getPlayerOrException());
+        context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.forgotten", count), false);
         return count;
     }
 

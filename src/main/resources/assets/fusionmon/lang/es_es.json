@@ -141,5 +141,6 @@
   "gui.fusionmon.inspect.help": "←/→ especie · V vista · G sexo · F filtro · B bien · X fallo (Intro guarda la nota) · U borrar revisión · C cámara · arrastrar: girar (derecho: mover) · rueda: zoom",
   "command.fusionmon.unfused": "Fusión deshecha.",
   "command.fusionmon.unknown_species": "Especie desconocida: %s",
-  "command.fusionmon.spawned": "Han aparecido %s Pokémon."
+  "command.fusionmon.spawned": "Han aparecido %s Pokémon.",
+  "command.fusionmon.forgotten": "Fusion Album vacío: %s fusiones vuelven a salir en silueta."
 }

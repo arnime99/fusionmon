@@ -75,6 +75,17 @@ public final class FusionDiscovery {
     }
 
     /**
+     * Olvida todas las fusiones descubiertas del jugador (vuelven a salir en silueta) y devuelve cuántas eran. Solo para
+     * desarrollo: para volver a grabar la revelación de una pareja. No se vuelve a llamar a registerExisting, así que
+     * las fusiones que ya tiene en el equipo o el PC tampoco cuentan hasta que las vuelva a crear.
+     */
+    public static int forgetAll(ServerPlayer player) {
+        int count = player.getAttachedOrCreate(DISCOVERED).size();
+        player.setAttached(DISCOVERED, List.of());
+        return count;
+    }
+
+    /**
      * Una vez por jugador: las fusiones que ya tiene en el equipo o el PC cuentan como descubiertas (se crearon antes
      * de que existiera el registro y, si no, no saldrían en su Fusion Album).
      */
