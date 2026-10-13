@@ -1129,9 +1129,7 @@ public final class FusionGraft {
         if (texture == null) {
             return null;
         }
-        if (layer.getScrolling() != null) {
-            return model.getScrollingLayer(texture, layer.getScrolling(), layer);
-        }
+        // (Cobblemon 1.7.3 no tiene capas con textura que se desplaza: en 1.8 aquí va getScrollingLayer)
         return model.getLayer(texture, layer.getEmissive(), layer.getTranslucent(), layer.getTranslucent_cull());
     }
 

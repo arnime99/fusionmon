@@ -1,6 +1,8 @@
 package com.arnau.fusionmon.fusion;
 
 import com.cobblemon.mod.common.api.moves.BenchedMove;
+import com.cobblemon.mod.common.api.moves.Move;
+import com.cobblemon.mod.common.api.moves.MoveSet;
 import com.cobblemon.mod.common.api.moves.MoveTemplate;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import kotlin.Unit;
@@ -70,6 +72,18 @@ final class FusionMoves {
     }
 
     private static boolean isAvailable(Pokemon fusion, MoveTemplate move) {
-        return fusion.getMoveSet().getMoveTemplates().contains(move) || fusion.getAllAccessibleMoves().contains(move);
+        return templates(fusion.getMoveSet()).contains(move) || fusion.getAllAccessibleMoves().contains(move);
+    }
+
+    /**
+     * Los movimientos de un MoveSet como plantillas. MoveSet.getMoveTemplates() solo existe desde Cobblemon 1.8; así
+     * vale para 1.7.3 y 1.8.
+     */
+    public static List<MoveTemplate> templates(MoveSet moveSet) {
+        List<MoveTemplate> templates = new ArrayList<>();
+        for (Move move : moveSet.getMoves()) {
+            templates.add(move.getTemplate());
+        }
+        return templates;
     }
 }

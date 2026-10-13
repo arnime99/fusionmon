@@ -57,6 +57,9 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
 	modImplementation "com.cobblemon:fabric:${project.cobblemon_version}"
+	// Cobblemon 1.7.3 lleva Fabric Language Kotlin dentro de su jar pero su POM no lo declara (el de 1.8.1 sí):
+	// sin esto no se compila contra sus clases Kotlin. La misma versión que trae dentro
+	modImplementation "net.fabricmc:fabric-language-kotlin:1.13.6+kotlin.2.2.20"
 }
 
 processResources {

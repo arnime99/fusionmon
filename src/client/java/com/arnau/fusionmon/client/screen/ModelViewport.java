@@ -1,7 +1,6 @@
 package com.arnau.fusionmon.client.screen;
 
 import com.cobblemon.mod.common.client.gui.PokemonGuiUtilsKt;
-import com.cobblemon.mod.common.client.gui.ProfileTransformType;
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState;
 import com.cobblemon.mod.common.client.render.models.blockbench.PosableModel;
 import com.cobblemon.mod.common.client.render.models.blockbench.repository.VaryingModelRepository;
@@ -23,15 +22,15 @@ import org.lwjgl.glfw.GLFW;
  *
  * Cobblemon coloca los modelos de los menús con unos valores de retrato de cada especie (profileTranslation/Scale),
  * pensados para su cuadrito del resumen: en una caja grande el modelo salía cortado por arriba. Con
- * ProfileTransformType.NONE no los usa (solo escala x20, gira y pinta), y lo colocamos aquí con la caja real del
- * modelo que se pinta (el del cuerpo, si es cabeza sobre cuerpo).
+ * applyProfileTransform = false no los usa (solo escala x20, gira y pinta), y lo colocamos aquí con la caja real del
+ * modelo que se pinta (el del cuerpo, si es cabeza sobre cuerpo). (Cobblemon 1.7.3: en 1.8 es ProfileTransformType.NONE,
+ * y además la luz va como parámetro; en 1.7.3 drawProfilePokemon pinta siempre con luz máxima.)
  */
 final class ModelViewport {
 
     // Parte de la caja que ocupa el modelo, y la escala que aplica drawProfilePokemon por su cuenta
     private static final float FIT = 0.85F;
     private static final float PROFILE_SCALE = 20F;
-    private static final int MODEL_LIGHT = 15;
     private static final float MIN_ZOOM = 0.25F;
     private static final float MAX_ZOOM = 5F;
     /** Mientras no se arrastre, el modelo gira solo (una vuelta en este tiempo). */
@@ -95,7 +94,7 @@ final class ModelViewport {
             }
             float shade = silhouette ? 0F : 1F;
             PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, state, partialTick,
-                    PROFILE_SCALE, ProfileTransformType.NONE, false, shade, shade, shade, 1F, 0F, 0F, MODEL_LIGHT);
+                    PROFILE_SCALE, false, false, shade, shade, shade, 1F, 0F, 0F);
         } finally {
             // Pase lo que pase: "after" deshace lo de "before" (el inspector apaga la inspección)
             pose.popPose();
@@ -125,7 +124,7 @@ final class ModelViewport {
         pose.translate(-center.x * PROFILE_SCALE, -center.y * PROFILE_SCALE, -center.z * PROFILE_SCALE);
         try {
             PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, state, partialTick,
-                    PROFILE_SCALE, ProfileTransformType.NONE, false, 1F, 1F, 1F, 1F, 0F, 0F, MODEL_LIGHT);
+                    PROFILE_SCALE, false, false, 1F, 1F, 1F, 1F, 0F, 0F);
         } finally {
             pose.popPose();
         }

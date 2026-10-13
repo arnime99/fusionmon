@@ -306,13 +306,13 @@ public final class FusionService {
      */
     private static void addMovesToBench(Pokemon visible, Set<MoveTemplate> headMovesBefore, Pokemon body) {
         Set<MoveTemplate> candidates = new LinkedHashSet<>(headMovesBefore);
-        candidates.addAll(body.getMoveSet().getMoveTemplates());
+        candidates.addAll(FusionMoves.templates(body.getMoveSet()));
         candidates.addAll(body.getAllAccessibleMoves());
         // Movimientos por nivel del cuerpo hasta el nivel de la fusión (por si es mayor que el del cuerpo)
         candidates.addAll(body.getForm().getMoves().getLevelUpMovesUpTo(visible.getLevel()));
 
         Set<MoveTemplate> alreadyAvailable = new HashSet<>(visible.getAllAccessibleMoves());
-        alreadyAvailable.addAll(visible.getMoveSet().getMoveTemplates());
+        alreadyAvailable.addAll(FusionMoves.templates(visible.getMoveSet()));
 
         List<BenchedMove> toBench = new ArrayList<>();
         for (MoveTemplate move : candidates) {
