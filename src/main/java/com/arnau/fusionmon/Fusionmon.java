@@ -1,6 +1,7 @@
 package com.arnau.fusionmon;
 
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.resources.ResourceLocation;
 
@@ -46,5 +47,14 @@ public class Fusionmon implements ModInitializer {
 
 	public static ResourceLocation id(String path) {
 		return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+	}
+
+	/**
+	 * Comandos de grabación (/fusionmon spawn y forget): en desarrollo (runClient/runServer) o con el argumento de Java
+	 * -Dfusionmon.devtools=true, para grabar vídeos en una instancia normal con el jar publicado (shaders...). Ningún
+	 * jugador lo tiene sin ponerlo a mano: la gracia del mod es descubrir las fusiones jugando.
+	 */
+	public static boolean recordingTools() {
+		return FabricLoader.getInstance().isDevelopmentEnvironment() || Boolean.getBoolean("fusionmon.devtools");
 	}
 }

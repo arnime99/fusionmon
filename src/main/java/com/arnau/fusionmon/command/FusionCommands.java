@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.command;
 
+import com.arnau.fusionmon.Fusionmon;
 import com.arnau.fusionmon.fusion.FusionData;
 import com.arnau.fusionmon.fusion.FusionDiscovery;
 import com.arnau.fusionmon.fusion.FusionService;
@@ -17,7 +18,6 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -41,7 +41,7 @@ import java.util.concurrent.ThreadLocalRandom;
  *                            cada una; cuerpo "none" = Pokémon normales, para comparar). Para medir rendimiento con
  *                            muchas fusiones a la vista, y para grabar contenido
  * /fusionmon forget          vacía tu Fusion Album: todas las parejas vuelven a salir en silueta (para regrabar clips)
- * spawn y forget solo existen en desarrollo.
+ * spawn y forget solo existen en desarrollo o con -Dfusionmon.devtools=true (para grabar vídeos).
  */
 public final class FusionCommands {
 
@@ -58,9 +58,10 @@ public final class FusionCommands {
     }
 
     public static void register() {
-        // spawn crea cualquier fusión sin capturar nada: solo en desarrollo (runClient/runServer), como /fusionviewer. La
-        // gracia del mod es descubrir las fusiones jugando. info y unfuse se quedan para los admins: arreglan problemas
-        boolean dev = FabricLoader.getInstance().isDevelopmentEnvironment();
+        // spawn crea cualquier fusión sin capturar nada: solo en desarrollo (runClient/runServer) o con el interruptor de
+        // grabación (Fusionmon.recordingTools). La gracia del mod es descubrir las fusiones jugando. info y unfuse se
+        // quedan para los admins: arreglan problemas
+        boolean dev = Fusionmon.recordingTools();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("fusionmon")
                     .requires(source -> source.hasPermission(2))
