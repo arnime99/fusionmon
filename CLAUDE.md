@@ -19,6 +19,21 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - Comandos de prueba en el juego (con trucos): `/fusionmon info <hueco>`, `/fusionmon unfuse <hueco>`, `/fusionmon spawn <cabeza> <cuerpo> [n]` (fusiones salvajes en corro; `random`, cuerpo `none` = normales), `/fusionmon forget` (vacía tu Fusion Album: las parejas vuelven a salir en silueta), `spawn` y `forget` solo en desarrollo, o con el archivo `config/fusionmon-devtools` o el argumento de Java `-Dfusionmon.devtools=true` (`Fusionmon.recordingTools`: para grabar vídeos en la instancia de CurseForge con el jar publicado; CurseForge borra los argumentos de Java al lanzar, por eso el archivo), `/pokegive <especie>`, `/spawnpokemon <especie> lvl=N`.
 - **Medir rendimiento:** mundo sin apariciones (`/gamerule doPokemonSpawning false`, `doMobSpawning false`), FPS ilimitados y sin VSync, F3; 60 normales (`/fusionmon spawn charizard none 60`) frente a 60 fusiones. Perfilador sin instalar nada (JDK 21): `jcmd -l` (el juego es `devlaunchinjector`), `jcmd <pid> JFR.start settings=profile duration=20s filename=...` mientras el usuario mira las fusiones, y `jfr print --events jdk.ExecutionSample` agrupando las muestras del "Render thread". Referencia (2026-10-08, gráfica integrada): 60 Charizard 94 FPS, 60 fusiones Charizard+Pikachu 78 FPS.
 
+## Versión para Cobblemon 1.7.3 (Cobbleverse)
+
+Cobbleverse (el modpack más jugado; 1.7.42, julio 2026) usa **Cobblemon 1.7.3**, mismo Minecraft 1.21.1 y Fabric. Hay una
+**rama `cobblemon-1.7.3`** con un worktree en `C:\MinecraftMods\Fusionmon\fusionmon-cobblemon-1.7.3` (su propia carpeta `run`:
+no abrir mundos de 1.8.1 con 1.7.3). Probada entera en el juego el 2026-10-13 (fusionar en pantalla y en el mundo, separar,
+invertir, montar, combate, resumen, Fusion Album). Diferencias con `main` (todas pequeñas):
+- `gradle.properties`: `cobblemon_version=1.7.3+1.21.1`, `version=…+cobblemon-1.7.3`; `fabric.mod.json`: `"cobblemon": "~1.7.3"`.
+- `build.gradle`: `modImplementation "net.fabricmc:fabric-language-kotlin:1.13.6+kotlin.2.2.20"` (el POM de 1.7.3 no lo declara).
+- `FusionMoves.templates(moveSet)` en vez de `MoveSet.getMoveTemplates()` (no existe en 1.7.3; vale para las dos: se puede pasar a `main`).
+- `ModelViewport`: `drawProfilePokemon(…, scale, false, false, r, g, b, a, 0, 0)` (1.7.3: dos booleanos y sin luz; 1.8: `ProfileTransformType.NONE`, `false`, …, luz).
+- `FusionGraft.layerType`: sin `getScrolling`/`getScrollingLayer` (no existen en 1.7.3).
+- Sin `ClientboundSeatAssignmentPacketHandlerMixin` (ese paquete no existe en 1.7.3; montar va bien sin él).
+Para sacar versión: `git merge main` en el worktree, compilar los dos y publicar los dos jars. Los 12 mixins restantes se
+comprobaron con `javap` contra el jar de 1.7.3: mismos métodos y llamadas.
+
 ## Dependencia de Cobblemon (no tocar sin motivo)
 
 - Maven oficial `https://maven.impactdev.net/repository/development/`, `modImplementation "com.cobblemon:fabric:1.8.1+1.21.1"`; su POM trae Fabric Language Kotlin.
