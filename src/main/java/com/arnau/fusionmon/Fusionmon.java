@@ -5,6 +5,8 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.resources.ResourceLocation;
 
+import java.nio.file.Files;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.arnau.fusionmon.command.FusionCommands;
@@ -50,11 +52,16 @@ public class Fusionmon implements ModInitializer {
 	}
 
 	/**
-	 * Comandos de grabación (/fusionmon spawn y forget): en desarrollo (runClient/runServer) o con el argumento de Java
-	 * -Dfusionmon.devtools=true, para grabar vídeos en una instancia normal con el jar publicado (shaders...). Ningún
-	 * jugador lo tiene sin ponerlo a mano: la gracia del mod es descubrir las fusiones jugando.
+	 * Comandos de grabación (/fusionmon spawn y forget): en desarrollo (runClient/runServer), o en una instancia normal
+	 * con el jar publicado (para grabar vídeos con shaders...) si existe el archivo config/fusionmon-devtools o con el
+	 * argumento de Java -Dfusionmon.devtools=true. El archivo es por si el lanzador no deja poner argumentos (CurseForge
+	 * los borra al lanzar). Ningún jugador lo tiene sin ponerlo a mano: la gracia del mod es descubrir las fusiones
+	 * jugando.
 	 */
 	public static boolean recordingTools() {
-		return FabricLoader.getInstance().isDevelopmentEnvironment() || Boolean.getBoolean("fusionmon.devtools");
+		FabricLoader loader = FabricLoader.getInstance();
+		return loader.isDevelopmentEnvironment()
+				|| Boolean.getBoolean("fusionmon.devtools")
+				|| Files.exists(loader.getConfigDir().resolve("fusionmon-devtools"));
 	}
 }
