@@ -2437,6 +2437,16 @@ public final class FusionGraft {
                 // Quitamos el localizador: la cabeza es su padre
                 primary.remove(primary.size() - 1);
                 primary = withSkull(withFace(root, primary));
+            } else if (firstPath(root, name -> name.matches("head\\d*|head_(left|right)")) == null) {
+                // Sin "head", "locator_head" ni "head2"/"head_left"...: el hueso del que cuelga toda la cara. Modelos
+                // de resource packs que no siguen los nombres de Cobblemon (Azurill de Cobbleverse: "RightEye",
+                // "LeftEye" y "mouth" cuelgan de "body") y algunos de Cobblemon (Heracross, Krabby, Drifblim...)
+                primary = faceHolder(root);
+                if (primary != null) {
+                    primary = withSkull(primary);
+                }
+            }
+            if (primary != null) {
                 // En los modelos sin hueso "head" ese padre casi siempre es casi todo el cuerpo ("torso", "body").
                 // Como cabeza: se pega el modelo entero (bien apoyado, ver groundOffset), sin sus extremidades
                 // para moverse, sus brazos (también manos sueltas, como las de Haunter) ni su cola (ver withoutParts).
@@ -3300,6 +3310,50 @@ public final class FusionGraft {
 
     private static boolean isFace(String name) {
         return name.startsWith("eye") || name.startsWith("face") || name.startsWith("mouth");
+    }
+
+    /**
+     * El primer hueso que contiene todas las piezas de la cara (ojos, caras, bocas, ver isFaceName), como camino desde
+     * la raíz; null si no hay cara o si solo la junta la raíz (ocultar la raíz ocultaría el Pokémon entero). Para
+     * modelos sin ningún hueso de cabeza por el nombre (ver findHeads). Simulado en todos los modelos de Cobblemon,
+     * AllTheMons y el pack de Cobbleverse (tools/species-table.ps1): 52 cambian, ninguno pierde la cabeza que tenía.
+     */
+    private static List<ModelPart> faceHolder(ModelPart root) {
+        List<List<ModelPart>> faces = new ArrayList<>();
+        List<ModelPart> current = new ArrayList<>();
+        current.add(root);
+        collectPaths(root, FusionGraft::isFaceName, current, faces);
+        if (faces.isEmpty()) {
+            return null;
+        }
+        // El camino de cada pieza sin la pieza: hasta el hueso del que cuelga
+        List<ModelPart> common = faces.get(0).subList(0, faces.get(0).size() - 1);
+        for (List<ModelPart> face : faces) {
+            int shared = 0;
+            while (shared < common.size() && shared < face.size() - 1 && common.get(shared) == face.get(shared)) {
+                shared++;
+            }
+            common = common.subList(0, shared);
+        }
+        return common.size() < 2 ? null : new ArrayList<>(common);
+    }
+
+    /**
+     * Pieza de la cara por el nombre, con las palabras de posición quitadas también si van pegadas ("righteye",
+     * "left_eye", "eye_left"). Más amplia que isFace, pero solo para faceHolder: con isFace en withFace no cambia
+     * ningún modelo que ya funcionaba.
+     */
+    private static boolean isFaceName(String name) {
+        if (name.startsWith("locator") || name.startsWith("%")) {
+            return false;
+        }
+        for (String token : name.split("_")) {
+            String word = stripModifiers(withoutNumber(token));
+            if (word.startsWith("eye") || word.startsWith("face") || word.startsWith("mouth")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Volumen de los cubos de un hueso y sus hijos, en píxeles³ de modelo (sin giros: solo para comparar). */

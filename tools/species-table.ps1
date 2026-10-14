@@ -242,6 +242,32 @@ function WithFace($head) {
     }
     return ,$common
 }
+# Pieza de la cara por el nombre, con las palabras de posición quitadas también si van pegadas ("RightEye", "left_eye",
+# "eye_left"): ojos, cara o boca. Solo para FaceHolder (WithFace sigue con su regla, para no cambiar los demás modelos)
+function IsFaceName([string]$x) {
+    if ($x.StartsWith('locator') -or $x.StartsWith('%')) { return $false }
+    foreach ($tok in $x.Split('_')) {
+        $w = StripModifiers ($tok -replace '\d+$','')
+        if ($w.StartsWith('eye') -or $w.StartsWith('face') -or $w.StartsWith('mouth')) { return $true }
+    }
+    $false
+}
+# Sin "head" ni "locator_head": la cabeza es el hueso del que cuelga toda la cara (el primero que contiene todos los
+# ojos, caras y bocas). Azurill de Cobbleverse: "RightEye", "LeftEye" y "mouth" cuelgan de "body". $null si no hay
+# cara o si solo la junta la raíz
+function FaceHolder {
+    $faces = Paths { param($x) IsFaceName $x }
+    if ($faces.Count -eq 0) { return $null }
+    $common = Sub $faces[0] ($faces[0].Count - 1)
+    foreach ($f in $faces) {
+        $shared = 0
+        while ($shared -lt $common.Count -and $shared -lt ($f.Count - 1) -and $common[$shared] -eq $f[$shared]) { $shared++ }
+        if ($shared -eq 0) { return $null }
+        $common = Sub $common $shared
+    }
+    if ($common.Count -lt 2) { return $null }
+    return ,$common
+}
 function WithSkull($head) {
     if (HasOwnCubes $head[$head.Count - 1]) { return ,$head }
     for ($i = $head.Count - 2; $i -ge 1; $i--) { if (HasOwnCubes $head[$i]) { return ,(Sub $head ($i + 1)) } }
@@ -432,6 +458,12 @@ function Analyze($geoText) {
         $loc = Paths { param($x) $x -eq 'locator_head' }
         if ($loc.Count) {
             $primary = WithSkull (WithFace (Sub $loc[0] ($loc[0].Count - 1)))
+        } elseif ((Paths { param($x) $x -match '^(head\d*|head_(left|right))$' }).Count -eq 0) {
+            # Solo si tampoco hay "head2", "head_left"... (Binacle, Wugtrio, Scovillain: esas ya son sus cabezas)
+            $holder = FaceHolder
+            if ($holder) { $primary = WithSkull $holder; $r.tags += 'cabeza por la cara' }
+        }
+        if ($primary) {
             $part = $primary[$primary.Count - 1]
             $whole = (TreeVol $part) -ge $WHOLE_MODEL_SHARE * (TreeVol '')
             if ((TreeCnt $part) -eq $total) { $headless = $true }
