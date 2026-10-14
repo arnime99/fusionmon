@@ -10,7 +10,8 @@
 	"contact": {
 		"homepage": "https://github.com/arnime99/fusionmon",
 		"sources": "https://github.com/arnime99/fusionmon",
-		"issues": "https://github.com/arnime99/fusionmon/issues"
+		"issues": "https://github.com/arnime99/fusionmon/issues",
+		"discord": "https://discord.gg/42Nw83Qy2"
 	},
 	"license": "MPL-2.0",
 	"icon": "assets/fusionmon/icon.png",
