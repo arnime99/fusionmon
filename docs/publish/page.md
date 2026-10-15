@@ -21,10 +21,19 @@ Entorno: cliente y servidor (los dos).]
 
 ## Descripción
 
-<!-- [GIF de la animación de fusión aquí: es lo primero que tiene que ver la gente] -->
+[Imágenes: se sirven desde el repo de GitHub (docs/publish/gallery); si se mueven o renombran, se rompen aquí.
+El tráiler es una miniatura que enlaza a YouTube (https://youtu.be/Vj9k-KyJ7kA). Copiar desde el aviso ⚠️ hasta el
+final, sin estas notas entre corchetes.]
+
+> ⚠️ **Two files:** pick the one for your Cobblemon version, **1.8.1** or **1.7.3 (Cobbleverse)**. Check the **Files**
+> tab: the Download button may not give you the right one.
+
+[![Watch the trailer](https://img.youtube.com/vi/Vj9k-KyJ7kA/maxresdefault.jpg)](https://www.youtube.com/watch?v=Vj9k-KyJ7kA)
 
 **Fusionmon** brings Pokémon fusions to **Cobblemon**, inspired by *Pokémon Infinite Fusion*. Pick any two of your
 Pokémon, use a **Fusion Injector**, and watch them become something new.
+
+![Pikachu + Charizard](https://raw.githubusercontent.com/arnime99/fusionmon/main/docs/publish/gallery/01-pikachu-charizard.jpg)
 
 There is no list of hand-made fusions: every pair is built on the fly, so **any two species can be fused**. With
 Cobblemon's models that is close to **800,000 combinations**, and over **a million** with model packs like AllTheMons.
@@ -50,6 +59,26 @@ Cobblemon's models that is close to **800,000 combinations**, and over **a milli
   earned as a fusion) or swaps head and body in one step.
 - **Multiplayer ready.** Works on servers; each player has their own discoveries.
 
+### See it in action
+
+![A fusion you have never made shows up as a silhouette](https://raw.githubusercontent.com/arnime99/fusionmon/main/docs/publish/gallery/02-fusion-screen.jpg)
+*Undiscovered fusions show up as a silhouette with hidden stats.*
+
+![Fusing in the world](https://raw.githubusercontent.com/arnime99/fusionmon/main/docs/publish/gallery/03-spirals.jpg)
+*With both Pokémon out, they fuse right in the world...*
+
+![The fusion appears](https://raw.githubusercontent.com/arnime99/fusionmon/main/docs/publish/gallery/04-growing.jpg)
+*...and the new Pokémon appears where they met.*
+
+![Fused types and stats](https://raw.githubusercontent.com/arnime99/fusionmon/main/docs/publish/gallery/05-summary.jpg)
+*Lapras + Arcanine: a Water/Fire fusion.*
+
+![Riding a fusion](https://raw.githubusercontent.com/arnime99/fusionmon/main/docs/publish/gallery/06-riding.jpg)
+*Ride fusions whose body can be ridden.*
+
+![Fusion Album](https://raw.githubusercontent.com/arnime99/fusionmon/main/docs/publish/gallery/07-fusion-album.jpg)
+*The Fusion Album keeps every fusion you discover.*
+
 ### How to use it
 
 1. Craft a **Fusion Injector**: redstone in the bottom-left corner, lapis lazuli in the center and a copper, iron, gold
@@ -59,10 +88,10 @@ Cobblemon's models that is close to **800,000 combinations**, and over **a milli
 4. Right-click again with the injector and pick a fusion to split or swap it.
 5. Sneak + right-click (or `/fusionalbum`) to open your Fusion Album.
 
+![Fusion Injector recipe](https://raw.githubusercontent.com/arnime99/fusionmon/main/docs/publish/gallery/08-recipe.jpg)
+
 If a fusion looks odd or your game runs slow with many fusions around, `/fusionvisual colors` switches to a simpler
 look (the head recolored with the body's palette) and `/fusionvisual graft` switches back.
-
-<!-- [Capturas aquí: pantalla de fusionar con silueta, un grupo de fusiones, combate, montando una, Fusion Album] -->
 
 ### Requirements
 
