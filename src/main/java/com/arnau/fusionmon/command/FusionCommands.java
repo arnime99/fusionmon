@@ -18,6 +18,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -42,7 +43,8 @@ import java.util.concurrent.ThreadLocalRandom;
  *                            muchas fusiones a la vista, y para grabar contenido
  * /fusionmon forget          vacía tu Fusion Album: todas las parejas vuelven a salir en silueta (para regrabar clips)
  * /fusionmon reveal on|off   con on, ninguna pareja sale en silueta (sin apuntarlas en el Fusion Album)
- * spawn, forget y reveal solo existen en desarrollo o con el interruptor de grabación (Fusionmon.recordingTools).
+ * spawn y forget solo existen en desarrollo o con el interruptor de grabación (Fusionmon.recordingTools); reveal, solo
+ * en desarrollo.
  */
 public final class FusionCommands {
 
@@ -84,7 +86,10 @@ public final class FusionCommands {
                                                         IntegerArgumentType.getInteger(context, COUNT)))))));
                 // forget borra el Fusion Album propio: las parejas vuelven a salir en silueta, para regrabar la revelación
                 root.then(Commands.literal("forget").executes(FusionCommands::forget));
-                // reveal on: ninguna pareja sale en silueta, para grabar o enseñar fusiones sin crearlas antes
+            }
+            if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+                // reveal on: ninguna pareja sale en silueta. Solo en runClient/runServer, ni siquiera con el interruptor
+                // de grabación (decisión del usuario): en los vídeos las siluetas son parte de la gracia
                 root.then(Commands.literal("reveal")
                         .then(Commands.literal("on").executes(context -> reveal(context, true)))
                         .then(Commands.literal("off").executes(context -> reveal(context, false))));
