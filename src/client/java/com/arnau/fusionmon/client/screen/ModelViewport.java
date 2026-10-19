@@ -1,7 +1,6 @@
 package com.arnau.fusionmon.client.screen;
 
-import com.cobblemon.mod.common.client.gui.PokemonGuiUtilsKt;
-import com.cobblemon.mod.common.client.gui.ProfileTransformType;
+import com.arnau.fusionmon.client.CobblemonCompat;
 import com.cobblemon.mod.common.client.render.models.blockbench.FloatingState;
 import com.cobblemon.mod.common.client.render.models.blockbench.PosableModel;
 import com.cobblemon.mod.common.client.render.models.blockbench.repository.VaryingModelRepository;
@@ -33,7 +32,8 @@ import java.io.IOException;
  * Cobblemon coloca los modelos de los menús con unos valores de retrato de cada especie (profileTranslation/Scale),
  * pensados para su cuadrito del resumen: en una caja grande el modelo salía cortado por arriba. Con
  * ProfileTransformType.NONE no los usa (solo escala x20, gira y pinta), y lo colocamos aquí con la caja real del
- * modelo que se pinta (el del cuerpo, si es cabeza sobre cuerpo).
+ * modelo que se pinta (el del cuerpo, si es cabeza sobre cuerpo). Se pinta a través de CobblemonCompat: la llamada es
+ * distinta en Cobblemon 1.7.3.
  */
 final class ModelViewport {
 
@@ -102,8 +102,8 @@ final class ModelViewport {
                 before.run();
             }
             float shade = silhouette ? 0F : 1F;
-            PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, state, partialTick,
-                    PROFILE_SCALE, ProfileTransformType.NONE, false, shade, shade, shade, 1F, 0F, 0F, MODEL_LIGHT);
+            CobblemonCompat.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, state, partialTick,
+                    PROFILE_SCALE, shade, shade, shade, 1F, MODEL_LIGHT);
         } finally {
             // Pase lo que pase: "after" deshace lo de "before" (el inspector apaga la inspección)
             pose.popPose();
@@ -180,8 +180,8 @@ final class ModelViewport {
         pose.translate(-center.x * PROFILE_SCALE, -center.y * PROFILE_SCALE, -center.z * PROFILE_SCALE);
         try {
             float shade = silhouette ? 0F : 1F;
-            PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, state, partialTick,
-                    PROFILE_SCALE, ProfileTransformType.NONE, false, shade, shade, shade, 1F, 0F, 0F, MODEL_LIGHT);
+            CobblemonCompat.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, state, partialTick,
+                    PROFILE_SCALE, shade, shade, shade, 1F, MODEL_LIGHT);
         } finally {
             pose.popPose();
         }

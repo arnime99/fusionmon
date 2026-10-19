@@ -25,8 +25,10 @@ Entorno: cliente y servidor (los dos).]
 El tráiler es una miniatura que enlaza a YouTube (https://youtu.be/Vj9k-KyJ7kA). Copiar desde el aviso ⚠️ hasta el
 final, sin estas notas entre corchetes.]
 
-> ⚠️ **Two files:** pick the one for your Cobblemon version, **1.8.1** or **1.7.3 (Cobbleverse)**. Check the **Files**
-> tab: the Download button may not give you the right one.
+> ✅ **One file for every Cobblemon version:** works with **Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse)** since
+> 0.1.1-beta.
+
+💬 **[Join the Discord](https://discord.gg/mmaXAA4MkX)** to share your fusions, suggest ideas and report bugs!
 
 [![Watch the trailer](https://img.youtube.com/vi/Vj9k-KyJ7kA/maxresdefault.jpg)](https://www.youtube.com/watch?v=Vj9k-KyJ7kA)
 
@@ -97,8 +99,7 @@ look (the head recolored with the body's palette) and `/fusionvisual graft` swit
 
 - Minecraft **1.21.1** with **Fabric Loader 0.17.2+**
 - **Fabric API**
-- **Cobblemon 1.8.1** or **Cobblemon 1.7.3** (Cobbleverse): there is one file for each, check the Cobblemon version in
-  the file name
+- **Cobblemon 1.7.3** (Cobbleverse), **1.8.1** or **1.8.2**: the same file works for all of them
 
 Install it on the **server and on every client**.
 

@@ -15,19 +15,15 @@ a nadie). Cada mensaje cabe en un mensaje de Discord (máx. 2000 caracteres).
 **Modrinth:** [MODRINTH LINK]
 
 ## Which file do I need?
-There are two files for each version. Pick the one that matches **your Cobblemon version**:
-🟢 **Cobblemon 1.8.1**: `Fusionmon 0.1.0-beta (Cobblemon 1.8.1)`
-🔵 **Cobblemon 1.7.3 / Cobbleverse**: `Fusionmon 0.1.0-beta (Cobblemon 1.7.3 / Cobbleverse)`
-
-Not sure? Open the Mods menu in Minecraft and check the Cobblemon version there.
+Just the latest one! Since **0.1.1-beta**, the same file works with **Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse)**.
 
 ## Requirements
 • Minecraft **1.21.1** with **Fabric Loader 0.17.2+**
 • **Fabric API**
-• **Cobblemon** (1.8.1 or 1.7.3)
+• **Cobblemon** 1.7.3, 1.8.1 or 1.8.2
 
 ## How to install
-1. Download the file for your Cobblemon version.
+1. Download the latest file.
 2. Put it in your `mods` folder, next to Cobblemon.
 3. On a server, install it on the **server and on every player's game**.
 
@@ -56,7 +52,7 @@ Something not working? Ask in the support forum 💬
 • Battle, ride (if the body can be ridden) and evolve them (both parts, by level, item or trade)
 • Split them back or swap head and body anytime, keeping all the experience
 
-🖥️ Works on servers. Available for **Cobblemon 1.8.1** and **Cobblemon 1.7.3 (Cobbleverse)**.
+🖥️ Works on servers. One file for **Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse)** (since 0.1.1-beta).
 
 ⚠️ This is a beta: back up your worlds, and report odd-looking fusions with a screenshot in the support forum!
 ```
@@ -73,7 +69,7 @@ The first beta is now available on CurseForge and Modrinth. Fuse any two Pokémo
 ⬇️ **CurseForge:** [CURSEFORGE LINK]
 ⬇️ **Modrinth:** [MODRINTH LINK]
 
-Works with **Cobblemon 1.8.1** and **Cobblemon 1.7.3 (Cobbleverse)**: check #download to pick the right file, and #changelog for everything in this version.
+One file for **Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse)**: check #download to install it, and #changelog for everything new.
 
 This is a **beta**, so your feedback matters a lot:
 🐛 Found a bug or a weird-looking fusion? Post it in the support forum with a screenshot

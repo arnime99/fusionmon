@@ -1,6 +1,6 @@
 # Fusionmon
 
-Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobblemon 1.8.1**, inspirado en Pokémon Infinite Fusion. Los datos de la fusión (nombre, tipos, stats) se calculan dinámicamente; nunca se guardan tablas de combinaciones.
+Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobblemon 1.7.3, 1.8.1 y 1.8.2** (un solo jar), inspirado en Pokémon Infinite Fusion. Los datos de la fusión (nombre, tipos, stats) se calculan dinámicamente; nunca se guardan tablas de combinaciones.
 
 ## Cómo trabajar con el usuario
 
@@ -19,26 +19,37 @@ Mod de Fabric para **Minecraft 1.21.1** que añade fusiones de Pokémon a **Cobb
 - Comandos de prueba en el juego (con trucos): `/fusionmon info <hueco>`, `/fusionmon unfuse <hueco>`, `/fusionmon spawn <cabeza> <cuerpo> [n]` (fusiones salvajes en corro; `random`, cuerpo `none` = normales), `/fusionmon forget` (vacía tu Fusion Album: las parejas vuelven a salir en silueta; también quita `reveal`), `/fusionmon reveal on|off` (con `on` ninguna pareja sale en silueta, sin apuntarlas en el Fusion Album; attachment `fusionmon:reveal_all`; **solo en `runClient`/`runServer`**, ni con el interruptor de grabación: decisión del usuario), `spawn` y `forget` solo en desarrollo, o con el archivo `config/fusionmon-devtools` o el argumento de Java `-Dfusionmon.devtools=true` (`Fusionmon.recordingTools`: para grabar vídeos en la instancia de CurseForge con el jar publicado; CurseForge borra los argumentos de Java al lanzar, por eso el archivo), `/pokegive <especie>`, `/spawnpokemon <especie> lvl=N`.
 - **Medir rendimiento:** mundo sin apariciones (`/gamerule doPokemonSpawning false`, `doMobSpawning false`), FPS ilimitados y sin VSync, F3; 60 normales (`/fusionmon spawn charizard none 60`) frente a 60 fusiones. Perfilador sin instalar nada (JDK 21): `jcmd -l` (el juego es `devlaunchinjector`), `jcmd <pid> JFR.start settings=profile duration=20s filename=...` mientras el usuario mira las fusiones, y `jfr print --events jdk.ExecutionSample` agrupando las muestras del "Render thread". Referencia (2026-10-08, gráfica integrada): 60 Charizard 94 FPS, 60 fusiones Charizard+Pikachu 78 FPS.
 
-## Versión para Cobblemon 1.7.3 (Cobbleverse)
+## Un solo jar para Cobblemon 1.7.3 (Cobbleverse) y 1.8.x
 
-Cobbleverse (el modpack más jugado; 1.7.42, julio 2026) usa **Cobblemon 1.7.3**, mismo Minecraft 1.21.1 y Fabric. Hay una
-**rama `cobblemon-1.7.3`** con un worktree en `C:\MinecraftMods\Fusionmon\fusionmon-cobblemon-1.7.3` (su propia carpeta `run`:
-no abrir mundos de 1.8.1 con 1.7.3). Probada entera en el juego el 2026-10-13 (fusionar en pantalla y en el mundo, separar,
-invertir, montar, combate, resumen, Fusion Album). Diferencias con `main` (todas pequeñas):
-- `gradle.properties`: `cobblemon_version=1.7.3+1.21.1`, `version=…+cobblemon-1.7.3`; `fabric.mod.json`: `"cobblemon": "~1.7.3"`.
-- `build.gradle`: `modImplementation "net.fabricmc:fabric-language-kotlin:1.13.6+kotlin.2.2.20"` (el POM de 1.7.3 no lo declara).
-- `ModelViewport`: `drawProfilePokemon(…, scale, false, false, r, g, b, a, 0, 0)` (1.7.3: dos booleanos y sin luz; 1.8: `ProfileTransformType.NONE`, `false`, …, luz).
-- `FusionGraft.layerType`: sin `getScrolling`/`getScrollingLayer` (no existen en 1.7.3).
-- Sin `ClientboundSeatAssignmentPacketHandlerMixin` (ese paquete no existe en 1.7.3; montar va bien sin él).
-Para sacar versión: `git merge main` en el worktree, compilar los dos y publicar los dos jars. En `main`, no usar API que
-solo exista en 1.8 sin mirar si hay equivalente en 1.7.3 (p. ej. `MoveSet.getMoveTemplates()` → `FusionMoves.templates`). Los 12 mixins restantes se
-comprobaron con `javap` contra el jar de 1.7.3: mismos métodos y llamadas.
+Cobbleverse (el modpack más jugado) usa **Cobblemon 1.7.3**; Cobblemon normal va por la **1.8.2** (2026-10-11). Desde la
+0.1.1-beta hay **un solo jar** para las dos (`fabric.mod.json`: `"cobblemon": ">=1.7.3 <1.9"`), compilado contra 1.8.2.
+Antes había una rama `cobblemon-1.7.3` y dos jars, y la app de CurseForge daba a la gente el que no era (instalaba el
+último subido): con Cobblemon 1.8.2 les salía "requires Cobblemon between 1.7.3 and 1.8" y pedían "actualizar".
+La rama queda solo como historia (worktree en `C:\MinecraftMods\Fusionmon\fusionmon-cobblemon-1.7.3`, sin usar).
+Las diferencias entre versiones se resuelven al arrancar:
+- `client/CobblemonCompat`: `MODERN` = existe `ProfileTransformType` (1.8+). `drawProfilePokemon` (1.7.3: `…, escala,
+  false, false, r, g, b, a, 0, 0` sin luz, llamado con `MethodHandle` porque no compila contra 1.8; 1.8: directo, con
+  `ProfileTransformType.NONE` y luz) y `scrollingLayer` (capas que se desplazan, solo 1.8). Lo de 1.8 va en la clase
+  interna `Modern`, que en 1.7.3 nunca se carga. **Todo lo que solo exista en una versión, aquí.**
+- `client/FusionmonMixinPlugin` (plugin de `fusionmon.client.mixins.json`): salta los mixins cuya clase objetivo no existe
+  (`ClientboundSeatAssignmentPacketHandlerMixin` en 1.7.3; montar va bien sin él allí). Mira el `.class` sin cargarlo.
+- El POM de 1.7.3 no declara Fabric Language Kotlin, pero el jar de Cobblemon 1.7.3 lo exige igual: los jugadores lo tienen.
+Comprobar una versión nueva de Cobblemon (probado así con 1.8.2 y 1.7.3, 2026-10-19), con sus jars en la caché de Gradle:
+`tools/cobblemon-mixin-check.ps1 -OldJar <viejo> -NewJar <nuevo>` (cada enganche de los mixins: método, firma, llamadas
+interceptadas y campos `@Shadow`) y `tools/cobblemon-api-check.ps1 -ModJar build/libs/<mod>.jar -CobblemonJar <jar>`
+(todas las referencias del mod a Cobblemon; da falsos positivos con lo heredado de Minecraft —`method_*`— y de las
+colecciones de Java). En 1.7.3 solo deben faltar las de `CobblemonCompat$Modern`. Después, probar el **mismo jar** en
+una instancia de CurseForge con 1.8.2 (`CF 1.8.2`) y en la de Cobbleverse.
+- 1.8.2 cambió `Pokemon.updateMovesOnFormChange`: ahora llama dos veces a `canLearn` (también para quitar movimientos de
+  forma de los activos solo si la forma nueva no los aprende); `PokemonMixin` intercepta las dos, así que una fusión que
+  cambia de forma conserva también esos (aceptado: las fusiones no pierden movimientos).
+- 1.8.2 rehízo 36 modelos con otros nombres de huesos (`head_angle`, `head_ai`, `torso2/3`): ver `docs/visual-bugs.md`.
 
 ## Dependencia de Cobblemon (no tocar sin motivo)
 
-- Maven oficial `https://maven.impactdev.net/repository/development/`, `modImplementation "com.cobblemon:fabric:1.8.1+1.21.1"`; su POM trae Fabric Language Kotlin.
+- Maven oficial `https://maven.impactdev.net/repository/development/`, `modImplementation "com.cobblemon:fabric:${cobblemon_version}"` (`gradle.properties`: `1.8.2+1.21.1`); su POM trae Fabric Language Kotlin. Gradle descarga el jar (144 MB) con un solo hilo y puede tardar más de 10 min.
 - El plugin `org.jetbrains.kotlin.jvm` está aplicado **aunque no haya código Kotlin**: Loom solo remapea los metadatos Kotlin de Cobblemon si está; sin él, crash `ClassNotFoundException: net.minecraft.class_2960` en kotlin-reflect.
-- El sources jar de Cobblemon está vacío. Para conocer su API: `javap` (JDK 21 en `~/.jdks`) sobre el jar en `~/.gradle/caches/modules-2/files-2.1/com.cobblemon/fabric/1.8.1+1.21.1/`. **Comprobar qué hace un método por dentro (`javap -c`) antes de usarlo**, no fiarse del nombre.
+- El sources jar de Cobblemon está vacío. Para conocer su API: `javap` (JDK 21 en `~/.jdks`) sobre el jar en `~/.gradle/caches/modules-2/files-2.1/com.cobblemon/fabric/<versión>/` (están 1.7.3, 1.8.1 y 1.8.2). **Comprobar qué hace un método por dentro (`javap -c`) antes de usarlo**, no fiarse del nombre.
 
 ## Arquitectura (`src/main/java/com/arnau/fusionmon`)
 

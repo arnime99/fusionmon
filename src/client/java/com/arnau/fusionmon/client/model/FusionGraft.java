@@ -1,6 +1,7 @@
 package com.arnau.fusionmon.client.model;
 
 import com.arnau.fusionmon.Fusionmon;
+import com.arnau.fusionmon.client.CobblemonCompat;
 import com.arnau.fusionmon.client.texture.FusionBody;
 import com.arnau.fusionmon.client.texture.FusionTextures;
 import com.cobblemon.mod.common.client.render.ModelLayer;
@@ -1129,8 +1130,10 @@ public final class FusionGraft {
         if (texture == null) {
             return null;
         }
-        if (layer.getScrolling() != null) {
-            return model.getScrollingLayer(texture, layer.getScrolling(), layer);
+        // Las capas con textura que se desplaza solo existen desde Cobblemon 1.8 (ver CobblemonCompat)
+        RenderType scrolling = CobblemonCompat.scrollingLayer(model, texture, layer);
+        if (scrolling != null) {
+            return scrolling;
         }
         return model.getLayer(texture, layer.getEmissive(), layer.getTranslucent(), layer.getTranslucent_cull());
     }

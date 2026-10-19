@@ -1,6 +1,7 @@
 {
 	"required": true,
 	"package": "com.arnau.fusionmon.client.mixin",
+	"plugin": "com.arnau.fusionmon.client.FusionmonMixinPlugin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"ClientboundSeatAssignmentPacketHandlerMixin",

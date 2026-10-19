@@ -10,7 +10,7 @@
   Escribe docs/species/especies.csv (separado por ";", se abre con Excel) y docs/species/README.md (resumen).
   Este archivo tiene que estar guardado en UTF-8 CON BOM: PowerShell 5.1 lee los .ps1 sin BOM como ANSI.
 #>
-param([string]$OutDir)
+param([string]$OutDir, [string]$CobblemonVersion, [switch]$NoPacks)
 $ErrorActionPreference = 'Stop'
 [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -20,11 +20,17 @@ if (-not $OutDir) { $OutDir = Join-Path $repo 'docs\species' }
 # ---------------------------------------------------------------------------------------------------------------
 # 1. Archivos: el jar de Cobblemon y después los resource packs
 # ---------------------------------------------------------------------------------------------------------------
-$jar = Get-ChildItem "$env:USERPROFILE\.gradle\caches\modules-2\files-2.1\com.cobblemon\fabric\1.8.1+1.21.1" -Recurse -Filter '*.jar' |
+# La versión de Cobblemon del proyecto (gradle.properties), o la que se pida (-CobblemonVersion 1.8.1+1.21.1) para
+# comparar entre versiones
+if (-not $CobblemonVersion) {
+    $CobblemonVersion = ((Get-Content (Join-Path $repo 'gradle.properties')) -match '^cobblemon_version=' -replace '^cobblemon_version=', '').Trim()
+}
+$jar = Get-ChildItem "$env:USERPROFILE\.gradle\caches\modules-2\files-2.1\com.cobblemon\fabric\$CobblemonVersion" -Recurse -Filter '*.jar' |
         Where-Object { $_.Name -notmatch 'sources' } | Select-Object -First 1
 $sources = @(@{ tag = 'Cobblemon'; path = $jar.FullName })
 $packDir = Join-Path $repo 'run\resourcepacks'
-if (Test-Path $packDir) {
+# -NoPacks: solo Cobblemon, como lo ve un jugador sin resource packs de modelos
+if (-not $NoPacks -and (Test-Path $packDir)) {
     foreach ($p in (Get-ChildItem $packDir -Filter *.zip)) { $sources += @{ tag = $p.BaseName; path = $p.FullName } }
 }
 $files = @{}

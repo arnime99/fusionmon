@@ -194,6 +194,18 @@ Lo que se hizo:
   Clefairy + Charizard (cola de Clefairy en vez de la de Charizard), Charizard + Clefairy (antes dos colas, ahora una),
   Pikachu + Gengar (cola), Gengar + Pikachu, Clefairy + Voltorb, Butterfree + Voltorb (manos de Butterfree).
 
+## Modelos rehechos en Cobblemon 1.8.2 (2026-10-19, sin revisar en el juego)
+
+1.8.2 rehízo 36 modelos con otra forma de nombrar los huesos (`head_angle`, `head_ai`, `torso2/3`) y añadió 17 especies.
+Comparado con `tools/species-table.ps1 -NoPacks` (solo Cobblemon) en 1.8.1 y 1.8.2: la mayoría detecta bien (los nuevos
+también: Charjabug y Vikavolt, que en Cobbleverse daban guerra, ahora salen con cabeza) y algunos mejoran (Oddish, Gloom y
+Quilladin tienen cabeza `head_ai`; Quilladin deja de ser "todo cabeza"). Sospechosos, para mirar en `/fusionviewer` **con
+AllTheMons y el pack de Cobbleverse desactivados** (sustituyen justo estos modelos):
+- **Greninja** (y Ash-Greninja): cráneo = `tongue_closed` (la lengua-bufanda es la pieza más grande) y sin cola. El más urgente.
+- **Luxray / Luxio**: la cola se queda solo con los mechones (`tail_fluff*`), sin la principal.
+- **Glimmet / Glimmora**: antes "sin cabeza"; ahora cabeza = `face_point`, que solo tiene planos.
+- **Houndstone** (cráneo `jaw`), **Snover** (cabeza `torso2`), **Ekans** (tronco y punta de cola cambian), Sawsbuck (pegado).
+
 ## Abiertos
 
 - **Ninetales**: su cabeza está inclinada en su modelo y su cráneo también; al pegar, no queda del todo bien.
