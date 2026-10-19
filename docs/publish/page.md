@@ -114,7 +114,7 @@ screenshots, on the issue tracker or in the Discord. Back up your worlds before 
 Made by **Rupikola**. Inspired by *Pokémon Infinite Fusion* and built on top of the amazing **Cobblemon**.
 Licensed under the **MPL-2.0**. Source code and issues: https://github.com/arnime99/fusionmon
 
-**Join the community on Discord:** https://discord.gg/42Nw83Qy2 (share your fusions, get help, follow the updates)
+**Join the community on Discord:** https://discord.gg/mmaXAA4MkX (share your fusions, get help, follow the updates)
 
 Pokémon is © Nintendo, Game Freak and The Pokémon Company. This is an unofficial fan project, not affiliated with or
 endorsed by them, Cobblemon or Pokémon Infinite Fusion.
