@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.client.screen;
 
+import com.arnau.fusionmon.Fusionmon;
 import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.fusion.FusionAspects;
 import com.arnau.fusionmon.fusion.FusionCalculator;
@@ -13,17 +14,24 @@ import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Gender;
 import com.cobblemon.mod.common.pokemon.RenderablePokemon;
 import com.cobblemon.mod.common.pokemon.Species;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.text.Normalizer;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -66,6 +74,23 @@ public class FusionDexScreen extends Screen {
     private static Species body;
     private static boolean shiny;
     private static boolean female;
+    /** Pintar la fusión en negro, como sin descubrir (tecla B): para portadas "X + Y = ???". */
+    private static boolean silhouette;
+    /** Qué se ve en el visor (tecla V): la fusión, o una de las partes sin fusionar (para sacar su imagen). */
+    private static View view = View.FUSION;
+
+    private enum View { FUSION, HEAD, BODY }
+
+    /** Lado de las imágenes que se guardan con la tecla P, en píxeles: de sobra para una portada. */
+    private static final int RENDER_SIZE = 2048;
+    private static final long MESSAGE_MILLIS = 4000;
+    private static final DateTimeFormatter RENDER_TIME = DateTimeFormatter.ofPattern("HHmmss");
+
+    /** Se ha pulsado P: la imagen se guarda en el siguiente render (ver render). */
+    private boolean exportRequested;
+    /** Aviso de la última imagen guardada (o del error), y hasta cuándo se enseña. */
+    private Component exportMessage;
+    private long exportMessageUntil;
 
     /** Estado de animación del visor (como los de los menús de Cobblemon: sin entidad detrás). */
     private final FloatingState previewState = new FloatingState();
@@ -206,11 +231,26 @@ public class FusionDexScreen extends Screen {
         int boxBottom = height - SMALL - 8 - TEXT_LINES * LINE;
         int box = Math.max(40, Math.min(width - 2 * MARGIN, boxBottom - boxTop));
         int boxX = width / 2 - box / 2;
-        RenderablePokemon model = new RenderablePokemon(head, aspects(), ItemStack.EMPTY);
+        // Una parte sola se pinta como un Pokémon normal: sin los aspects de fusión no pasa por el graft
+        RenderablePokemon model = switch (view) {
+            case FUSION -> new RenderablePokemon(head, aspects(), ItemStack.EMPTY);
+            case HEAD -> new RenderablePokemon(head, partAspects(head), ItemStack.EMPTY);
+            case BODY -> new RenderablePokemon(body, partAspects(body), ItemStack.EMPTY);
+        };
         // Los modos de /fusionvisual cambian lo que se pinta: hay que volver a encuadrar
         String modes = "" + FusionGraft.isEnabled() + FusionGraft.hasTails() + FusionGraft.hasDecorations()
                 + FusionGraft.hasTops() + FusionGraft.getAlign() + FusionGraft.getSizing();
-        viewport.render(graphics, model, previewState, modes, boxX, boxTop, box, partialTick, null, null);
+        viewport.render(graphics, model, previewState, modes, boxX, boxTop, box, partialTick, null, null, silhouette);
+        // Esquina del visor: qué se está viendo, si no es la fusión normal (lo que saldrá en la imagen con P)
+        Component viewLabel = viewLabel();
+        if (viewLabel != null) {
+            graphics.drawString(font, viewLabel, boxX + 4, boxTop + 4, YELLOW);
+        }
+        if (exportRequested) {
+            // Aquí y no al pulsar la tecla: hace falta la matriz de la interfaz que se pone para pintar la pantalla
+            exportRequested = false;
+            export(model, modes, box, partialTick);
+        }
 
         // Debajo: nombre, tipos, stats y si se ha encontrado la cabeza
         FormData headForm = head.getStandardForm();
@@ -234,12 +274,44 @@ public class FusionDexScreen extends Screen {
         stats.append("  ").append(Component.translatable("gui.fusionmon.dex.total", total));
         graphics.drawCenteredString(font, stats, width / 2, y, GRAY);
         y += LINE;
-        boolean graft = FusionGraft.canGraft(head.getResourceIdentifier(), previewState);
-        Component status = Component.translatable(head == body ? "gui.fusionmon.dex.same"
-                : graft ? "gui.fusionmon.confirm.graft_yes" : "gui.fusionmon.confirm.graft_no");
-        graphics.drawCenteredString(font, status, width / 2, y, graft ? GREEN : GRAY);
+        if (exportMessage != null && System.currentTimeMillis() < exportMessageUntil) {
+            // La última imagen guardada tapa un momento la línea de si encuentra la cabeza
+            graphics.drawCenteredString(font, exportMessage, width / 2, y, YELLOW);
+        } else {
+            boolean graft = FusionGraft.canGraft(head.getResourceIdentifier(), previewState);
+            Component status = Component.translatable(head == body ? "gui.fusionmon.dex.same"
+                    : graft ? "gui.fusionmon.confirm.graft_yes" : "gui.fusionmon.confirm.graft_no");
+            graphics.drawCenteredString(font, status, width / 2, y, graft ? GREEN : GRAY);
+        }
         y += LINE;
         graphics.drawCenteredString(font, Component.translatable("gui.fusionmon.dex.help"), width / 2, y, GRAY);
+    }
+
+    /**
+     * Guarda lo que se ve en el visor como PNG con el fondo transparente en fusionmon/renders (en runClient,
+     * run/fusionmon/renders), y lo avisa aquí y en el chat con un enlace al archivo.
+     */
+    private void export(RenderablePokemon model, String modes, int box, float partialTick) {
+        String name = switch (view) {
+            case FUSION -> head.getResourceIdentifier().getPath()
+                    + (head == body ? "" : "+" + body.getResourceIdentifier().getPath());
+            case HEAD -> head.getResourceIdentifier().getPath();
+            case BODY -> body.getResourceIdentifier().getPath();
+        } + (shiny ? "_shiny" : "") + (female ? "_female" : "") + (silhouette ? "_silhouette" : "")
+                + "_" + LocalTime.now().format(RENDER_TIME) + ".png";
+        File file = new File(new File(Minecraft.getInstance().gameDirectory, "fusionmon/renders"), name);
+        try {
+            Files.createDirectories(file.getParentFile().toPath());
+            viewport.export(model, previewState, modes, box, RENDER_SIZE, silhouette, partialTick, file);
+            exportMessage = Component.translatable("gui.fusionmon.dex.saved", name);
+            Component link = Component.literal(name).withStyle(style -> style.withUnderlined(true)
+                    .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_FILE, file.getAbsolutePath())));
+            Minecraft.getInstance().gui.getChat().addMessage(Component.translatable("gui.fusionmon.dex.saved", link));
+        } catch (IOException | RuntimeException e) {
+            Fusionmon.LOGGER.error("No se ha podido guardar la imagen {}", file, e);
+            exportMessage = Component.translatable("gui.fusionmon.dex.save_failed").withColor(0xFF5555);
+        }
+        exportMessageUntil = System.currentTimeMillis() + MESSAGE_MILLIS;
     }
 
     /**
@@ -310,6 +382,9 @@ public class FusionDexScreen extends Screen {
                 case GLFW.GLFW_KEY_R -> setBody(random());
                 case GLFW.GLFW_KEY_S -> swap();
                 case GLFW.GLFW_KEY_C -> viewport.reset();
+                case GLFW.GLFW_KEY_B -> silhouette = !silhouette;
+                case GLFW.GLFW_KEY_V -> view = View.values()[(view.ordinal() + 1) % View.values().length];
+                case GLFW.GLFW_KEY_P -> exportRequested = true;
                 default -> {
                     return super.keyPressed(keyCode, scanCode, modifiers);
                 }
@@ -416,6 +491,20 @@ public class FusionDexScreen extends Screen {
                 + FusionGraft.getAlign().name().toLowerCase(Locale.ROOT)));
         sizeButton.setMessage(Component.translatable("gui.fusionmon.dex.size."
                 + FusionGraft.getSizing().name().toLowerCase(Locale.ROOT)));
+    }
+
+    /** "Solo cabeza: Pikachu", "Silueta"... o null si se ve la fusión normal. */
+    private static Component viewLabel() {
+        MutableComponent label = switch (view) {
+            case FUSION -> null;
+            case HEAD -> Component.translatable("gui.fusionmon.dex.view.head", head.getTranslatedName());
+            case BODY -> Component.translatable("gui.fusionmon.dex.view.body", body.getTranslatedName());
+        };
+        if (!silhouette) {
+            return label;
+        }
+        Component black = Component.translatable("gui.fusionmon.dex.view.silhouette");
+        return label == null ? black : label.append(" · ").append(black);
     }
 
     private static Component onOff(boolean value) {

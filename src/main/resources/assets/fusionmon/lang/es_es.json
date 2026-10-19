@@ -79,7 +79,12 @@
   "gui.fusionmon.dex.none": "No hay especies con modelo cargadas",
   "gui.fusionmon.dex.total": "Total %s",
   "gui.fusionmon.dex.same": "Misma especie: sin fusión visual",
-  "gui.fusionmon.dex.help": "←/→ cuerpo · ↑/↓ cabeza · R azar · S intercambiar · C cámara · arrastrar: girar (derecho: mover) · rueda: zoom",
+  "gui.fusionmon.dex.help": "←/→ cuerpo · ↑/↓ cabeza · R azar · S intercambiar · C cámara · V fusión/cabeza/cuerpo · B silueta · P guardar PNG · arrastrar: girar (derecho: mover) · rueda: zoom",
+  "gui.fusionmon.dex.saved": "Guardada %s",
+  "gui.fusionmon.dex.view.head": "Solo cabeza: %s",
+  "gui.fusionmon.dex.view.body": "Solo cuerpo: %s",
+  "gui.fusionmon.dex.view.silhouette": "Silueta",
+  "gui.fusionmon.dex.save_failed": "No se ha podido guardar la imagen (mira el log)",
   "gui.fusionmon.dex.shiny": "Shiny: %s",
   "gui.fusionmon.dex.male": "Sexo: ♂",
   "gui.fusionmon.dex.female": "Sexo: ♀",
@@ -143,5 +148,7 @@
   "command.fusionmon.unfused": "Fusión deshecha.",
   "command.fusionmon.unknown_species": "Especie desconocida: %s",
   "command.fusionmon.spawned": "Han aparecido %s Pokémon.",
-  "command.fusionmon.forgotten": "Fusion Album vacío: %s fusiones vuelven a salir en silueta."
+  "command.fusionmon.forgotten": "Fusion Album vacío: %s fusiones vuelven a salir en silueta.",
+  "command.fusionmon.reveal_on": "Todas las fusiones reveladas: ninguna sale en silueta hasta /fusionmon reveal off o /fusionmon forget.",
+  "command.fusionmon.reveal_off": "Las fusiones que no has creado vuelven a salir en silueta."
 }

@@ -41,7 +41,8 @@ import java.util.concurrent.ThreadLocalRandom;
  *                            cada una; cuerpo "none" = Pokémon normales, para comparar). Para medir rendimiento con
  *                            muchas fusiones a la vista, y para grabar contenido
  * /fusionmon forget          vacía tu Fusion Album: todas las parejas vuelven a salir en silueta (para regrabar clips)
- * spawn y forget solo existen en desarrollo o con -Dfusionmon.devtools=true (para grabar vídeos).
+ * /fusionmon reveal on|off   con on, ninguna pareja sale en silueta (sin apuntarlas en el Fusion Album)
+ * spawn, forget y reveal solo existen en desarrollo o con el interruptor de grabación (Fusionmon.recordingTools).
  */
 public final class FusionCommands {
 
@@ -83,6 +84,10 @@ public final class FusionCommands {
                                                         IntegerArgumentType.getInteger(context, COUNT)))))));
                 // forget borra el Fusion Album propio: las parejas vuelven a salir en silueta, para regrabar la revelación
                 root.then(Commands.literal("forget").executes(FusionCommands::forget));
+                // reveal on: ninguna pareja sale en silueta, para grabar o enseñar fusiones sin crearlas antes
+                root.then(Commands.literal("reveal")
+                        .then(Commands.literal("on").executes(context -> reveal(context, true)))
+                        .then(Commands.literal("off").executes(context -> reveal(context, false))));
             }
             dispatcher.register(root);
 
@@ -141,6 +146,13 @@ public final class FusionCommands {
         int count = FusionDiscovery.forgetAll(context.getSource().getPlayerOrException());
         context.getSource().sendSuccess(() -> Component.translatable("command.fusionmon.forgotten", count), false);
         return count;
+    }
+
+    private static int reveal(CommandContext<CommandSourceStack> context, boolean reveal) throws CommandSyntaxException {
+        FusionDiscovery.setRevealAll(context.getSource().getPlayerOrException(), reveal);
+        context.getSource().sendSuccess(() -> Component.translatable(
+                reveal ? "command.fusionmon.reveal_on" : "command.fusionmon.reveal_off"), false);
+        return 1;
     }
 
     /** La especie por su nombre ("charizard"), una al azar con "random", o null si no existe. */

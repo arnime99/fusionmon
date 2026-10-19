@@ -79,7 +79,12 @@
   "gui.fusionmon.dex.none": "No species with a model are loaded",
   "gui.fusionmon.dex.total": "Total %s",
   "gui.fusionmon.dex.same": "Same species: no visual fusion",
-  "gui.fusionmon.dex.help": "←/→ body · ↑/↓ head · R random · S swap · C camera · drag: rotate (right: move) · wheel: zoom",
+  "gui.fusionmon.dex.help": "←/→ body · ↑/↓ head · R random · S swap · C camera · V fusion/head/body · B silhouette · P save PNG · drag: rotate (right: move) · wheel: zoom",
+  "gui.fusionmon.dex.saved": "Saved %s",
+  "gui.fusionmon.dex.view.head": "Head only: %s",
+  "gui.fusionmon.dex.view.body": "Body only: %s",
+  "gui.fusionmon.dex.view.silhouette": "Silhouette",
+  "gui.fusionmon.dex.save_failed": "Couldn't save the image (see the log)",
   "gui.fusionmon.dex.shiny": "Shiny: %s",
   "gui.fusionmon.dex.male": "Gender: ♂",
   "gui.fusionmon.dex.female": "Gender: ♀",
@@ -143,5 +148,7 @@
   "command.fusionmon.unfused": "Fusion undone.",
   "command.fusionmon.unknown_species": "Unknown species: %s",
   "command.fusionmon.spawned": "Spawned %s Pokémon.",
-  "command.fusionmon.forgotten": "Fusion Album cleared: %s fusions are back to silhouettes."
+  "command.fusionmon.forgotten": "Fusion Album cleared: %s fusions are back to silhouettes.",
+  "command.fusionmon.reveal_on": "All fusions revealed: no more silhouettes until /fusionmon reveal off or /fusionmon forget.",
+  "command.fusionmon.reveal_off": "Fusions you haven't made show up as silhouettes again."
 }

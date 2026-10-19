@@ -8,13 +8,22 @@ import com.cobblemon.mod.common.client.render.models.blockbench.repository.Varyi
 import com.cobblemon.mod.common.entity.PoseType;
 import com.cobblemon.mod.common.pokemon.RenderablePokemon;
 import com.cobblemon.mod.common.util.math.QuaternionUtilsKt;
+import com.mojang.blaze3d.pipeline.TextureTarget;
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexSorting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.util.Mth;
+import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
+
+import java.io.File;
+import java.io.IOException;
 
 /**
  * Visor 3D de un Pokémon dentro de una pantalla (lo usan el visor de fusiones y el inspector de especies): encuadrado
@@ -74,8 +83,7 @@ final class ModelViewport {
         graphics.fill(x, y, x + box, y + box, 0xFF1E1E1E);
         measure(model, state, fitExtra);
 
-        float shownYaw = manualCamera ? yaw : yaw + (System.currentTimeMillis() % TURN_MILLIS) * 360F / TURN_MILLIS;
-        Quaternionf rotation = QuaternionUtilsKt.fromEulerXYZDegrees(new Quaternionf(), new Vector3f(pitch, shownYaw, 0F));
+        Quaternionf rotation = cameraRotation();
         // Píxeles por bloque para que el modelo quepa; drawProfilePokemon escala además x20 (el "20F" de abajo)
         float pixels = box * FIT / (2 * fitRadius) * zoom;
         // El centro del modelo, ya girado, en el centro de la caja
@@ -115,20 +123,74 @@ final class ModelViewport {
         state.setCurrentAspects(model.getAspects());
         measure(model, state, "");
         Quaternionf rotation = QuaternionUtilsKt.fromEulerXYZDegrees(new Quaternionf(), new Vector3f(pitch, yaw, 0F));
-        float pixels = size / (2 * fitRadius);
+        draw(graphics.pose(), model, state, rotation, centerX, centerY, size / (2 * fitRadius), false, partialTick);
+    }
+
+    /**
+     * Guarda en un PNG cuadrado de size píxeles, con el fondo transparente, el modelo tal como se ve ahora en la caja
+     * de lado box (mismo giro, zoom y desplazamiento): para portadas de vídeos y redes.
+     *
+     * No se puede leer la pantalla (llevaría el fondo y el resto de la interfaz): se pinta en una imagen aparte de la
+     * tarjeta gráfica (TextureTarget) que empieza transparente, se copia a memoria y se guarda. Hay que llamarlo
+     * mientras se pinta la pantalla, con la matriz de la interfaz puesta: solo se cambia la proyección, al tamaño de la
+     * imagen, y se deja todo como estaba al acabar.
+     */
+    void export(RenderablePokemon model, FloatingState state, String fitExtra, int box, int size, boolean silhouette,
+                float partialTick, File file) throws IOException {
+        state.setCurrentAspects(model.getAspects());
+        measure(model, state, fitExtra);
+        Minecraft minecraft = Minecraft.getInstance();
+        Matrix4f oldProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
+        VertexSorting oldSorting = RenderSystem.getVertexSorting();
+        TextureTarget target = new TextureTarget(size, size, true, Minecraft.ON_OSX);
+        try {
+            target.setClearColor(0F, 0F, 0F, 0F);
+            target.clear(Minecraft.ON_OSX);
+            target.bindWrite(true);
+            // Como la de la interfaz (GameRenderer), pero del tamaño de la imagen
+            RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(0F, size, size, 0F, 1000F, 21000F),
+                    VertexSorting.ORTHOGRAPHIC_Z);
+            // La caja del visor pasa a medir size: lo que se movió con el ratón se agranda igual
+            float ratio = size / (float) box;
+            draw(new PoseStack(), model, state, cameraRotation(), size / 2F + panX * ratio, size / 2F + panY * ratio,
+                    size * FIT / (2 * fitRadius) * zoom, silhouette, partialTick);
+            try (NativeImage image = new NativeImage(size, size, false)) {
+                RenderSystem.bindTexture(target.getColorTextureId());
+                // false: conservar la transparencia (las capturas de Minecraft la quitan)
+                image.downloadTexture(0, false);
+                // La tarjeta gráfica guarda las filas de abajo arriba
+                image.flipY();
+                image.writeToFile(file);
+            }
+        } finally {
+            RenderSystem.setProjectionMatrix(oldProjection, oldSorting);
+            target.destroyBuffers();
+            minecraft.getMainRenderTarget().bindWrite(true);
+        }
+    }
+
+    /** Pinta el modelo centrado en (centerX, centerY) a pixels píxeles por bloque (sin marco ni recorte). */
+    private void draw(PoseStack pose, RenderablePokemon model, FloatingState state, Quaternionf rotation,
+                      float centerX, float centerY, float pixels, boolean silhouette, float partialTick) {
         Vector3f center = rotation.transform(new Vector3f(fitCenter));
-        PoseStack pose = graphics.pose();
         pose.pushPose();
         pose.translate(centerX, centerY, 0);
         float scale = pixels / PROFILE_SCALE;
         pose.scale(scale, scale, scale);
         pose.translate(-center.x * PROFILE_SCALE, -center.y * PROFILE_SCALE, -center.z * PROFILE_SCALE);
         try {
+            float shade = silhouette ? 0F : 1F;
             PokemonGuiUtilsKt.drawProfilePokemon(model, pose, rotation, PoseType.PROFILE, state, partialTick,
-                    PROFILE_SCALE, ProfileTransformType.NONE, false, 1F, 1F, 1F, 1F, 0F, 0F, MODEL_LIGHT);
+                    PROFILE_SCALE, ProfileTransformType.NONE, false, shade, shade, shade, 1F, 0F, 0F, MODEL_LIGHT);
         } finally {
             pose.popPose();
         }
+    }
+
+    /** Giro de la cámara ahora mismo: el elegido con el ratón, o el que lleva girando solo. */
+    private Quaternionf cameraRotation() {
+        float shownYaw = manualCamera ? yaw : yaw + (System.currentTimeMillis() % TURN_MILLIS) * 360F / TURN_MILLIS;
+        return QuaternionUtilsKt.fromEulerXYZDegrees(new Quaternionf(), new Vector3f(pitch, shownYaw, 0F));
     }
 
     /**

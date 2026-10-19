@@ -34,6 +34,14 @@ public final class FusionDiscovery {
     private static final AttachmentType<Boolean> EXISTING_REGISTERED = AttachmentRegistry.create(
             Fusionmon.id("discovered_existing"),
             builder -> builder.persistent(Codec.BOOL).copyOnDeath().initializer(() -> false));
+    /**
+     * Todas las parejas cuentan como descubiertas (ninguna sale en silueta), sin apuntarlas en el Fusion Album: para
+     * grabar o enseñar fusiones sin tener que crearlas antes (/fusionmon reveal, solo desarrollo). Se guarda con el
+     * jugador hasta que lo quite (reveal off o forget).
+     */
+    private static final AttachmentType<Boolean> REVEAL_ALL = AttachmentRegistry.create(
+            Fusionmon.id("reveal_all"),
+            builder -> builder.persistent(Codec.BOOL).copyOnDeath().initializer(() -> false));
 
     private FusionDiscovery() {
     }
@@ -59,7 +67,12 @@ public final class FusionDiscovery {
     }
 
     public static boolean isDiscovered(ServerPlayer player, String key) {
-        return player.getAttachedOrCreate(DISCOVERED).contains(key);
+        return player.getAttachedOrCreate(REVEAL_ALL) || player.getAttachedOrCreate(DISCOVERED).contains(key);
+    }
+
+    /** Ver REVEAL_ALL. */
+    public static void setRevealAll(ServerPlayer player, boolean reveal) {
+        player.setAttached(REVEAL_ALL, reveal);
     }
 
     /** Apunta una pareja como descubierta (si ya lo estaba, no hace nada). */
@@ -82,6 +95,8 @@ public final class FusionDiscovery {
     public static int forgetAll(ServerPlayer player) {
         int count = player.getAttachedOrCreate(DISCOVERED).size();
         player.setAttached(DISCOVERED, List.of());
+        // Si no, con reveal puesto seguirían sin salir en silueta, que es para lo que se usa forget
+        setRevealAll(player, false);
         return count;
     }
 
