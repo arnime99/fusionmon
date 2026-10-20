@@ -1,6 +1,7 @@
 package com.arnau.fusionmon.client.screen;
 
 import com.arnau.fusionmon.Fusionmon;
+import com.arnau.fusionmon.client.model.FusionCustomModels;
 import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.fusion.FusionAspects;
 import com.arnau.fusionmon.fusion.FusionCalculator;
@@ -278,8 +279,10 @@ public class FusionDexScreen extends Screen {
             // La última imagen guardada tapa un momento la línea de si encuentra la cabeza
             graphics.drawCenteredString(font, exportMessage, width / 2, y, YELLOW);
         } else {
-            boolean graft = FusionGraft.canGraft(head.getResourceIdentifier(), previewState);
+            boolean custom = FusionCustomModels.isCustom(head.getResourceIdentifier(), aspects());
+            boolean graft = custom || FusionGraft.canGraft(head.getResourceIdentifier(), previewState);
             Component status = Component.translatable(head == body ? "gui.fusionmon.dex.same"
+                    : custom ? "gui.fusionmon.dex.custom"
                     : graft ? "gui.fusionmon.confirm.graft_yes" : "gui.fusionmon.confirm.graft_no");
             graphics.drawCenteredString(font, status, width / 2, y, graft ? GREEN : GRAY);
         }

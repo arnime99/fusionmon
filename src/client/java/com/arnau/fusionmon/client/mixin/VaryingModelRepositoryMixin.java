@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.client.mixin;
 
+import com.arnau.fusionmon.client.model.FusionCustomModels;
 import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.client.texture.FusionTextures;
 import com.arnau.fusionmon.fusion.FusionAspects;
@@ -57,7 +58,9 @@ public abstract class VaryingModelRepositoryMixin {
     @Inject(method = "getTextureNoSubstitute", at = @At("HEAD"), cancellable = true)
     private void fusionmon$fusionTexture(ResourceLocation name, PosableState state,
                                          CallbackInfoReturnable<ResourceLocation> cir) {
-        if (!state.getCurrentAspects().contains(FusionAspects.FUSION)) {
+        // Las fusiones hechas a mano tienen texturas de verdad: que Cobblemon las compruebe como siempre
+        if (!state.getCurrentAspects().contains(FusionAspects.FUSION)
+                || FusionCustomModels.isCustom(name, state.getCurrentAspects())) {
             return;
         }
 

@@ -1,0 +1,20 @@
+{
+  "species": "cobblemon:pikachu",
+  "order": 100,
+  "variations": [
+    {
+      "aspects": ["fusionmon-body-charizard"],
+      "poser": "cobblemon:raichu",
+      "model": "cobblemon:raichu_male.geo",
+      "texture": "cobblemon:textures/pokemon/0026_raichu/raichu_shiny.png",
+      "layers": [
+        {
+          "name": "emissive",
+          "texture": "cobblemon:textures/pokemon/0026_raichu/raichu_emissive_shiny.png",
+          "emissive": true,
+          "translucent": false
+        }
+      ]
+    }
+  ]
+}

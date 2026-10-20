@@ -81,6 +81,7 @@
   "gui.fusionmon.dex.same": "Misma especie: sin fusión visual",
   "gui.fusionmon.dex.help": "←/→ cuerpo · ↑/↓ cabeza · R azar · S intercambiar · C cámara · V fusión/cabeza/cuerpo · B silueta · P guardar PNG · arrastrar: girar (derecho: mover) · rueda: zoom",
   "gui.fusionmon.dex.saved": "Guardada %s",
+  "gui.fusionmon.dex.custom": "✔ Modelo hecho a mano (resource pack)",
   "gui.fusionmon.dex.view.head": "Solo cabeza: %s",
   "gui.fusionmon.dex.view.body": "Solo cuerpo: %s",
   "gui.fusionmon.dex.view.silhouette": "Silueta",

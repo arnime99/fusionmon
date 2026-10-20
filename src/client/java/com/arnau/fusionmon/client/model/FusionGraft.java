@@ -525,6 +525,10 @@ public final class FusionGraft {
             return null;
         }
         Set<String> aspects = state.getCurrentAspects();
+        // Un pack trae esta fusión hecha a mano: se pinta la suya, sin pegar nada (ver FusionCustomModels)
+        if (FusionCustomModels.isCustom(name, aspects)) {
+            return null;
+        }
         CachedGraft cached = GRAFTS.get(state);
         if (cached != null && cached.version() == graftVersion && cached.name().equals(name)
                 && cached.aspects().equals(aspects)) {
