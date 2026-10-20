@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.client.model;
 
+import com.arnau.fusionmon.client.CobblemonCompat;
 import com.arnau.fusionmon.fusion.FusionAspects;
 import com.cobblemon.mod.common.client.render.ModelAssetVariation;
 import com.cobblemon.mod.common.client.render.VaryingRenderableResolver;
@@ -46,7 +47,9 @@ public final class FusionCustomModels {
     }
 
     public static boolean isCustom(VaryingRenderableResolver resolver, Set<String> aspects) {
-        if (resolver == null || !aspects.contains(FusionAspects.FUSION)
+        // De momento solo en Cobblemon 1.8+, donde está probado (decisión del usuario, 2026-10-20): en 1.7.3 siempre
+        // la fusión automática
+        if (!CobblemonCompat.MODERN || resolver == null || !aspects.contains(FusionAspects.FUSION)
                 || !HAS_CUSTOM.computeIfAbsent(resolver, FusionCustomModels::hasCustomVariation)) {
             return false;
         }

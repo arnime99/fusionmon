@@ -6,7 +6,8 @@ automatic one, everywhere (in the world, in battles, in menus, in the Fusion Alb
 
 It works like the community sprites of Pokémon Infinite Fusion: every pair exists, and the best ones get made by hand.
 
-> Requires **Fusionmon 0.1.2-beta** or newer.
+> Requires **Fusionmon 0.1.2-beta** or newer and **Cobblemon 1.8** or newer (on Cobblemon 1.7.3 / Cobbleverse,
+> fusions always use the automatic model for now).
 
 ## What you need
 
