@@ -46,6 +46,7 @@
   "message.fusionmon.not_enough_pokemon": "Necesitas 2 Pokémon sin fusionar, o una fusión para separarla.",
   "message.fusionmon.unfused": "¡%s se ha separado!",
   "message.fusionmon.selection_changed": "Tu equipo ha cambiado durante la selección. Vuelve a intentarlo.",
+  "message.fusionmon.mega_reverted": "%s ha vuelto a su forma normal para fusionarse.",
   "message.fusionmon.no_injector": "Necesitas un Inyector de Fusión en el inventario.",
   "message.fusionmon.fused": "¡%s (cabeza) y %s (cuerpo) se han fusionado!",
   "message.fusionmon.no_room": "No hay sitio para %s ni en tu equipo ni en tu PC. Libera un hueco para separar esta fusión.",

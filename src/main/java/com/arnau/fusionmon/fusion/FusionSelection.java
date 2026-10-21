@@ -114,9 +114,21 @@ public final class FusionSelection {
             return;
         }
 
+        // Se fusionan en su forma normal (ver FusionMegas): ya ahora, para que la vista previa, la habilidad y el
+        // Fusion Album no vean la mega
+        revertMega(player, first);
+        revertMega(player, second);
+
         PENDING_REVERSES.remove(player.getUUID());
         PENDING_FUSIONS.put(player.getUUID(), new PendingFusion(firstId, secondId));
         ServerPlayNetworking.send(player, fusionScreen(player, first, second, false));
+    }
+
+    private static void revertMega(ServerPlayer player, Pokemon pokemon) {
+        if (FusionMegas.revert(pokemon)) {
+            player.sendSystemMessage(Component.translatable("message.fusionmon.mega_reverted",
+                    pokemon.getDisplayName(false)));
+        }
     }
 
     /** La pantalla de fusión con first como cabeza y second como cuerpo (Intercambiar los cambia en el cliente). */

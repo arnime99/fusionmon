@@ -118,6 +118,24 @@ una instancia de CurseForge con 1.8.2 (`CF 1.8.2`) y en la de Cobbleverse.
 - Mixins sobre clases de Cobblemon: `@Mixin(value = ..., remap = false)`. Si el método es de Minecraft sobrescrito por Cobblemon (`getDimensions`, `onSyncedDataUpdated`, `renderWidget`), poner también su nombre intermediary (`method_18377`...): con `remap = false` no se traduce y en el juego publicado se llama así. Las llamadas cuya firma lleva clases de Minecraft se buscan solo por nombre (`Lcom/.../FormData;getHitbox`). Los errores de mixin no salen al compilar sino al cargar la clase (arrancar el juego).
 - Tamaño y montura: Cobblemon los lee de `form.baseScale`/`form.hitbox`/`form.riding` en muchos sitios (la forma es la de la cabeza); ver `FusionBodyForm`. El controlador de montura (`PokemonEntity.refreshRiding`: estilo y velocidades) se prepara **solo al crear la entidad** (constructor y `setPokemon`); en el cliente los aspects llegan después, así que salía la montura de la cabeza (sin montura, o cliente y servidor moviéndolo a velocidades distintas). `PokemonEntityMixin` lo vuelve a preparar cuando cambia el cuerpo (`onSyncedDataUpdated` de ASPECTS); `refreshRiding` baja a los jinetes. En el cliente, el `Pokemon` de una entidad no tiene persistentData ni aspects: los aspects están en `entity.getEntityData().get(PokemonEntity.Companion.getASPECTS())`.
 - Los paquetes de actualización de Cobblemon (`BenchedMovesUpdatePacket`, `MoveSet`...) llevan la colección **viva** y se serializan más tarde en el hilo de red: modificarla varias veces seguidas → `ConcurrentModificationException` y desconexión. Agrupar cambios con `doWithoutEmitting` y sincronizar una vez al final.
+  Desde la 0.1.2, `mixin/BenchedMovesUpdatePacketMixin` hace que el de recordables lleve una copia: Mega Showdown, al
+  megaevolucionar, borraba recordables de uno en uno y el cliente se desconectaba ("Failed to decode packet",
+  `BenchedMove.loadFromBuffer`; servidor CobbleFusion, 2026-10-21). Mega Showdown lleva su propia copia de
+  `updateMovesOnFormChange` (`AspectUtils`): `mixin/MegaShowdownAspectUtilsMixin` (`@Pseudo`, `require = 0`) le hace
+  lo mismo que `PokemonMixin`.
+- **Megas (Mega Showdown, opcional; 2026-10-21).** La mega de fuera de combate es solo de aspecto: Mega Showdown la
+  deshace al empezar cada combate (`revertPokemonsIfRequiredBattleStart`) y al quitarle la piedra (evento
+  `HELD_ITEM_PRE`, que también dispara `removeHeldItem`), con animación que la retrasa. En combate la decide Showdown
+  (`canMegaEvo`: `stone[species.name]`), así que una fusión, que pelea como especie propia, hoy no megaevoluciona en
+  combate. Su `canMega` mira la especie visible (la cabeza). **Fase 1 (hecha y probada):** `fusion/FusionMegas` (sin
+  clases de Mega Showdown: marca `is_mega` en persistentData, característica `mega_evolution=none`, etiqueta
+  `mega_showdown:mega_stone`): las partes se fusionan siempre en forma normal (al abrir la pantalla, con aviso; otra vez
+  en `fuse` y al leer las partes) y la fusión se queda con la megapiedra (la de la cabeza si llevan las dos; al invertir,
+  la de la fusión), dada después de guardar las copias. **Pendiente (0.2.0):** fase 2, mega fuera de combate de la parte
+  que lleve su piedra, cabeza o cuerpo (idea del usuario: sumar a la fusión la subida de stats de esa mega, como "Mix
+  and Mega" de Showdown); fase 3, mega en combate (registrar la fusión mega en Showdown). Mega Showdown 1.3.1 está en
+  `run/mods` y `run/server/mods`, y AllTheMons R5.0 apartado en `run/fusionmon/packs-desactivados/` (se declara
+  incompatible con Mega Showdown).
 - Cobblemon comprueba evoluciones cada segundo (`PlayerPartyStore.onSecondPassed` → `getLockedEvolutions()`); `setSpecies`/`setForm` vacían las pendientes. El envío completo del Pokémon (`SetPartyPokemonPacket`) incluye las evoluciones pendientes.
 - `setForm` (también al evolucionar) llama a `updateMovesOnFormChange`, que borra los benched moves que la nueva especie no aprende; en fusiones se lo impide `PokemonMixin` con `@WrapOperation` (MixinExtras viene con Fabric Loader).
 - `runServer`: hay que forzar Java 21 (como `runClient`) y añadirle ICU4J 71.1 a mano, porque Loom quita la 73.2 del cliente y Showdown se queda sin ella (en un servidor real va dentro del jar de Cobblemon). En modo offline, `op` antes de haber entrado nunca da op a la cuenta de Mojang real con ese nombre: corregir `run/server/ops.json`.
