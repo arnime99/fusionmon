@@ -4,6 +4,8 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"BattleRegistryMixin",
+		"BenchedMovesUpdatePacketMixin",
+		"MegaShowdownAspectUtilsMixin",
 		"PokemonEntityMixin",
 		"PokemonMixin",
 		"RidingControllerMixin",
