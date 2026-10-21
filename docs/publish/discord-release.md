@@ -77,3 +77,30 @@ This is a **beta**, so your feedback matters a lot:
 
 Thank you all for being here from the very start 💜
 ```
+
+---
+
+## Tutorial de fusiones hechas a mano (publicar con la 0.1.2-beta)
+
+```
+# 🎨 Make your own hand-made fusions!
+
+Every pair of Pokémon already has an automatic fusion. Now you can make a specific pair look exactly how you want, with your own model or texture! Your hand-made fusion replaces the automatic one everywhere: in the world, battles, menus and the Fusion Album.
+
+It's a normal Cobblemon resource pack:
+🧩 Your model (Blockbench, "Bedrock Entity"), texture and poser
+📄 One resolver file: head species + `"aspects": ["fusionmon-body-<body>"]`
+✨ Shiny versions and texture-only fusions are supported too
+
+📖 Full guide: https://github.com/arnime99/fusionmon/blob/main/docs/custom-fusions.md
+Requires Fusionmon 0.1.2-beta or newer and Cobblemon 1.8+.
+
+Made one? Show it off in #fusion-showcase! 🧬
+```
+
+## Changelog de CurseForge para la 0.1.2-beta (completar con los arreglos)
+
+```
+- Hand-made fusions! Resource packs can now replace the automatic model of any pair with their own model or texture (Cobblemon 1.8+). Guide: https://github.com/arnime99/fusionmon/blob/main/docs/custom-fusions.md
+- Still one file for Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse)
+```
