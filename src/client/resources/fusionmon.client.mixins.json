@@ -6,6 +6,7 @@
 	"client": [
 		"ClientboundSeatAssignmentPacketHandlerMixin",
 		"InfoWidgetMixin",
+		"PokemonOnShoulderRendererMixin",
 		"PokemonRendererMixin",
 		"PosableModelMixin",
 		"StatWidgetMixin",

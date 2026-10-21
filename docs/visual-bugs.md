@@ -230,9 +230,6 @@ AllTheMons y el pack de Cobbleverse desactivados** (sustituyen justo estos model
   plano de 3×11×6), así que la escala de tronco sale ×3-4. Su cuerpo es casi todo cabeza + mandíbula + cola, pero la
   cabeza no llega al 80 % para pegarlo entero. Idea: limitar la escala de adornos respecto a la de la cabeza.
 - Decidir si "Pegar: cráneo" (`/fusionvisual align skull`) pasa a ser el modo por defecto para todas las cabezas.
-- **En el hombro** (2026-10-21, servidor CobbleFusion F2P, 0.1.1-beta con Cobblemon 1.8.2): una fusión sentada en el
-  hombro del jugador sale con la cabeza de la especie original (sin fusionar). Sin reproducir aún: el hombro lo pinta
-  Cobblemon aparte (`ShoulderEffect`/capa del jugador), probablemente sin los aspects de fusión o por otro resolver.
 
 ## Ideas (no son fallos)
 

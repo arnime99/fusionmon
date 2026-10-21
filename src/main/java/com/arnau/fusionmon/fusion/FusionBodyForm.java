@@ -53,7 +53,8 @@ public final class FusionBodyForm {
         return body == null ? head : body.getRiding();
     }
 
-    private static FormData fromAspects(Set<String> aspects) {
+    /** Forma del cuerpo según los aspects de fusión (p. ej. los del Pokémon del hombro), o null si no es una fusión. */
+    public static FormData fromAspects(Set<String> aspects) {
         if (aspects == null || !aspects.contains(FusionAspects.FUSION)) {
             return null;
         }

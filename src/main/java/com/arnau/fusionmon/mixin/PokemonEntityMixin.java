@@ -50,6 +50,18 @@ public abstract class PokemonEntityMixin {
         return body == null ? hitbox : body.getHitbox();
     }
 
+    /**
+     * Hombro: se puede subir si se puede su CUERPO, que es el modelo y el tamaño que se ven ahí (decisión del usuario,
+     * 2026-10-21; antes decidía la cabeza y se subía un Charizard con cabeza de Pikachu). canSitOnShoulder es de
+     * Minecraft: "method_6626" en el juego publicado.
+     */
+    @ModifyExpressionValue(method = {"canSitOnShoulder", "method_6626"}, at = @At(value = "INVOKE",
+            target = "Lcom/cobblemon/mod/common/pokemon/FormData;getShoulderMountable()Z"))
+    private boolean fusionmon$bodyShoulder(boolean mountable) {
+        FormData body = FusionBodyForm.of((PokemonEntity) (Object) this);
+        return body == null ? mountable : body.getShoulderMountable();
+    }
+
     /** El cuerpo con el que se preparó la montura (ver fusionmon$refreshBody); null si no es una fusión. */
     @Unique
     private FormData fusionmon$ridingBody;

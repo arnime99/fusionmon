@@ -6,6 +6,7 @@
 		"BattleRegistryMixin",
 		"BenchedMovesUpdatePacketMixin",
 		"MegaShowdownAspectUtilsMixin",
+		"PlayerPartyStoreMixin",
 		"PokemonEntityMixin",
 		"PokemonMixin",
 		"RidingControllerMixin",
