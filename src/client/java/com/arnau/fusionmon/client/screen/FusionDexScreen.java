@@ -1,6 +1,7 @@
 package com.arnau.fusionmon.client.screen;
 
 import com.arnau.fusionmon.Fusionmon;
+import com.arnau.fusionmon.client.ServerRules;
 import com.arnau.fusionmon.client.model.FusionCustomModels;
 import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.fusion.FusionAspects;
@@ -265,7 +266,7 @@ public class FusionDexScreen extends Screen {
         int total = 0;
         MutableComponent stats = Component.empty();
         for (int i = 0; i < STATS.length; i++) {
-            int value = FusionCalculator.baseStat(headForm, bodyForm, STATS[i]);
+            int value = FusionCalculator.baseStat(headForm, bodyForm, STATS[i], ServerRules.statBonusPercent());
             total += value;
             if (i > 0) {
                 stats.append("  ");

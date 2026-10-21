@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.fusion;
 
+import com.arnau.fusionmon.FusionConfig;
 import com.arnau.fusionmon.Fusionmon;
 import com.cobblemon.mod.common.api.battles.model.PokemonBattle;
 import com.cobblemon.mod.common.api.battles.model.actor.BattleActor;
@@ -114,7 +115,8 @@ public final class FusionShowdown {
 
         JsonObject baseStats = new JsonObject();
         for (Stat stat : FusionService.PERMANENT_STATS) {
-            baseStats.addProperty(stat.getShowdownId(), FusionCalculator.baseStat(head, body, stat));
+            baseStats.addProperty(stat.getShowdownId(),
+                    FusionCalculator.baseStat(head, body, stat, FusionConfig.statBonusPercent()));
         }
         fused.add("baseStats", baseStats);
 

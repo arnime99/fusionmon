@@ -60,6 +60,12 @@ una instancia de CurseForge con 1.8.2 (`CF 1.8.2`) y en la de Cobbleverse.
 - `fusion/FusionAspects` — `AspectProvider` de Cobblemon: las fusiones llevan los aspects `fusionmon-fusion`, `fusionmon-body-<especie>` y `fusionmon-bodyaspect-<aspect del cuerpo>`. Cobblemon los sincroniza solo al cliente (entidad, equipo, PC) y los resolvers los usan para elegir modelo/textura (también sirven para resource packs).
 - `fusion/FusionCalculator` — fórmulas puras (stats base ponderados 2/3, regla de tipos, nombre partido). Aquí se retoca el algoritmo.
 - `fusion/FusionStatProvider` — envuelve `Cobblemon.statProvider` para los stats de fusiones.
+- `FusionConfig` — opciones del servidor en `config/fusionmon.json` (se crea solo; se lee al arrancar). Por ahora solo
+  `statBonusPercent` (0–100, 0 por defecto): % extra sobre cada stat base de la fórmula, tope 255
+  (`FusionCalculator.baseStat(..., bonusPercent)`); petición del servidor CobbleFusion (2026-10-21). Descartado "no
+  bajar del mejor total" (Magikarp + Arceus = 720: decisión del usuario). Lo usan stats reales, Showdown y vista previa;
+  el cliente (Fusion Album, visor) usa el del servidor, que llega al entrar en `network/FusionRulesPayload` y se guarda en
+  `client/ServerRules` (0 al desconectarse). Como los stats se calculan al vuelo, afecta también a las fusiones ya hechas.
 - `fusion/FusionShowdown` + `mixin/BattleRegistryMixin` — antes de cada combate registra en Showdown la especie de fusión (`fusionmon<cabeza>x<cuerpo>`).
 - `mixin/PokemonMixin` — tipos, nombre visible, `showdownId()` y `getEvolutions()` de las fusiones.
 - `fusion/FusionEvolutions` — evoluciones de una fusión = las de cabeza y cuerpo guardados, envueltas en `FusionLevelUpEvolution` / `FusionItemEvolution` / `FusionTradeEvolution` (heredan de las de Cobblemon; id `fusionmon_<parte>_<id>`). Cobblemon las comprueba y muestra solo; al aceptar, `evolvePart` evoluciona la parte guardada (`FusionData.writePart`), y si es la cabeza también la especie visible. `mixin/ServerEvolutionControllerMixin` bloquea cualquier evolución no envuelta en una fusión.

@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.network;
 
+import com.arnau.fusionmon.FusionConfig;
 import com.arnau.fusionmon.fusion.FusionDiscovery;
 import com.arnau.fusionmon.fusion.FusionSelection;
 import com.arnau.fusionmon.fusion.FusionWorldAnimation;
@@ -18,6 +19,7 @@ public final class ModNetworking {
         PayloadTypeRegistry.playS2C().register(OpenUnfuseScreenPayload.TYPE, OpenUnfuseScreenPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(OpenFusionAlbumPayload.TYPE, OpenFusionAlbumPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(FusionResultPayload.TYPE, FusionResultPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(FusionRulesPayload.TYPE, FusionRulesPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(FusionChoicePayload.TYPE, FusionChoicePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(UnfuseChoicePayload.TYPE, UnfuseChoicePayload.CODEC);
 
@@ -32,8 +34,13 @@ public final class ModNetworking {
             // Una fusión animándose en el mundo se hace ya: el inyector está gastado
             FusionWorldAnimation.finishFor(handler.getPlayer());
         });
-        // Las fusiones creadas antes de que existiera el registro cuentan como descubiertas (una vez por jugador)
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-                FusionDiscovery.registerExisting(handler.getPlayer()));
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            // Las fusiones creadas antes de que existiera el registro cuentan como descubiertas (una vez por jugador)
+            FusionDiscovery.registerExisting(handler.getPlayer());
+            // Las opciones del servidor que el cliente necesita (un cliente con una versión vieja no lo conoce)
+            if (ServerPlayNetworking.canSend(handler.getPlayer(), FusionRulesPayload.TYPE)) {
+                sender.sendPacket(new FusionRulesPayload(FusionConfig.statBonusPercent()));
+            }
+        });
     }
 }

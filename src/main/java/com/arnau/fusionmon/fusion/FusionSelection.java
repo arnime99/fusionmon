@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.fusion;
 
+import com.arnau.fusionmon.FusionConfig;
 import com.arnau.fusionmon.item.FusionInjectorItem;
 import com.arnau.fusionmon.network.FusionChoicePayload;
 import com.arnau.fusionmon.network.FusionPartView;
@@ -373,7 +374,7 @@ public final class FusionSelection {
 
         List<Integer> baseStats = new ArrayList<>();
         for (Stat stat : FusionService.PERMANENT_STATS) {
-            baseStats.add(FusionCalculator.baseStat(headForm, bodyForm, stat));
+            baseStats.add(FusionCalculator.baseStat(headForm, bodyForm, stat, FusionConfig.statBonusPercent()));
         }
 
         // Para el visor 3D: la cabeza con los aspects que tendrá como fusión (sin objeto: al fusionar vuelve al jugador)

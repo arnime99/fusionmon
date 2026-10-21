@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.client.screen;
 
+import com.arnau.fusionmon.client.ServerRules;
 import com.arnau.fusionmon.fusion.FusionAspects;
 import com.arnau.fusionmon.fusion.FusionCalculator;
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies;
@@ -172,7 +173,7 @@ public class FusionAlbumScreen extends Screen {
         y += FusionScreenLayout.LINE + 4;
         List<Integer> stats = new ArrayList<>();
         for (Stat stat : STATS) {
-            stats.add(FusionCalculator.baseStat(selected.head, selected.body, stat));
+            stats.add(FusionCalculator.baseStat(selected.head, selected.body, stat, ServerRules.statBonusPercent()));
         }
         // renderStats reparte el ancho que le digan: el de la parte derecha
         FusionScreenLayout.renderStats(graphics, font, stats, detailCenter, y,

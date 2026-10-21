@@ -10,6 +10,7 @@ import com.arnau.fusionmon.client.screen.SpeciesInspectorScreen;
 import com.arnau.fusionmon.client.screen.UnfuseConfirmScreen;
 import com.arnau.fusionmon.client.texture.FusionTextures;
 import com.arnau.fusionmon.network.FusionResultPayload;
+import com.arnau.fusionmon.network.FusionRulesPayload;
 import com.arnau.fusionmon.network.OpenFusionAlbumPayload;
 import com.arnau.fusionmon.network.OpenFusionScreenPayload;
 import com.arnau.fusionmon.network.OpenUnfuseScreenPayload;
@@ -18,6 +19,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
@@ -42,6 +44,10 @@ public class FusionmonClient implements ClientModInitializer {
 		// La fusión aceptada ya está hecha: animación de pantalla, o ninguna si se ve en el mundo
 		ClientPlayNetworking.registerGlobalReceiver(FusionResultPayload.TYPE,
 				(payload, context) -> FusionAnimationScreen.onResult(context.client(), payload.inWorld()));
+		// Opciones del servidor (bonus de stats): al entrar; al salir se olvidan
+		ClientPlayNetworking.registerGlobalReceiver(FusionRulesPayload.TYPE,
+				(payload, context) -> ServerRules.set(payload.statBonusPercent()));
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ServerRules.reset());
 
 		// Herramientas para afinar los visuales (ajustes finos de /fusionvisual, /fusionviewer, /fusioninspect): solo en
 		// desarrollo (runClient). En el mod publicado no están: el visor enseñaría todas las fusiones sin jugar (la

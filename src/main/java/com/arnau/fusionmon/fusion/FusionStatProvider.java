@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.fusion;
 
+import com.arnau.fusionmon.FusionConfig;
 import com.cobblemon.mod.common.api.pokemon.stats.Stat;
 import com.cobblemon.mod.common.api.pokemon.stats.StatProvider;
 import com.cobblemon.mod.common.api.pokemon.stats.StatTypeAdapter;
@@ -35,7 +36,7 @@ public class FusionStatProvider implements StatProvider {
         }
 
         // Misma fórmula que Cobblemon (la de los juegos), cambiando solo el stat base
-        int base = FusionCalculator.baseStat(head, body, stat);
+        int base = FusionCalculator.baseStat(head, body, stat, FusionConfig.statBonusPercent());
         int iv = pokemon.getIvs().getEffectiveBattleIV(stat);
         int ev = pokemon.getEvs().getOrDefault(stat);
         int level = pokemon.getLevel();

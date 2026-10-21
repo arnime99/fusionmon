@@ -16,18 +16,28 @@ public final class FusionCalculator {
     private FusionCalculator() {
     }
 
+    /** El stat base más alto de los juegos (Blissey, PS): con el bonus, ninguno pasa de aquí. */
+    private static final int MAX_BASE_STAT = 255;
+
     /**
      * La cabeza pesa 2/3 en PS, Ataque Especial y Defensa Especial;
      * el cuerpo pesa 2/3 en Ataque, Defensa y Velocidad.
+     *
+     * @param bonusPercent % extra que pone el servidor (FusionConfig; en el cliente, el que ha recibido del servidor).
+     *                     Se aplica a cada stat por igual: la fusión crece sin cambiar de forma
      */
-    public static int baseStat(FormData head, FormData body, Stat stat) {
+    public static int baseStat(FormData head, FormData body, Stat stat, int bonusPercent) {
         int headValue = head.getBaseStats().getOrDefault(stat, 0);
         int bodyValue = body.getBaseStats().getOrDefault(stat, 0);
 
         boolean headWeighted = stat == Stats.HP || stat == Stats.SPECIAL_ATTACK || stat == Stats.SPECIAL_DEFENCE;
-        return headWeighted
+        int base = headWeighted
                 ? (2 * headValue + bodyValue) / 3
                 : (2 * bodyValue + headValue) / 3;
+        if (bonusPercent <= 0) {
+            return base;
+        }
+        return Math.min(MAX_BASE_STAT, Math.round(base * (100 + bonusPercent) / 100f));
     }
 
     /**

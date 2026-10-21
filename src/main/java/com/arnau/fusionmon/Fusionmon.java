@@ -30,6 +30,8 @@ public class Fusionmon implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		// Opciones del servidor (config/fusionmon.json): antes de nada que calcule stats
+		FusionConfig.load();
 		ModItems.initialize();
 		FusionCommands.register();
 		ModNetworking.initialize();
