@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.client.mixin;
 
+import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.client.SummaryTooltip;
 import com.arnau.fusionmon.client.texture.FusionBody;
 import com.arnau.fusionmon.fusion.FusionData;
@@ -51,22 +52,37 @@ public abstract class InfoWidgetMixin {
             target = "Lcom/cobblemon/mod/common/pokemon/Species;getTranslatedName"))
     private MutableComponent fusionmon$fusionSpecies(Species species, Operation<MutableComponent> original) {
         MutableComponent head = original.call(species);
-        Species body = fusionmon$bodySpecies();
-        if (body == null) {
+        try {
+            Species body = fusionmon$bodySpecies();
+            if (body == null) {
+                return head;
+            }
+            MutableComponent both = head.copy().append(" + ").append(body.getTranslatedName());
+            // Dos nombres largos no caben en la fila: se recorta y el texto entero sale al pasar el ratón
+            Font font = Minecraft.getInstance().font;
+            if (font.width(both) <= VALUE_MAX_WIDTH) {
+                return both;
+            }
+            return Component.literal(font.plainSubstrByWidth(both.getString(), VALUE_MAX_WIDTH - font.width("…"))
+                    + "…");
+        } catch (RuntimeException e) {
+            // Una pantalla que falla al pintarse es un crash: mejor la especie de la cabeza sola
+            FusionSafety.failed("la especie de una fusión en el resumen", e);
             return head;
         }
-        MutableComponent both = head.copy().append(" + ").append(body.getTranslatedName());
-        // Dos nombres largos no caben en la fila: se recorta y el texto entero sale al pasar el ratón
-        Font font = Minecraft.getInstance().font;
-        if (font.width(both) <= VALUE_MAX_WIDTH) {
-            return both;
-        }
-        return Component.literal(font.plainSubstrByWidth(both.getString(), VALUE_MAX_WIDTH - font.width("…")) + "…");
     }
 
     @Inject(method = {"renderWidget", "method_48579"}, at = @At("TAIL"))
     private void fusionmon$partsTooltip(GuiGraphics graphics, int mouseX, int mouseY, float partialTick,
                                         CallbackInfo ci) {
+        try {
+            fusionmon$showPartsTooltip(mouseX, mouseY);
+        } catch (RuntimeException e) {
+            FusionSafety.failed("el tooltip de una fusión en el resumen", e);
+        }
+    }
+
+    private void fusionmon$showPartsTooltip(int mouseX, int mouseY) {
         Species body = fusionmon$bodySpecies();
         if (body == null) {
             return;

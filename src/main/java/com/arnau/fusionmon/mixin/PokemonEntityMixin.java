@@ -23,19 +23,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * sus nombres no se traducen: en desarrollo se llaman así y en el juego publicado "method_18377" y "method_5674"
  * (intermediary). Ponemos los dos nombres; en cada entorno solo existe uno. Por lo mismo, las llamadas cuya firma
  * lleva clases de Minecraft (getHitbox devuelve EntityDimensions) se buscan solo por nombre, sin firma.
+ *
+ * Todos con require = 0: si otro mod o una versión de Cobblemon cambia uno de estos métodos, esa parte se queda como
+ * la de la cabeza (tamaño, montura, hombro) en vez de no arrancar el juego; CommonMixinPlugin lo avisa en el log.
  */
 @Mixin(value = PokemonEntity.class, remap = false)
 public abstract class PokemonEntityMixin {
 
     /** Asientos, propiedades de montura y controlador de montura (refreshRiding): los del cuerpo. */
-    @WrapOperation(method = {"getSeats", "getRideProp", "refreshRiding"}, at = @At(value = "INVOKE",
+    @WrapOperation(method = {"getSeats", "getRideProp", "refreshRiding"}, require = 0, at = @At(value = "INVOKE",
             target = "Lcom/cobblemon/mod/common/pokemon/FormData;getRiding()Lcom/cobblemon/mod/common/api/riding/RidingProperties;"))
     private RidingProperties fusionmon$bodyRiding(FormData form, Operation<RidingProperties> original) {
         return FusionBodyForm.riding(FusionBodyForm.of((PokemonEntity) (Object) this), original.call(form));
     }
 
     /** Caja de colisión: escala del cuerpo... */
-    @ModifyExpressionValue(method = {"getDimensions", "method_18377"}, at = @At(value = "INVOKE",
+    @ModifyExpressionValue(method = {"getDimensions", "method_18377"}, require = 0, at = @At(value = "INVOKE",
             target = "Lcom/cobblemon/mod/common/pokemon/FormData;getBaseScale()F"))
     private float fusionmon$bodyScale(float scale) {
         FormData body = FusionBodyForm.of((PokemonEntity) (Object) this);
@@ -43,7 +46,7 @@ public abstract class PokemonEntityMixin {
     }
 
     /** ...y su caja (ancho y alto). */
-    @ModifyExpressionValue(method = {"getDimensions", "method_18377"}, at = @At(value = "INVOKE",
+    @ModifyExpressionValue(method = {"getDimensions", "method_18377"}, require = 0, at = @At(value = "INVOKE",
             target = "Lcom/cobblemon/mod/common/pokemon/FormData;getHitbox"))
     private EntityDimensions fusionmon$bodyHitbox(EntityDimensions hitbox) {
         FormData body = FusionBodyForm.of((PokemonEntity) (Object) this);
@@ -55,7 +58,7 @@ public abstract class PokemonEntityMixin {
      * 2026-10-21; antes decidía la cabeza y se subía un Charizard con cabeza de Pikachu). canSitOnShoulder es de
      * Minecraft: "method_6626" en el juego publicado.
      */
-    @ModifyExpressionValue(method = {"canSitOnShoulder", "method_6626"}, at = @At(value = "INVOKE",
+    @ModifyExpressionValue(method = {"canSitOnShoulder", "method_6626"}, require = 0, at = @At(value = "INVOKE",
             target = "Lcom/cobblemon/mod/common/pokemon/FormData;getShoulderMountable()Z"))
     private boolean fusionmon$bodyShoulder(boolean mountable) {
         FormData body = FusionBodyForm.of((PokemonEntity) (Object) this);
@@ -77,7 +80,7 @@ public abstract class PokemonEntityMixin {
      * servidor con la del cuerpo (velocidades distintas: el modelo se iba sin el jinete). Cuando cambia el cuerpo, se
      * vuelve a preparar. Solo entonces: refreshRiding baja a los jinetes.
      */
-    @Inject(method = {"onSyncedDataUpdated", "method_5674"}, at = @At("TAIL"))
+    @Inject(method = {"onSyncedDataUpdated", "method_5674"}, at = @At("TAIL"), require = 0)
     private void fusionmon$refreshBody(EntityDataAccessor<?> data, CallbackInfo ci) {
         if (!PokemonEntity.Companion.getASPECTS().equals(data)) {
             return;

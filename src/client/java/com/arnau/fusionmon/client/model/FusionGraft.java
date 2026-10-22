@@ -751,6 +751,8 @@ public final class FusionGraft {
         }
 
         hiddenWereVisible.clear();
+        // Antes de ocultar nada: si algo falla a partir de aquí, recover() sabe qué devolver a su sitio
+        active = graft;
         setVisible(graft.hidden, hiddenWereVisible, false);
         // Con patas nuevas, el modelo entero sube (o baja) para apoyarse en ellas. Moviendo la raíz se mueve todo lo
         // que se le pega, que se coloca desde sus huesos
@@ -760,7 +762,19 @@ public final class FusionGraft {
             liftedY = root.y;
             root.y -= graft.lift[0] * 16;
         }
-        active = graft;
+    }
+
+    /**
+     * Tras un error a medias entre beforeRender y afterRender (ver PosableModelMixin): vuelve a mostrar lo oculto y
+     * baja la raíz subida. Si no, todos los Pokémon de la especie del cuerpo saldrían sin cabeza.
+     */
+    public static void recover() {
+        if (active != null) {
+            restoreVisible(active.hidden, hiddenWereVisible);
+            active = null;
+        }
+        hiddenWereVisible.clear();
+        restoreLift();
     }
 
     /** Devuelve la raíz subida por las patas nuevas (ver beforeRender) a su sitio. */

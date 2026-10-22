@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.client.mixin;
 
+import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.client.SummaryTooltip;
 import com.cobblemon.mod.common.client.gui.summary.Summary;
 import net.minecraft.client.gui.GuiGraphics;
@@ -18,6 +19,10 @@ public abstract class SummaryMixin {
     @Inject(method = {"render", "method_25394"}, at = @At("TAIL"))
     private void fusionmon$renderTooltip(GuiGraphics graphics, int mouseX, int mouseY, float partialTick,
                                          CallbackInfo ci) {
-        SummaryTooltip.render(graphics);
+        try {
+            SummaryTooltip.render(graphics);
+        } catch (RuntimeException e) {
+            FusionSafety.failed("el tooltip del resumen", e);
+        }
     }
 }

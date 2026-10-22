@@ -12,12 +12,12 @@ import org.spongepowered.asm.mixin.injection.At;
 /**
  * Cobblemon comprueba cada poco que el Pokémon del hombro todavía puede ir ahí (validateShoulder) y si no, lo baja.
  * Mira la forma del Pokémon, que en una fusión es la de la cabeza: la del cuerpo, como al subirlo (PokemonEntityMixin).
- * En ese método getForm solo se usa para eso.
+ * En ese método getForm solo se usa para eso. require = 0: si no se engancha, decide la cabeza, como antes.
  */
 @Mixin(value = PlayerPartyStore.class, remap = false)
 public abstract class PlayerPartyStoreMixin {
 
-    @WrapOperation(method = "validateShoulder", at = @At(value = "INVOKE",
+    @WrapOperation(method = "validateShoulder", require = 0, at = @At(value = "INVOKE",
             target = "Lcom/cobblemon/mod/common/pokemon/Pokemon;getForm()Lcom/cobblemon/mod/common/pokemon/FormData;"))
     private FormData fusionmon$bodyShoulder(Pokemon pokemon, Operation<FormData> original) {
         FormData body = FusionBodyForm.of(pokemon);

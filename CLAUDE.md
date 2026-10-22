@@ -115,6 +115,29 @@ una instancia de CurseForge con 1.8.2 (`CF 1.8.2`) y en la de Cobbleverse.
 - Objetivo: multijugador/servidores y publicar en CurseForge.
 - **Descubrir fusiones jugando** (decisión del usuario, 2026-10-09): la gracia es pensar combinaciones, capturar, probar y ver qué sale. Por eso `/fusionviewer` (visor de todas las fusiones), `/fusioninspect` y los ajustes finos de `/fusionvisual` solo existen en desarrollo (`FabricLoader.isDevelopmentEnvironment()`, en `FusionmonClient`); el jugador solo tiene `/fusionvisual graft|colors` (global, no se guarda) y los admins `/fusionmon info|unfuse` (`spawn` también es solo de desarrollo). Idea futura: un registro de fusiones **descubiertas** (como el Pokédex) en vez del visor completo.
 
+## Blindaje: no crashear con otros mods (2026-10-22, decisión del usuario)
+
+Objetivo: que el mod no tumbe el juego en cualquier modpack; si algo choca, se pierde ese detalle (la fusión se ve como
+su cabeza, el resumen sin añadido) y se avisa en el log.
+- `FusionSafety.failed(dónde, error)`: aviso **una vez** por sitio. Todo lo que se llama en cada fotograma, en cada
+  tick o al cargar Pokémon va en try/catch con él: enganches de pintado (`VaryingModelRepositoryMixin`,
+  `VaryingRenderableResolverMixin`, `PosableModelMixin` + `FusionGraft.recover()`, que devuelve las piezas ocultas),
+  pantallas (`InfoWidgetMixin`, `SummaryMixin`), hombro, `FusionBodyForm`, `PokemonMixin` (nombre, tipos, Showdown,
+  evoluciones: si fallan, lista vacía), `FusionStatProvider`, `FusionAspects.provide`. **Código nuevo en esos caminos:
+  igual.**
+- Mixins: **cliente todos opcionales** (`defaultRequire: 0`); servidor opcionales con `require = 0` (Showdown —la fusión
+  pelea como su cabeza—, tamaño/montura/hombro, copia del paquete de recordables, montura de `PokemonMixin`).
+  Obligatorios solo `PokemonMixin` (tipos, Showdown, evoluciones, recordables) y `ServerEvolutionControllerMixin`:
+  mejor no arrancar que corromper partidas. Ningún `@Redirect`/`@Overwrite` (chocan con otros mods): seguir así.
+- `CommonMixinPlugin` (plugin de las dos configuraciones; el de cliente lo amplía): salta mixins cuya clase no existe y
+  apunta las clases modificadas; `MixinHealth.check()` (al arrancar el servidor y el cliente y al entrar en un mundo)
+  mira si cada método `fusionmon$` con anotación de inyección tiene quien lo llame y avisa de los que no. Siempre deja
+  `Fusionmon: comprobados N enganches en M clases, K sin aplicar` (en runClient: 17 en 6 clases de cliente y 11 en 6
+  de servidor, 0 sin aplicar). Los métodos de mixin que inyectan **deben** empezar por `fusionmon$`.
+- `Fusionmon.checkStatProvider` (SERVER_STARTING): si otro mod cambió la calculadora de stats de Cobblemon, se envuelve.
+- Pendiente (ideas del plan): interruptores en `config/fusionmon.json` (`disabledMixins`, modo colores forzado),
+  scripts de log y de conflictos de mixins sobre los modpacks instalados en CurseForge, `/fusionmon selftest`.
+
 ## Trampas de Cobblemon ya encontradas
 
 - `PartyStore.sendTo(player)` envía el equipo como si fuera de **otro** jugador → el cliente se desincroniza (huecos fantasma). Para refrescar un Pokémon: `SetPartyPokemonPacket` con `CobblemonNetwork.sendPacket`.

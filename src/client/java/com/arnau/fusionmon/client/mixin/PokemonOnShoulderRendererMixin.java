@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.client.mixin;
 
+import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.fusion.FusionAspects;
 import com.arnau.fusionmon.fusion.FusionBodyForm;
 import com.cobblemon.mod.common.client.render.layer.PokemonOnShoulderRenderer;
@@ -33,12 +34,18 @@ public abstract class PokemonOnShoulderRendererMixin {
     private void fusionmon$skipStatelessPass(PosableModel model, RenderContext context, PoseStack poseStack,
                                              VertexConsumer buffer, int light, int overlay, int color,
                                              Operation<Void> original) {
-        PosableState state = context.request(RenderContext.Companion.getPOSABLE_STATE());
-        if (model.getCurrentState() == null && state != null
-                && state.getCurrentAspects().contains(FusionAspects.FUSION)) {
-            return;
+        boolean skip = false;
+        try {
+            PosableState state = context.request(RenderContext.Companion.getPOSABLE_STATE());
+            skip = model.getCurrentState() == null && state != null
+                    && state.getCurrentAspects().contains(FusionAspects.FUSION);
+        } catch (RuntimeException e) {
+            // Si no se puede saber, se pinta como siempre (a lo sumo, con la cabeza original encima)
+            FusionSafety.failed("el Pokémon del hombro", e);
         }
-        original.call(model, context, poseStack, buffer, light, overlay, color);
+        if (!skip) {
+            original.call(model, context, poseStack, buffer, light, overlay, color);
+        }
     }
 
     /**

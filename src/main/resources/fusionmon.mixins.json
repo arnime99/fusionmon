@@ -1,6 +1,7 @@
 {
 	"required": true,
 	"package": "com.arnau.fusionmon.mixin",
+	"plugin": "com.arnau.fusionmon.CommonMixinPlugin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"BattleRegistryMixin",

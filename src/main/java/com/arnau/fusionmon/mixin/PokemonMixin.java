@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.mixin;
 
+import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.fusion.FusionBodyForm;
 import com.arnau.fusionmon.fusion.FusionCalculator;
 import com.arnau.fusionmon.fusion.FusionData;
@@ -66,35 +67,51 @@ public abstract class PokemonMixin {
             return;
         }
 
-        FormData head = FusionData.headForm(self);
-        FormData body = FusionData.bodyForm(self);
-        if (head != null && body != null) {
-            cir.setReturnValue(Component.literal(
-                    FusionCalculator.name(head.getSpecies().getName(), body.getSpecies().getName())));
+        try {
+            FormData head = FusionData.headForm(self);
+            FormData body = FusionData.bodyForm(self);
+            if (head != null && body != null) {
+                cir.setReturnValue(Component.literal(
+                        FusionCalculator.name(head.getSpecies().getName(), body.getSpecies().getName())));
+            }
+        } catch (RuntimeException e) {
+            // Sale con el nombre de la cabeza
+            FusionSafety.failed("el nombre de una fusión", e);
         }
     }
 
     /** La especie que se le dice a Showdown en combate: la de la fusión (registrada por FusionShowdown). */
     @Inject(method = "showdownId", at = @At("HEAD"), cancellable = true)
     private void fusionmon$showdownId(CallbackInfoReturnable<String> cir) {
-        Pokemon self = (Pokemon) (Object) this;
-        FormData head = FusionData.headForm(self);
-        FormData body = FusionData.bodyForm(self);
-        if (head != null && body != null) {
-            String id = FusionShowdown.speciesId(head, body);
-            // Si no se pudo registrar en Showdown, que pelee como su cabeza antes que romper el combate
-            if (FusionShowdown.isUsable(id)) {
-                cir.setReturnValue(id);
+        try {
+            Pokemon self = (Pokemon) (Object) this;
+            FormData head = FusionData.headForm(self);
+            FormData body = FusionData.bodyForm(self);
+            if (head != null && body != null) {
+                String id = FusionShowdown.speciesId(head, body);
+                // Si no se pudo registrar en Showdown, que pelee como su cabeza antes que romper el combate
+                if (FusionShowdown.isUsable(id)) {
+                    cir.setReturnValue(id);
+                }
             }
+        } catch (RuntimeException e) {
+            FusionSafety.failed("la especie de combate de una fusión", e);
         }
     }
 
     /** Las evoluciones de una fusión son las de su cabeza y su cuerpo guardados (ver FusionEvolutions). */
     @Inject(method = "getEvolutions", at = @At("HEAD"), cancellable = true)
     private void fusionmon$getEvolutions(CallbackInfoReturnable<Iterable<Evolution>> cir) {
-        List<Evolution> evolutions = FusionEvolutions.evolutionsOf((Pokemon) (Object) this);
-        if (evolutions != null) {
-            cir.setReturnValue(evolutions);
+        try {
+            List<Evolution> evolutions = FusionEvolutions.evolutionsOf((Pokemon) (Object) this);
+            if (evolutions != null) {
+                cir.setReturnValue(evolutions);
+            }
+        } catch (RuntimeException e) {
+            // Cobblemon las pide cada segundo: un fallo aquí sería un crash en bucle. Sin evoluciones de fusión, las
+            // de la especie visible las bloquea ServerEvolutionControllerMixin al aceptarlas
+            FusionSafety.failed("las evoluciones de una fusión", e);
+            cir.setReturnValue(List.of());
         }
     }
 
@@ -117,7 +134,9 @@ public abstract class PokemonMixin {
      * Montura y estadísticas de montura: las del cuerpo (ver FusionBodyForm.riding). Cobblemon las lee de la forma
      * (form.riding), que en una fusión es la de la cabeza.
      */
-    @WrapOperation(method = {"getRiding", "getBaseRideStat", "getMaxRideBoost", "getRideStat"},
+    // require = 0: sin esto la montura es la de la cabeza, no un juego que no arranca. El resto de PokemonMixin sí es
+    // obligatorio: sin él las fusiones pelearían, evolucionarían o perderían movimientos como si no lo fueran
+    @WrapOperation(method = {"getRiding", "getBaseRideStat", "getMaxRideBoost", "getRideStat"}, require = 0,
             at = @At(value = "INVOKE",
                     target = "Lcom/cobblemon/mod/common/pokemon/FormData;getRiding()Lcom/cobblemon/mod/common/api/riding/RidingProperties;"))
     private RidingProperties fusionmon$bodyRiding(FormData form, Operation<RidingProperties> original) {
@@ -126,9 +145,15 @@ public abstract class PokemonMixin {
     }
 
     private List<ElementalType> fusionmon$fusedTypes() {
-        Pokemon self = (Pokemon) (Object) this;
-        FormData head = FusionData.headForm(self);
-        FormData body = FusionData.bodyForm(self);
-        return head != null && body != null ? FusionCalculator.types(head, body) : null;
+        try {
+            Pokemon self = (Pokemon) (Object) this;
+            FormData head = FusionData.headForm(self);
+            FormData body = FusionData.bodyForm(self);
+            return head != null && body != null ? FusionCalculator.types(head, body) : null;
+        } catch (RuntimeException e) {
+            // Los tipos de la cabeza
+            FusionSafety.failed("los tipos de una fusión", e);
+            return null;
+        }
     }
 }

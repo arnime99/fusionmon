@@ -1,6 +1,7 @@
 package com.arnau.fusionmon.client;
 
 import com.arnau.fusionmon.Fusionmon;
+import com.arnau.fusionmon.MixinHealth;
 import com.arnau.fusionmon.client.model.FusionGraft;
 import com.arnau.fusionmon.client.screen.FusionAlbumScreen;
 import com.arnau.fusionmon.client.screen.FusionAnimationScreen;
@@ -19,6 +20,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
@@ -48,6 +50,10 @@ public class FusionmonClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(FusionRulesPayload.TYPE,
 				(payload, context) -> ServerRules.set(payload.statBonusPercent()));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ServerRules.reset());
+		// Enganches de cliente que no se han podido aplicar (ver MixinHealth): al log, al arrancar y al entrar en un
+		// mundo (algunas clases de Cobblemon se cargan solo entonces)
+		ClientLifecycleEvents.CLIENT_STARTED.register(client -> MixinHealth.check());
+		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> MixinHealth.check());
 
 		// Herramientas para afinar los visuales (ajustes finos de /fusionvisual, /fusionviewer, /fusioninspect): solo en
 		// desarrollo (runClient). En el mod publicado no están: el visor enseñaría todas las fusiones sin jugar (la

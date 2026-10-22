@@ -1,6 +1,7 @@
 package com.arnau.fusionmon.fusion;
 
 import com.arnau.fusionmon.FusionConfig;
+import com.arnau.fusionmon.FusionSafety;
 import com.cobblemon.mod.common.api.pokemon.stats.Stat;
 import com.cobblemon.mod.common.api.pokemon.stats.StatProvider;
 import com.cobblemon.mod.common.api.pokemon.stats.StatTypeAdapter;
@@ -29,8 +30,17 @@ public class FusionStatProvider implements StatProvider {
 
     @Override
     public int getStatForPokemon(Pokemon pokemon, Stat stat) {
-        FormData head = FusionData.headForm(pokemon);
-        FormData body = FusionData.bodyForm(pokemon);
+        FormData head;
+        FormData body;
+        try {
+            head = FusionData.headForm(pokemon);
+            body = FusionData.bodyForm(pokemon);
+        } catch (RuntimeException e) {
+            // Los stats se piden a todas horas: si no se pueden leer las partes, los de la especie visible
+            FusionSafety.failed("los stats de una fusión", e);
+            head = null;
+            body = null;
+        }
         if (head == null || body == null) {
             return delegate.getStatForPokemon(pokemon, stat);
         }

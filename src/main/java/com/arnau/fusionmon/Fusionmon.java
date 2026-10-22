@@ -19,6 +19,8 @@ import com.arnau.fusionmon.item.ModItems;
 import com.arnau.fusionmon.network.ModNetworking;
 import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.api.pokemon.aspect.AspectProvider;
+import com.cobblemon.mod.common.api.pokemon.stats.StatProvider;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
 public class Fusionmon implements ModInitializer {
 	public static final String MOD_ID = "fusionmon";
@@ -46,7 +48,26 @@ public class Fusionmon implements ModInitializer {
 		// Fusión animada en el mundo cuando los dos Pokémon están fuera (avanza en cada tick del servidor)
 		FusionWorldAnimation.initialize();
 
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> checkStatProvider());
+		// Enganches opcionales que no se han podido aplicar (ver MixinHealth): al log
+		ServerLifecycleEvents.SERVER_STARTED.register(server -> MixinHealth.check());
+
 		LOGGER.info("Hello Fabric world!");
+	}
+
+	/**
+	 * Otro mod puede cambiar la calculadora de stats de Cobblemon después de nosotros (un mod de stats, de dificultad...):
+	 * la nuestra desaparecería y las fusiones pelearían con los stats de su cabeza, sin que nadie lo notase. Antes de
+	 * arrancar el servidor se comprueba; si no es la nuestra, se envuelve la suya (las fusiones con nuestros stats, el
+	 * resto con los del otro mod). Si el otro mod envolvió la nuestra, queda envuelta dos veces: no pasa nada.
+	 */
+	private static void checkStatProvider() {
+		StatProvider current = Cobblemon.INSTANCE.getStatProvider();
+		if (!(current instanceof FusionStatProvider)) {
+			LOGGER.info("Fusionmon: otro mod ha cambiado la calculadora de stats de Cobblemon ({}); se envuelve para"
+					+ " que las fusiones sigan con sus stats", current.getClass().getName());
+			Cobblemon.INSTANCE.setStatProvider(new FusionStatProvider(current));
+		}
 	}
 
 	public static ResourceLocation id(String path) {

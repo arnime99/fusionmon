@@ -17,7 +17,8 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 public abstract class BenchedMovesUpdatePacketMixin {
 
     /** Cambia el valor que se pasa a super(...) (SingleUpdatePacket). Antes de super no hay "this": tiene que ser static. */
-    @ModifyArg(method = "<init>", index = 1, at = @At(value = "INVOKE",
+    // require = 0: es una protección de más; sin ella el juego funciona igual (CommonMixinPlugin avisa si falta)
+    @ModifyArg(method = "<init>", index = 1, require = 0, at = @At(value = "INVOKE",
             target = "Lcom/cobblemon/mod/common/net/messages/client/pokemon/update/SingleUpdatePacket;<init>(Lkotlin/jvm/functions/Function0;Ljava/lang/Object;)V"))
     private static Object fusionmon$snapshot(Object value) {
         if (value instanceof BenchedMoves live) {

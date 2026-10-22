@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.fusion;
 
+import com.arnau.fusionmon.FusionSafety;
 import com.cobblemon.mod.common.api.pokemon.PokemonSpecies;
 import com.cobblemon.mod.common.api.riding.RidingProperties;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
@@ -25,22 +26,36 @@ public final class FusionBodyForm {
     private FusionBodyForm() {
     }
 
-    /** Forma del cuerpo de la fusión de esta entidad, o null si no es una fusión. */
+    /**
+     * Forma del cuerpo de la fusión de esta entidad, o null si no es una fusión. Se pide desde muchos sitios de
+     * Cobblemon (tamaño, montura, hombro, pintado), también en cada tick: si falla, null, y esa parte se queda como
+     * la de la cabeza en vez de un crash (FusionSafety).
+     */
     public static FormData of(PokemonEntity entity) {
-        // Mientras Minecraft construye la entidad, Cobblemon aún no le ha puesto el Pokémon (Kotlin lo da por
-        // no nulo, pero el campo todavía lo es)
-        Pokemon pokemon = entity.getPokemon();
-        FormData form = pokemon == null ? null : FusionData.bodyForm(pokemon);
-        if (form != null) {
-            return form;
+        try {
+            // Mientras Minecraft construye la entidad, Cobblemon aún no le ha puesto el Pokémon (Kotlin lo da por
+            // no nulo, pero el campo todavía lo es)
+            Pokemon pokemon = entity.getPokemon();
+            FormData form = pokemon == null ? null : FusionData.bodyForm(pokemon);
+            if (form != null) {
+                return form;
+            }
+            return fromAspects(entity.getEntityData().get(PokemonEntity.Companion.getASPECTS()));
+        } catch (RuntimeException e) {
+            FusionSafety.failed("la forma del cuerpo de una fusión", e);
+            return null;
         }
-        return fromAspects(entity.getEntityData().get(PokemonEntity.Companion.getASPECTS()));
     }
 
     /** Forma del cuerpo de una fusión (del equipo, del PC...), o null si no es una fusión. */
     public static FormData of(Pokemon pokemon) {
-        FormData form = FusionData.bodyForm(pokemon);
-        return form != null ? form : fromAspects(pokemon.getAspects());
+        try {
+            FormData form = FusionData.bodyForm(pokemon);
+            return form != null ? form : fromAspects(pokemon.getAspects());
+        } catch (RuntimeException e) {
+            FusionSafety.failed("la forma del cuerpo de una fusión", e);
+            return null;
+        }
     }
 
     /**
@@ -58,6 +73,15 @@ public final class FusionBodyForm {
         if (aspects == null || !aspects.contains(FusionAspects.FUSION)) {
             return null;
         }
+        try {
+            return bodyFormOf(aspects);
+        } catch (RuntimeException e) {
+            FusionSafety.failed("la forma del cuerpo de una fusión", e);
+            return null;
+        }
+    }
+
+    private static FormData bodyFormOf(Set<String> aspects) {
         String path = null;
         Set<String> bodyAspects = new HashSet<>();
         for (String aspect : aspects) {

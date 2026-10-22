@@ -1,5 +1,6 @@
 package com.arnau.fusionmon.fusion;
 
+import com.arnau.fusionmon.FusionSafety;
 import com.cobblemon.mod.common.api.pokemon.PokemonProperties;
 import com.cobblemon.mod.common.api.pokemon.aspect.AspectProvider;
 import com.cobblemon.mod.common.pokemon.FormData;
@@ -34,11 +35,18 @@ public final class FusionAspects implements AspectProvider {
     public Set<String> provide(Pokemon pokemon) {
         // Cobblemon llama a esto cada vez que recalcula los aspects de cualquier Pokémon: tiene que ser barato.
         // isFusion ya comprueba que persistentData no sea null (lo es mientras se construye el Pokémon).
-        if (!FusionData.isFusion(pokemon)) {
+        try {
+            if (!FusionData.isFusion(pokemon)) {
+                return new HashSet<>();
+            }
+            FormData bodyForm = FusionData.bodyForm(pokemon);
+            return fusionAspects(bodyForm == null ? null : bodyForm.getSpecies(), FusionData.bodyAspects(pokemon));
+        } catch (RuntimeException e) {
+            // Se calcula al cargar cualquier Pokémon: un fallo aquí impediría cargar el equipo o el PC. Sin estos
+            // aspects la fusión solo se ve como su cabeza
+            FusionSafety.failed("los aspects de una fusión", e);
             return new HashSet<>();
         }
-        FormData bodyForm = FusionData.bodyForm(pokemon);
-        return fusionAspects(bodyForm == null ? null : bodyForm.getSpecies(), FusionData.bodyAspects(pokemon));
     }
 
     /**
