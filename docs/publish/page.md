@@ -37,7 +37,7 @@ Pokémon, use a **Fusion Injector**, and watch them become something new.
 
 ![Pikachu + Charizard](https://raw.githubusercontent.com/arnime99/fusionmon/main/docs/publish/gallery/01-pikachu-charizard.jpg)
 
-There is no list of hand-made fusions: every pair is built on the fly, so **any two species can be fused**. With
+There is no fixed list of fusions: every pair is built on the fly, so **any two species can be fused**. With
 Cobblemon's models that is close to **800,000 combinations**, and over **a million** with model packs like AllTheMons.
 
 ### Features
@@ -59,7 +59,11 @@ Cobblemon's models that is close to **800,000 combinations**, and over **a milli
   level-up moves from both parts.
 - **Split or swap anytime.** The same injector splits a fusion back into its two Pokémon (both keep all the experience
   earned as a fusion) or swaps head and body in one step.
+- **Hand-made fusions.** Resource packs can give any pair its own model or texture, replacing the automatic one
+  everywhere (Cobblemon 1.8.1+). [Guide for artists](https://github.com/arnime99/fusionmon/blob/main/docs/custom-fusions.md).
 - **Multiplayer ready.** Works on servers; each player has their own discoveries.
+- **Plays well with Mega Showdown.** Mega evolved Pokémon go back to normal before fusing, and the fusion keeps the
+  Mega Stone.
 
 ### See it in action
 
@@ -102,6 +106,17 @@ look (the head recolored with the body's palette) and `/fusionvisual graft` swit
 - **Cobblemon 1.7.3** (Cobbleverse), **1.8.1** or **1.8.2**: the same file works for all of them
 
 Install it on the **server and on every client**.
+
+### For server owners
+
+`config/fusionmon.json` (created on first launch; restart to apply changes):
+- `statBonusPercent`: every base stat of every fusion goes up by this % (0 by default, which is the Infinite Fusion
+  formula; 5-10 recommended; each stat is capped at 255). Great if fusing is a reward on your server.
+- Emergency switches, only if Fusionmon clashes with another mod in your pack: `disabledMixins` turns off one part by
+  the name shown in the log or crash report, and `forceColorsMode` draws fusions recolored without head-on-body for
+  every player. If something clashes, Fusionmon skips that detail and writes a warning to the log instead of crashing.
+
+Want the Fusion Injector to be a reward instead of craftable? Remove its recipe with a datapack.
 
 ### Beta
 
