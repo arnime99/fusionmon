@@ -172,6 +172,11 @@ public final class FusionGraft {
 
     /** Modo de ver las fusiones: cabeza sobre cuerpo (por defecto) o colores (/fusionvisual colors). */
     private static boolean enabled = true;
+    /**
+     * Modo colores forzado (forceColorsMode en config/fusionmon.json de este juego o del servidor): manda sobre
+     * /fusionvisual. Es el interruptor de emergencia si el pegado de cabezas choca con algún mod.
+     */
+    private static boolean forcedColors = false;
     /** Si se cambia la cola del cuerpo por la de la especie de la cabeza (/fusionvisual tail on|off). */
     private static boolean tails = true;
     /** Si se pegan al cuerpo los adornos de la especie de la cabeza (/fusionvisual decor on|off). */
@@ -401,11 +406,19 @@ public final class FusionGraft {
     }
 
     public static boolean isEnabled() {
-        return enabled;
+        return enabled && !forcedColors;
     }
 
     public static void setEnabled(boolean value) {
         enabled = value;
+    }
+
+    public static boolean isForcedColors() {
+        return forcedColors;
+    }
+
+    public static void setForcedColors(boolean value) {
+        forcedColors = value;
     }
 
     public static void setTails(boolean value) {
@@ -521,7 +534,7 @@ public final class FusionGraft {
      * colores, en vez de lanzar el error en cada fotograma (se llama desde el render: sería un crash del juego).
      */
     private static Graft graft(ResourceLocation name, PosableState state, boolean evenIfDisabled) {
-        if (!enabled && !evenIfDisabled) {
+        if (!isEnabled() && !evenIfDisabled) {
             return null;
         }
         Set<String> aspects = state.getCurrentAspects();
@@ -740,7 +753,7 @@ public final class FusionGraft {
             return;
         }
         PosableState state = model.getCurrentState();
-        if (!enabled || state == null) {
+        if (!isEnabled() || state == null) {
             return;
         }
         ResourceLocation headName = HEADS.get(state);

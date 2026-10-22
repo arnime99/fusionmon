@@ -60,8 +60,8 @@ una instancia de CurseForge con 1.8.2 (`CF 1.8.2`) y en la de Cobbleverse.
 - `fusion/FusionAspects` — `AspectProvider` de Cobblemon: las fusiones llevan los aspects `fusionmon-fusion`, `fusionmon-body-<especie>` y `fusionmon-bodyaspect-<aspect del cuerpo>`. Cobblemon los sincroniza solo al cliente (entidad, equipo, PC) y los resolvers los usan para elegir modelo/textura (también sirven para resource packs).
 - `fusion/FusionCalculator` — fórmulas puras (stats base ponderados 2/3, regla de tipos, nombre partido). Aquí se retoca el algoritmo.
 - `fusion/FusionStatProvider` — envuelve `Cobblemon.statProvider` para los stats de fusiones.
-- `FusionConfig` — opciones del servidor en `config/fusionmon.json` (se crea solo; se lee al arrancar). Por ahora solo
-  `statBonusPercent` (0–100, 0 por defecto): % extra sobre cada stat base de la fórmula, tope 255
+- `FusionConfig` — opciones en `config/fusionmon.json` (se crea solo; se lee al arrancar): los interruptores de
+  emergencia (ver "Blindaje") y `statBonusPercent` (0–100, 0 por defecto): % extra sobre cada stat base de la fórmula, tope 255
   (`FusionCalculator.baseStat(..., bonusPercent)`); petición del servidor CobbleFusion (2026-10-21). Descartado "no
   bajar del mejor total" (Magikarp + Arceus = 720: decisión del usuario). Lo usan stats reales, Showdown y vista previa;
   el cliente (Fusion Album, visor) usa el del servidor, que llega al entrar en `network/FusionRulesPayload` y se guarda en
@@ -135,8 +135,14 @@ su cabeza, el resumen sin añadido) y se avisa en el log.
   `Fusionmon: comprobados N enganches en M clases, K sin aplicar` (en runClient: 17 en 6 clases de cliente y 11 en 6
   de servidor, 0 sin aplicar). Los métodos de mixin que inyectan **deben** empezar por `fusionmon$`.
 - `Fusionmon.checkStatProvider` (SERVER_STARTING): si otro mod cambió la calculadora de stats de Cobblemon, se envuelve.
-- Pendiente (ideas del plan): interruptores en `config/fusionmon.json` (`disabledMixins`, modo colores forzado),
-  scripts de log y de conflictos de mixins sobre los modpacks instalados en CurseForge, `/fusionmon selftest`.
+- **Interruptores de emergencia** en `config/fusionmon.json` (hecho y probado 2026-10-22): `disabledMixins` (nombres
+  sin paquete, sin distinguir mayúsculas; los lee `CommonMixinPlugin.onLoad` con `FusionConfig.readDisabledMixins`
+  antes de que arranque el juego —por eso `FusionConfig` no toca clases de Minecraft ni `Fusionmon` y tiene su propio
+  logger— y avisa "X desactivado por config/fusionmon.json") y `forceColorsMode` (`FusionGraft.setForcedColors`, manda
+  sobre `/fusionvisual`; vale el del juego **o** el del servidor, que va en `FusionRulesPayload`; `client/ServerRules`).
+  Un archivo sin las opciones nuevas se reescribe con todas y el texto de ayuda actual.
+- Pendiente (ideas del plan): scripts de log y de conflictos de mixins sobre los modpacks instalados en CurseForge,
+  `/fusionmon selftest`.
 
 ## Trampas de Cobblemon ya encontradas
 

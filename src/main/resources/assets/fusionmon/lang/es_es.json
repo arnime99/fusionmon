@@ -58,6 +58,7 @@
   "command.fusionmon.aspects": "Aspects: %s",
   "command.fusionmon.visual.colors": "Fusiones: cabeza con los colores del cuerpo",
   "command.fusionmon.visual.graft": "Fusiones: cabeza sobre el cuerpo (experimental)",
+  "command.fusionmon.visual.forced": "El modo colores está forzado (forceColorsMode en config/fusionmon.json de tu juego o del servidor).",
   "command.fusionmon.visual.tail.on": "Fusiones: con la cola de la especie de la cabeza",
   "command.fusionmon.visual.tail.off": "Fusiones: con la cola del cuerpo",
   "command.fusionmon.visual.decor.on": "Fusiones: con los adornos de la especie de la cabeza",

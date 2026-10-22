@@ -1,5 +1,7 @@
 package com.arnau.fusionmon;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -8,12 +10,14 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
  * Plugin de las dos configuraciones de mixins (fusionmon.mixins.json y la de cliente, que lo amplía):
- * - Salta los mixins cuya clase objetivo no existe (otra versión de Cobblemon, o un mod opcional como Mega Showdown
- *   que no está), en vez de impedir que arranque el juego.
+ * - Salta los mixins que config/fusionmon.json pide desactivar (disabledMixins: interruptor de emergencia si uno choca
+ *   con un mod de un modpack) y los cuya clase objetivo no existe (otra versión de Cobblemon, o un mod opcional como
+ *   Mega Showdown que no está), en vez de impedir que arranque el juego.
  * - Apunta cada clase de Cobblemon que modifica, para que MixinHealth compruebe luego si los enganches opcionales
  *   (require = 0) se han aplicado: si no, Mixin no dice nada y la parte se pierde sin que nadie lo sepa.
  *
@@ -22,8 +26,23 @@ import java.util.Set;
  */
 public class CommonMixinPlugin implements IMixinConfigPlugin {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger("fusionmon");
+
+    /** Los que config/fusionmon.json pide no aplicar (interruptor de emergencia, ver FusionConfig). */
+    private Set<String> disabled = Set.of();
+
+    @Override
+    public void onLoad(String mixinPackage) {
+        disabled = FusionConfig.readDisabledMixins();
+    }
+
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        String name = simpleName(mixinClassName);
+        if (disabled.contains(name.toLowerCase(Locale.ROOT))) {
+            LOGGER.warn("Fusionmon: {} desactivado por config/fusionmon.json (disabledMixins)", name);
+            return false;
+        }
         String file = targetClassName.replace('.', '/') + ".class";
         return CommonMixinPlugin.class.getClassLoader().getResource(file) != null;
     }
@@ -55,10 +74,6 @@ public class CommonMixinPlugin implements IMixinConfigPlugin {
 
     private static String simpleName(String className) {
         return className.substring(className.lastIndexOf('.') + 1);
-    }
-
-    @Override
-    public void onLoad(String mixinPackage) {
     }
 
     @Override

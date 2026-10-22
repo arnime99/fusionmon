@@ -48,7 +48,8 @@ public class FusionmonClient implements ClientModInitializer {
 				(payload, context) -> FusionAnimationScreen.onResult(context.client(), payload.inWorld()));
 		// Opciones del servidor (bonus de stats): al entrar; al salir se olvidan
 		ClientPlayNetworking.registerGlobalReceiver(FusionRulesPayload.TYPE,
-				(payload, context) -> ServerRules.set(payload.statBonusPercent()));
+				(payload, context) -> ServerRules.set(payload.statBonusPercent(), payload.forceColorsMode()));
+		ServerRules.init();
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ServerRules.reset());
 		// Enganches de cliente que no se han podido aplicar (ver MixinHealth): al log, al arrancar y al entrar en un
 		// mundo (algunas clases de Cobblemon se cargan solo entonces)
@@ -72,7 +73,9 @@ public class FusionmonClient implements ClientModInitializer {
 					}))
 					.then(ClientCommandManager.literal("graft").executes(context -> {
 						FusionGraft.setEnabled(true);
-						context.getSource().sendFeedback(Component.translatable("command.fusionmon.visual.graft"));
+						// Con el modo colores forzado (config/fusionmon.json del juego o del servidor) no cambia nada
+						context.getSource().sendFeedback(Component.translatable(FusionGraft.isForcedColors()
+								? "command.fusionmon.visual.forced" : "command.fusionmon.visual.graft"));
 						return 1;
 					}));
 			if (dev) {
