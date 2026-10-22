@@ -1,5 +1,47 @@
 # Mensajes de Discord para el lanzamiento
 
+## 0.1.3-beta (arreglo rápido)
+
+Subir `build\libs\fusionmon-0.1.3-beta.jar` (no el `-sources`) como en la 0.1.2: Display name `Fusionmon 0.1.3-beta`,
+1.21.1 + Fabric, dependencias Cobblemon y Fabric API, changelog en modo **Markdown**. La descripción no cambia.
+
+### Changelog de CurseForge
+
+```
+## 0.1.3-beta
+
+### Fix
+- **Server stat bonus in the summary:** on a server with `statBonusPercent`, the Pokémon summary showed the fusion's stats (like max HP) without the bonus, while battles used the boosted ones. The summary now shows the same numbers as battles. Only players need this update for the fix, but updating the server too is recommended.
+
+Still **one file** for Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse). Thanks again to the CobbleFusion F2P server for the report!
+```
+
+### #changelog (Discord)
+
+```
+# 📜 Fusionmon 0.1.3-beta
+
+🛠️ **Fix:** on servers with `statBonusPercent`, the Pokémon summary now shows the boosted stats (like max HP), the same ones used in battle. Before, it showed them without the bonus.
+
+Small update, same single file for every Cobblemon version. Thanks to CobbleFusion F2P for the report 💜
+```
+
+### Mensaje para el dueño de CobbleFusion
+
+```
+Hey! Thanks a lot for the report about the summary stats, it was spot on. 🎯
+
+What happened: the Pokémon summary calculates stats on each player's game, and it was reading the player's own `config/fusionmon.json` (0 %) instead of the server's. So the summary showed stats without the bonus, while battles (calculated by the server) used your 25 %.
+
+It's fixed in **0.1.3-beta**: the summary now uses the bonus your server sends when players join, so the summary and battles show the same numbers. I tested it on a dedicated server with 25 % on the server and 0 % on the client, and they match now.
+
+⬇️ https://www.curseforge.com/minecraft/mc-mods/fusionmon
+
+The fix is on the player side, so the client pack is what matters, but please update the server too so both stay on the same version. Since you're already updating today, it should fit right in!
+
+And thank you again for the shoutout and the DEV rank, see you on the server soon! 🧬✨
+```
+
 ## Guía de publicación de la 0.1.2-beta (en orden)
 
 1. **CurseForge, subir el archivo**: proyecto → Upload File → `build\libs\fusionmon-0.1.2-beta.jar` (no el
