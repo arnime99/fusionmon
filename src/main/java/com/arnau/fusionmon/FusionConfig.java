@@ -55,13 +55,35 @@ public final class FusionConfig {
 
     private static int statBonusPercent = 0;
     private static boolean forceColorsMode = false;
+    /**
+     * El statBonusPercent del servidor al que está conectado este juego (FusionRulesPayload), o null si no hay. Los
+     * stats también se calculan en el cliente (el resumen de Cobblemon pide getStat a FusionStatProvider): con el
+     * archivo del propio jugador (0) el resumen enseñaba los stats sin bonus y el combate con él (aviso del servidor
+     * CobbleFusion, 2026-10-22). En un mundo de un jugador es el mismo valor que el archivo.
+     */
+    // volatile: lo escribe el hilo del cliente y, en un mundo de un jugador, lo lee también el del servidor integrado
+    private static volatile Integer syncedStatBonusPercent = null;
 
     private FusionConfig() {
     }
 
-    /** % que suben los stats base de todas las fusiones (0 = la fórmula de Infinite Fusion tal cual). */
+    /**
+     * % que suben los stats base de todas las fusiones (0 = la fórmula de Infinite Fusion tal cual): el del servidor
+     * al que está conectado este juego, o el del archivo (un servidor, o sin conectar).
+     */
     public static int statBonusPercent() {
+        Integer synced = syncedStatBonusPercent;
+        return synced != null ? synced : statBonusPercent;
+    }
+
+    /** El del archivo de este lado: lo que el servidor manda a los jugadores. */
+    public static int configuredStatBonusPercent() {
         return statBonusPercent;
+    }
+
+    /** Al recibir las opciones del servidor (null al desconectarse). */
+    public static void setSyncedStatBonusPercent(Integer value) {
+        syncedStatBonusPercent = value;
     }
 
     /** Pintar las fusiones solo con colores, sin cabeza pegada (en este lado; el cliente mira también el servidor). */

@@ -63,9 +63,13 @@ una instancia de CurseForge con 1.8.2 (`CF 1.8.2`) y en la de Cobbleverse.
 - `FusionConfig` — opciones en `config/fusionmon.json` (se crea solo; se lee al arrancar): los interruptores de
   emergencia (ver "Blindaje") y `statBonusPercent` (0–100, 0 por defecto): % extra sobre cada stat base de la fórmula, tope 255
   (`FusionCalculator.baseStat(..., bonusPercent)`); petición del servidor CobbleFusion (2026-10-21). Descartado "no
-  bajar del mejor total" (Magikarp + Arceus = 720: decisión del usuario). Lo usan stats reales, Showdown y vista previa;
-  el cliente (Fusion Album, visor) usa el del servidor, que llega al entrar en `network/FusionRulesPayload` y se guarda en
-  `client/ServerRules` (0 al desconectarse). Como los stats se calculan al vuelo, afecta también a las fusiones ya hechas.
+  bajar del mejor total" (Magikarp + Arceus = 720: decisión del usuario). Lo usan stats reales, Showdown y vista previa.
+  **Los stats también se calculan en el cliente** (el resumen de Cobblemon pide `getStat` a `FusionStatProvider`): el
+  servidor manda su valor al entrar (`network/FusionRulesPayload`, `configuredStatBonusPercent`) y `client/ServerRules`
+  lo guarda en `FusionConfig.setSyncedStatBonusPercent` (null al desconectarse); `statBonusPercent()` devuelve ese si lo
+  hay y si no el del archivo. Antes el cliente usaba su propio archivo (0): resumen sin bonus y combate con él (servidor
+  CobbleFusion, 2026-10-22; en un jugador no se ve porque es el mismo archivo: probar con `runServer`). Como los stats
+  se calculan al vuelo, afecta también a las fusiones ya hechas.
 - `fusion/FusionShowdown` + `mixin/BattleRegistryMixin` — antes de cada combate registra en Showdown la especie de fusión (`fusionmon<cabeza>x<cuerpo>`).
 - `mixin/PokemonMixin` — tipos, nombre visible, `showdownId()` y `getEvolutions()` de las fusiones.
 - `fusion/FusionEvolutions` — evoluciones de una fusión = las de cabeza y cuerpo guardados, envueltas en `FusionLevelUpEvolution` / `FusionItemEvolution` / `FusionTradeEvolution` (heredan de las de Cobblemon; id `fusionmon_<parte>_<id>`). Cobblemon las comprueba y muestra solo; al aceptar, `evolvePart` evoluciona la parte guardada (`FusionData.writePart`), y si es la cabeza también la especie visible. `mixin/ServerEvolutionControllerMixin` bloquea cualquier evolución no envuelta en una fusión.

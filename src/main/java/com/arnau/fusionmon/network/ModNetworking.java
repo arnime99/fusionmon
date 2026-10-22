@@ -39,7 +39,7 @@ public final class ModNetworking {
             FusionDiscovery.registerExisting(handler.getPlayer());
             // Las opciones del servidor que el cliente necesita (un cliente con una versión vieja no lo conoce)
             if (ServerPlayNetworking.canSend(handler.getPlayer(), FusionRulesPayload.TYPE)) {
-                sender.sendPacket(new FusionRulesPayload(FusionConfig.statBonusPercent(),
+                sender.sendPacket(new FusionRulesPayload(FusionConfig.configuredStatBonusPercent(),
                         FusionConfig.forceColorsMode()));
             }
         });
