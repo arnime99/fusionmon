@@ -28,6 +28,9 @@ final, sin estas notas entre corchetes.]
 > ✅ **One file for every Cobblemon version:** works with **Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse)** since
 > 0.1.1-beta.
 
+> 🆕 **New in 0.1.2-beta:** hand-made fusions with resource packs, a stat bonus option for servers, Mega Showdown and
+> shoulder fixes, and much more stable in big modpacks. See the changelog!
+
 💬 **[Join the Discord](https://discord.gg/mmaXAA4MkX)** to share your fusions, suggest ideas and report bugs!
 
 [![Watch the trailer](https://img.youtube.com/vi/Vj9k-KyJ7kA/maxresdefault.jpg)](https://www.youtube.com/watch?v=Vj9k-KyJ7kA)
