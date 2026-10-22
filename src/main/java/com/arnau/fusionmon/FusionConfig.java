@@ -45,16 +45,21 @@ public final class FusionConfig {
                 + " recommended 5-10, max 100; each stat is capped at 255). Emergency switches, only if Fusionmon"
                 + " conflicts with another mod: disabledMixins = names from the log or crash report (e.g."
                 + " \"PokemonOnShoulderRendererMixin\") to turn off; forceColorsMode = true draws fusions with the head"
-                + " recolored instead of head-on-body (a server forces it on every player). Restart to apply changes.";
+                + " recolored instead of head-on-body (a server forces it on every player). creatorTools = true, for"
+                + " videos and screenshots: /fusionmon spawn and /fusionmon forget for operators on the server, and"
+                + " /fusionviewer (every fusion, P saves a transparent PNG to fusionmon/renders) in your game. Restart to"
+                + " apply changes.";
         int statBonusPercent = 0;
         List<String> disabledMixins = new ArrayList<>();
         boolean forceColorsMode = false;
+        boolean creatorTools = false;
     }
 
-    private static final String[] KEYS = {"statBonusPercent", "disabledMixins", "forceColorsMode"};
+    private static final String[] KEYS = {"statBonusPercent", "disabledMixins", "forceColorsMode", "creatorTools"};
 
     private static int statBonusPercent = 0;
     private static boolean forceColorsMode = false;
+    private static boolean creatorTools = false;
     /**
      * El statBonusPercent del servidor al que está conectado este juego (FusionRulesPayload), o null si no hay. Los
      * stats también se calculan en el cliente (el resumen de Cobblemon pide getStat a FusionStatProvider): con el
@@ -91,6 +96,14 @@ public final class FusionConfig {
         return forceColorsMode;
     }
 
+    /**
+     * Herramientas para creadores de contenido (vídeos, miniaturas): ver Fusionmon.recordingTools. Apagado por defecto:
+     * la gracia del mod es descubrir las fusiones jugando, y esto enseña todas.
+     */
+    public static boolean creatorTools() {
+        return creatorTools;
+    }
+
     public static void load() {
         Data data = read(true);
         statBonusPercent = Math.clamp(data.statBonusPercent, 0, MAX_STAT_BONUS);
@@ -104,6 +117,10 @@ public final class FusionConfig {
         forceColorsMode = data.forceColorsMode;
         if (forceColorsMode) {
             LOGGER.info("Fusionmon: modo colores forzado por {}", FILE_NAME);
+        }
+        creatorTools = data.creatorTools;
+        if (creatorTools) {
+            LOGGER.info("Fusionmon: herramientas para creadores activadas por {}", FILE_NAME);
         }
     }
 

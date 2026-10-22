@@ -10,6 +10,12 @@ Subir `build\libs\fusionmon-0.1.3-beta.jar` (no el `-sources`) como en la 0.1.2:
 ```
 ## 0.1.3-beta
 
+### New: tools for content creators
+- New option `creatorTools` in `config/fusionmon.json` (off by default), for videos and screenshots:
+  - `/fusionviewer` in your game: browse **every** fusion, rotate and zoom, switch shiny/gender, silhouette, head or body only, and press **P** to save a transparent 2048×2048 PNG in `fusionmon/renders`.
+  - On the server (operators only): `/fusionmon spawn <head> <body> [count]` spawns wild fusions around you (`random` works too), and `/fusionmon forget` empties your Fusion Album so pairs show up as silhouettes again.
+- Off by default on purpose: discovering fusions by playing is the heart of Fusionmon.
+
 ### Fix
 - **Server stat bonus in the summary:** on a server with `statBonusPercent`, the Pokémon summary showed the fusion's stats (like max HP) without the bonus, while battles used the boosted ones. The summary now shows the same numbers as battles. Only players need this update for the fix, but updating the server too is recommended.
 
@@ -21,25 +27,32 @@ Still **one file** for Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse). Thanks ag
 ```
 # 📜 Fusionmon 0.1.3-beta
 
+🎬 **Tools for content creators:** set `creatorTools: true` in `config/fusionmon.json` to get `/fusionviewer` (browse every fusion and save transparent PNG renders with **P**) and, for operators, `/fusionmon spawn` and `/fusionmon forget`. Off by default, so the discovery stays intact for everyone else!
+
 🛠️ **Fix:** on servers with `statBonusPercent`, the Pokémon summary now shows the boosted stats (like max HP), the same ones used in battle. Before, it showed them without the bonus.
 
-Small update, same single file for every Cobblemon version. Thanks to CobbleFusion F2P for the report 💜
+Same single file for every Cobblemon version. Thanks to CobbleFusion F2P for the report 💜
 ```
 
-### Mensaje para el dueño de CobbleFusion
+### Mensaje para Uope (admin de CobbleFusion)
 
 ```
-Hey! Thanks a lot for the report about the summary stats, it was spot on. 🎯
+Hey Uope! Thanks a lot for the report about the summary stats, it was spot on 🎯
 
 What happened: the Pokémon summary calculates stats on each player's game, and it was reading the player's own `config/fusionmon.json` (0 %) instead of the server's. So the summary showed stats without the bonus, while battles (calculated by the server) used your 25 %.
 
 It's fixed in **0.1.3-beta**: the summary now uses the bonus your server sends when players join, so the summary and battles show the same numbers. I tested it on a dedicated server with 25 % on the server and 0 % on the client, and they match now.
-
 ⬇️ https://www.curseforge.com/minecraft/mc-mods/fusionmon
+The fix is on the player side, so the client pack is what matters most, but please update the server too so both stay on the same version.
 
-The fix is on the player side, so the client pack is what matters, but please update the server too so both stay on the same version. Since you're already updating today, it should fit right in!
+About YouTube: I love the idea, count me in! 🎬 And as a thank you, 0.1.3 also comes with a little something for your videos: set `"creatorTools": true` in `config/fusionmon.json` and you get:
+• `/fusionviewer` in your game: every fusion at hand, rotate/zoom, shiny, silhouette, and **P** saves a transparent 2048×2048 PNG to `fusionmon/renders` (great for thumbnails!)
+• On the server, for operators: `/fusionmon spawn <head> <body> [count]` to spawn wild fusions around you (`random` works too), and `/fusionmon forget` to reset your Fusion Album so pairs show up as silhouettes again for the "X + Y = ???" reveal.
+It's off by default, so your players keep the discovery. Just turn it on for your own game (and on the server if you want spawn).
 
-And thank you again for the shoutout and the DEV rank, see you on the server soon! 🧬✨
+Whenever you start working on the video, tell me and I can help with whatever you need: how features work, what's coming next, or our trailer (https://www.youtube.com/watch?v=Vj9k-KyJ7kA) if you want to use parts of it. I'd only ask to link the CurseForge page and our Discord in the description, and once it's out I'll gladly share it in our Discord too!
+
+Thanks again for the shoutout and the DEV rank, see you on the server soon! 🧬✨
 ```
 
 ## Guía de publicación de la 0.1.2-beta (en orden)

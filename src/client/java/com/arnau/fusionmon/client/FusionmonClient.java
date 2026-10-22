@@ -56,9 +56,10 @@ public class FusionmonClient implements ClientModInitializer {
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> MixinHealth.check());
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> MixinHealth.check());
 
-		// Herramientas para afinar los visuales (ajustes finos de /fusionvisual, /fusionviewer, /fusioninspect): solo en
-		// desarrollo (runClient). En el mod publicado no están: el visor enseñaría todas las fusiones sin jugar (la
-		// gracia es capturar, probar y ver qué sale) y el inspector lee archivos que solo hay en el proyecto
+		// Herramientas para afinar los visuales (ajustes finos de /fusionvisual, /fusioninspect): solo en desarrollo
+		// (runClient); el inspector lee archivos que solo hay en el proyecto. /fusionviewer, también con creatorTools: el
+		// visor enseña todas las fusiones sin jugar (la gracia es capturar, probar y ver qué sale), así que solo lo tiene
+		// quien lo activa a mano
 		boolean dev = FabricLoader.getInstance().isDevelopmentEnvironment();
 
 		// /fusionvisual colors|graft: elige cómo se ven las fusiones en este cliente (graft = cabeza sobre cuerpo, ver
@@ -137,8 +138,9 @@ public class FusionmonClient implements ClientModInitializer {
 			dispatcher.register(visual);
 		});
 
-		if (dev) {
-			// /fusionviewer: visor de TODAS las fusiones (FusionDexScreen), para probar visuales. No se llama /fusionalbum:
+		if (dev || Fusionmon.recordingTools()) {
+			// /fusionviewer: visor de TODAS las fusiones (FusionDexScreen), para probar visuales y, con creatorTools en
+			// config/fusionmon.json, para que los creadores de contenido hagan renders (P). No se llama /fusionalbum:
 			// ese es el del jugador, con solo sus fusiones descubiertas (y un comando de cliente taparía al del servidor).
 			// La pantalla se abre en la siguiente vuelta del bucle del juego: al terminar un comando, Minecraft cierra el
 			// chat, y cerraría también una pantalla abierta aquí mismo
@@ -148,6 +150,8 @@ public class FusionmonClient implements ClientModInitializer {
 						client.tell(() -> client.setScreen(new FusionDexScreen()));
 						return 1;
 					})));
+		}
+		if (dev) {
 			// /fusioninspect: inspector de especies (SpeciesInspectorScreen), para revisar una a una lo que detecta el
 			// graft
 			ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
