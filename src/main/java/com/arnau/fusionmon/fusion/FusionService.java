@@ -85,13 +85,14 @@ public final class FusionService {
         // Lo desbloqueado como fusión vuelve a cada parte, y combine lo pasa a la fusión nueva
         FusionEvolutions.carryOutOfFusion(fused, parts.head(), parts.body());
 
+        // A la Poké Ball antes de quitarle objetos, por lo mismo que el cuerpo en combine: sale del equipo enseguida.
         // Si la fusión estaba en mega, se deshace antes de quitarle la piedra (si no, Mega Showdown la deshace él,
         // con animación, sobre una fusión que ya no existe). Una megapiedra pasa a la fusión nueva; cualquier otro
         // objeto que se le haya dado a la fusión vuelve al jugador
+        fused.recall();
         FusionMegas.revert(fused);
         ItemStack stone = FusionMegas.takeStone(fused);
         returnHeldItem(player, fused);
-        fused.recall();
 
         // Se monta la fusión nueva antes de tocar el equipo: si algo fallase, la fusión de antes sigue en su sitio
         String discovered = FusionDiscovery.key(head, body);
@@ -129,6 +130,12 @@ public final class FusionService {
      */
     private static void combine(ServerPlayer player, Pokemon head, Pokemon body,
                                 boolean natureFromBody, boolean abilityFromBody, ItemStack inheritedStone) {
+        // El cuerpo vuelve a su Poké Ball ANTES de quitarle nada: si le quitamos un objeto que cambia su forma (cristal
+        // Z de Necrozma, placas...) con él fuera, Mega Showdown deshace el cambio con animación, unos ticks después,
+        // cuando el cuerpo ya no está en el equipo; Cobblemon manda igualmente el cambio de forma y el cliente, que no
+        // lo encuentra, se desconecta. Sin entidad lo deshace en el acto (y la copia guardada ya sale bien)
+        body.recall();
+
         // La fusión se queda con una megapiedra (la de la cabeza si llevan las dos) para poder megaevolucionar
         ItemStack stone = FusionMegas.takeStone(head);
         if (stone.isEmpty()) {
@@ -143,8 +150,6 @@ public final class FusionService {
         // Primero quitamos los objetos: así no quedan dentro de las copias guardadas y no se duplican al desfusionar
         returnHeldItem(player, head);
         returnHeldItem(player, body);
-
-        body.recall();
 
         makeFusion(player.registryAccess(), head, body, natureFromBody, abilityFromBody);
 
@@ -269,10 +274,10 @@ public final class FusionService {
         FusionEvolutions.carryOutOfFusion(fused, head, body);
 
         // Cualquier objeto que se le haya dado a la fusión vuelve al jugador (si estaba en mega, se deshace antes: ver
-        // reverse)
+        // reverse; y a la Poké Ball antes, como allí)
+        fused.recall();
         FusionMegas.revert(fused);
         returnHeldItem(player, fused);
-        fused.recall();
 
         // El cuerpo se coloca ANTES de quitar la fusión: si no hubiera sitio, la fusión se queda como estaba en vez
         // de perderse el cuerpo. Si el equipo está lleno, Cobblemon lo manda al PC (y avisa al jugador)
