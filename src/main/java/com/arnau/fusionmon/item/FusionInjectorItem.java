@@ -51,6 +51,18 @@ public class FusionInjectorItem extends Item {
     }
 
     /**
+     * Separar o invertir: como consumeOne, pero si el servidor lo tiene desactivado (FusionConfig
+     * .unfuseConsumesInjector / reverseConsumesInjector, en consume) solo comprueba que el jugador siga teniendo uno,
+     * sin gastarlo.
+     */
+    public static boolean useOne(ServerPlayer player, boolean consume) {
+        if (consume) {
+            return consumeOne(player);
+        }
+        return findInjector(player) != null;
+    }
+
+    /**
      * Devuelve el inyector gastado al confirmar si al final la fusión no se ha podido hacer (fusión en el mundo: se
      * hace unos segundos después de confirmar, ver FusionWorldAnimation). En creativo no se gastó, así que no se
      * devuelve. Si no cabe en el inventario, cae al suelo junto al jugador.

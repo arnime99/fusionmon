@@ -112,7 +112,7 @@ una instancia de CurseForge con 1.8.2 (`CF 1.8.2`) y en la de Cobbleverse.
 - Con cabeza sobre cuerpo (por defecto): modelo del cuerpo con la cabeza pegada; tamaño (escala, caja de colisión) y montura del cuerpo (si el cuerpo no se puede montar, la fusión tampoco).
 - Fórmulas de Infinite Fusion. Nivel, IVs y EVs = media. Naturaleza y habilidad: el jugador elige entre las dos.
 - Mantiene los movimientos de la cabeza; el resto, recordables (benched moves).
-- No hay fusión de fusiones. El mismo inyector fusiona, separa e invierte; cada acción gasta 1 (los inyectores son simbólicos: baratos, para usarlos a gusto).
+- No hay fusión de fusiones. El mismo inyector fusiona, separa e invierte; cada acción gasta 1 (los inyectores son simbólicos: baratos, para usarlos a gusto). Con `"unfuseConsumesInjector": false` / `"reverseConsumesInjector": false` en `config/fusionmon.json` (por separado, para que cada servidor elija; solo servidor; 2026-10-26, petición de CobbleFusion, donde el inyector es caro) separar / invertir no gastan, pero hay que tener uno (`FusionInjectorItem.useOne`): así se comparan las dos combinaciones sin gastar.
 - Invertir = separar + fusionar al revés en un paso (cada parte recibe la EXP de la fusión), sin necesitar sitio; en su pantalla ⇄ también vale para volver a elegir naturaleza o habilidad.
 - Al separar: cada parte recibe toda la EXP ganada como fusión y el % de PS de la fusión.
 - Evolución: el menú de Cobblemon ofrece las evoluciones de ambas partes; al elegir una, la otra sigue pendiente. Sin animación en el mundo (sonido + mensaje con el nombre de fusión). Las de intercambio sí (`FusionTradeEvolution`: el Cable Link y el intercambio buscan `TradeEvolution`); las de clic en bloque no se ofrecen a fusiones. Las evoluciones ya desbloqueadas (Cable Link, objetos: no pasivas) pasan a la fusión al fusionar y vuelven a su parte al separar o invertir (`FusionEvolutions.unlocked`/`carryIntoFusion`/`carryOutOfFusion`): si no, se perdían con el objeto gastado.
@@ -223,5 +223,16 @@ Pendiente:
   5. ~~Probar con mods que añadan modelos~~ (hecho y probado: **AllTheMons R4.0**, todo bien). Instalado en `run/saves/test/datapacks` y `run/resourcepacks` (activado en `run/options.txt`; también `COBBLEVERSE-CCC.zip`, el pack de Cobbleverse que sustituye 163 modelos con otros nombres de huesos: copiado de su instancia de CurseForge, entra en `tools/species-table.ps1`); añade 128 especies con modelo (legendarios, Paradojas…) y 26 remodelos en el namespace `atm_remodels`. Modelos suyos con la cabeza con otro nombre: Silvally (`neck5`), Wo-Chien (`top_head`), Iron Treads (`face`), Blacephalon (`head_ball`).
   Otras ideas: ajustes por especie en JSON (escala/desplazamiento/hueso cabeza, ampliable por resource packs); guardar la elección de `/fusionvisual`; recolorear las capas (emissive) de la textura.
 - **Después de la Beta (idea del usuario, 2026-10-10):** fusiones en la **Pokédex de Cobblemon** (ficha con las dos descripciones, las habilidades, altura del cuerpo, grito de la cabeza, stats y drops de las dos). Difícil: sus entradas (`data/cobblemon/dex_entries`, `api/pokedex/entry/DexEntries`) apuntan a especies registradas e iguales para todo el servidor, y `client/gui/pokedex/PokedexGUI` saca la información de la especie (saldría la de la cabeza). Paso intermedio barato: esa ficha completa en nuestro Fusion Album. Que una fusión suelte los drops de las dos es otro cambio aparte.
+- **Fusiones de la comunidad (decisión del usuario, 2026-10-26):** las fusiones hechas a mano que mande la gente van en
+  un **resource pack oficial aparte del mod** ("Fusionmon Community Fusions", CurseForge/Modrinth), no en el jar: se
+  actualiza sin sacar versión del mod, cada modelo lleva su autor y permiso, y quien no lo quiera no lo instala. Medido
+  (2026-10-26, modelos de Cobblemon 1.8.2): una especie completa ocupa 20–170 KB comprimida → 1.000 fusiones serían
+  30–100 MB. Solo entra lo que su autor permita por escrito (con crédito) y que sea suyo o con permiso del autor
+  original. Convención de `order`: el pack de la comunidad 100, los packs personales más alto para sustituirlo.
+  Pendiente de código, por orden: (1) **créditos**: un JSON por modelo con el autor, y en la pantalla de fusionar y el
+  Fusion Album "Hecha a mano por X" (solo al descubrirla) + filtro/contador de las que tienen modelo; (2) **elegir
+  modelo** si una pareja tiene varios (como las alternativas de Infinite Fusion): el jugador lo elige en la pantalla
+  del inyector, se guarda en la fusión y `FusionAspects` añade `fusionmon-alt-<n>` para que el resolver del pack elija.
+  Hoy, con varios modelos para la misma pareja, gana uno solo (el último que encaja según `order` y orden de packs).
 - Ideas para más adelante: propiedad `fusion_body=<especie>` (`CustomPokemonProperty`) para comandos, NPC y apariciones salvajes; entrenadores/líderes con fusiones (mirar Cobbleverse); inyectores por niveles de material.
 - No se puede cobrar por el mod (EULA de Mojang + propiedad de Pokémon): se publica gratis.

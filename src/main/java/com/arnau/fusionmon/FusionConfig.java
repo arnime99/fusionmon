@@ -25,6 +25,9 @@ import java.util.stream.Collectors;
  * cambio hay que reiniciar.
  * - statBonusPercent: % extra en los stats de las fusiones. Manda el del servidor: los jugadores lo reciben al entrar
  *   (FusionRulesPayload).
+ * - unfuseConsumesInjector / reverseConsumesInjector: con false, separar / invertir no gastan inyector (fusionar
+ *   siempre gasta). Por separado, para que cada servidor elija. Para servidores donde el inyector es caro (petición
+ *   del servidor CobbleFusion, 2026-10-26). Solo lo mira el servidor.
  * - disabledMixins / forceColorsMode: interruptores de emergencia por si Fusionmon choca con algún mod de un modpack.
  *   Valen en el lado donde estén: el servidor con su archivo, cada jugador con el suyo (forceColorsMode también se
  *   puede forzar a todos desde el servidor).
@@ -42,7 +45,10 @@ public final class FusionConfig {
     /** Lo que se guarda en el archivo (Gson lo rellena por nombre de campo; lo que falte, con estos valores). */
     private static final class Data {
         String _comment = "statBonusPercent: % extra on every base stat of every fusion (0 = Infinite Fusion formula,"
-                + " recommended 5-10, max 100; each stat is capped at 255). Emergency switches, only if Fusionmon"
+                + " recommended 5-10, max 100; each stat is capped at 255). unfuseConsumesInjector = false: splitting a"
+                + " fusion doesn't use up a Fusion Injector; reverseConsumesInjector = false: same for swapping its head"
+                + " and body (you still need one to open the menu; fusing always uses one). Emergency switches, only"
+                + " if Fusionmon"
                 + " conflicts with another mod: disabledMixins = names from the log or crash report (e.g."
                 + " \"PokemonOnShoulderRendererMixin\") to turn off; forceColorsMode = true draws fusions with the head"
                 + " recolored instead of head-on-body (a server forces it on every player). creatorTools = true, for"
@@ -50,14 +56,19 @@ public final class FusionConfig {
                 + " /fusionviewer (every fusion, P saves a transparent PNG to fusionmon/renders) in your game. Restart to"
                 + " apply changes.";
         int statBonusPercent = 0;
+        boolean unfuseConsumesInjector = true;
+        boolean reverseConsumesInjector = true;
         List<String> disabledMixins = new ArrayList<>();
         boolean forceColorsMode = false;
         boolean creatorTools = false;
     }
 
-    private static final String[] KEYS = {"statBonusPercent", "disabledMixins", "forceColorsMode", "creatorTools"};
+    private static final String[] KEYS = {"statBonusPercent", "unfuseConsumesInjector", "reverseConsumesInjector",
+            "disabledMixins", "forceColorsMode", "creatorTools"};
 
     private static int statBonusPercent = 0;
+    private static boolean unfuseConsumesInjector = true;
+    private static boolean reverseConsumesInjector = true;
     private static boolean forceColorsMode = false;
     private static boolean creatorTools = false;
     /**
@@ -91,6 +102,19 @@ public final class FusionConfig {
         syncedStatBonusPercent = value;
     }
 
+    /** Si separar gasta un inyector (por defecto sí). */
+    public static boolean unfuseConsumesInjector() {
+        return unfuseConsumesInjector;
+    }
+
+    /**
+     * Si invertir gasta un inyector (por defecto sí). Con false se pueden comparar las dos combinaciones (tipos,
+     * stats) sin gastar uno cada vez; fusionar dos Pokémon nuevos siempre gasta.
+     */
+    public static boolean reverseConsumesInjector() {
+        return reverseConsumesInjector;
+    }
+
     /** Pintar las fusiones solo con colores, sin cabeza pegada (en este lado; el cliente mira también el servidor). */
     public static boolean forceColorsMode() {
         return forceColorsMode;
@@ -113,6 +137,14 @@ public final class FusionConfig {
         }
         if (statBonusPercent > 0) {
             LOGGER.info("Stats base de las fusiones: +{} %", statBonusPercent);
+        }
+        unfuseConsumesInjector = data.unfuseConsumesInjector;
+        if (!unfuseConsumesInjector) {
+            LOGGER.info("Fusionmon: separar no gasta inyector ({})", FILE_NAME);
+        }
+        reverseConsumesInjector = data.reverseConsumesInjector;
+        if (!reverseConsumesInjector) {
+            LOGGER.info("Fusionmon: invertir no gasta inyector ({})", FILE_NAME);
         }
         forceColorsMode = data.forceColorsMode;
         if (forceColorsMode) {

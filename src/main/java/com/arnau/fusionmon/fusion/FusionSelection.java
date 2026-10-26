@@ -302,7 +302,7 @@ public final class FusionSelection {
             return;
         }
 
-        if (!FusionInjectorItem.consumeOne(player)) {
+        if (!FusionInjectorItem.useOne(player, FusionConfig.unfuseConsumesInjector())) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.no_injector"));
             return;
         }
@@ -335,7 +335,7 @@ public final class FusionSelection {
             return;
         }
 
-        if (!FusionInjectorItem.consumeOne(player)) {
+        if (!FusionInjectorItem.useOne(player, FusionConfig.reverseConsumesInjector())) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.no_injector"));
             return;
         }
