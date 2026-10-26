@@ -85,7 +85,7 @@ public abstract class PokemonMixin {
     private void fusionmon$showdownId(CallbackInfoReturnable<String> cir) {
         try {
             Pokemon self = (Pokemon) (Object) this;
-            FormData head = FusionData.headForm(self);
+            FormData head = FusionData.activeHeadForm(self);
             FormData body = FusionData.bodyForm(self);
             if (head != null && body != null) {
                 String id = FusionShowdown.speciesId(head, body);
@@ -147,7 +147,7 @@ public abstract class PokemonMixin {
     private List<ElementalType> fusionmon$fusedTypes() {
         try {
             Pokemon self = (Pokemon) (Object) this;
-            FormData head = FusionData.headForm(self);
+            FormData head = FusionData.activeHeadForm(self);
             FormData body = FusionData.bodyForm(self);
             return head != null && body != null ? FusionCalculator.types(head, body) : null;
         } catch (RuntimeException e) {

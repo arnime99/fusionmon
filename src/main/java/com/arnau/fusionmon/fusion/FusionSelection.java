@@ -149,8 +149,11 @@ public final class FusionSelection {
             return;
         }
         FusionService.giveFusionExperience(fused, parts);
-        // Las copias están en forma normal: si la fusión está en mega, la vista previa la enseña como quedará
+        // Las copias están en forma normal: si la fusión está en mega o lleva un objeto de forma, la vista previa la
+        // enseña como quedará (el objeto pasa a la fusión nueva)
         FusionMegas.previewMega(fused, parts);
+        FusionItemForms.preview(fused, parts);
+        FusionUltra.preview(fused, parts);
         PENDING_FUSIONS.remove(player.getUUID());
         PENDING_REVERSES.put(player.getUUID(), fused.getUuid());
         ServerPlayNetworking.send(player, fusionScreen(player, parts.body(), parts.head(), true));
@@ -189,6 +192,9 @@ public final class FusionSelection {
         Pokemon second = findValid(player, pending.secondId());
         if (first == null || second == null) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
+            return;
+        }
+        if (changingForm(player, first, second)) {
             return;
         }
 
@@ -241,6 +247,11 @@ public final class FusionSelection {
             player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
             return false;
         }
+        // Un cambio de forma empezado durante la animación (dar o quitar un objeto): mejor no fusionar
+        if (changingForm(player, head, body)) {
+            FusionInjectorItem.refundOne(player);
+            return false;
+        }
         fuseNow(player, head, body, natureFromBody, abilityFromBody);
         return true;
     }
@@ -258,8 +269,10 @@ public final class FusionSelection {
         if (parts == null) {
             return;
         }
-        // Si está en mega, la parte que lo está se enseña en mega: así sale al separar (y al invertir)
+        // Si está en mega o lleva un objeto de forma, la parte que lo tiene se enseña así: así sale al separar
         FusionMegas.previewMega(fused, parts);
+        FusionItemForms.preview(fused, parts);
+        FusionUltra.preview(fused, parts);
         PENDING_UNFUSES.put(player.getUUID(), fusedId);
         // La fusión con sus tipos y nombre de fusión (PokemonMixin) y su aspecto de fusión (los aspects)
         ServerPlayNetworking.send(player, new OpenUnfuseScreenPayload(
@@ -290,6 +303,9 @@ public final class FusionSelection {
             return;
         }
 
+        if (changingForm(player, fused)) {
+            return;
+        }
         // Otra vez: mientras la pantalla estaba abierta el PC podría haberse llenado. Antes de gastar el inyector
         FusionService.Parts parts = FusionService.prepareUnfuse(player, fused);
         if (parts == null) {
@@ -320,6 +336,9 @@ public final class FusionSelection {
         Pokemon fused = findFusion(player, fusedId);
         if (fused == null) {
             player.sendSystemMessage(Component.translatable("message.fusionmon.selection_changed"));
+            return;
+        }
+        if (changingForm(player, fused)) {
             return;
         }
 
@@ -385,6 +404,21 @@ public final class FusionSelection {
                 // Con las formas que tienen ahora: si una parte está en mega, la fusión saldrá en mega, que en el Fusion
                 // Album es otra fusión (en silueta si nunca se ha visto)
                 FusionDiscovery.isDiscovered(player, FusionDiscovery.key(head, body)));
+    }
+
+    /**
+     * Si alguno está a mitad de una animación de cambio de forma (FusionMegas.isChangingForm), avisa al jugador y
+     * devuelve true: hay que esperar a que acabe. Antes de gastar el inyector.
+     */
+    private static boolean changingForm(ServerPlayer player, Pokemon... pokemon) {
+        for (Pokemon candidate : pokemon) {
+            if (FusionMegas.isChangingForm(candidate)) {
+                player.sendSystemMessage(Component.translatable("message.fusionmon.form_changing",
+                        candidate.getDisplayName(false)));
+                return true;
+            }
+        }
+        return false;
     }
 
     /** El Pokémon con ese UUID si sigue en el equipo y no es una fusión; si no, null. */

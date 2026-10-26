@@ -33,7 +33,7 @@ public class FusionStatProvider implements StatProvider {
         FormData head;
         FormData body;
         try {
-            head = FusionData.headForm(pokemon);
+            head = FusionData.activeHeadForm(pokemon);
             body = FusionData.bodyForm(pokemon);
         } catch (RuntimeException e) {
             // Los stats se piden a todas horas: si no se pueden leer las partes, los de la especie visible

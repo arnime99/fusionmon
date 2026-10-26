@@ -28,10 +28,23 @@ public abstract class MegaShowdownInteractionWheelMixin {
     @Final
     private boolean canMega;
 
+    /** Lo mismo con la Ultraexplosión: su botón solo salía si la cabeza es Necrozma (ver FusionUltra). */
+    @Shadow
+    @Final
+    @Mutable
+    private boolean shouldUltra;
+
+    @Shadow
+    @Final
+    private boolean canUltra;
+
     @Inject(method = "<init>", require = 0, at = @At("RETURN"))
     private void fusionmon$showMegaWhenPossible(CallbackInfo ci) {
         if (canMega) {
             shouldMega = true;
+        }
+        if (canUltra) {
+            shouldUltra = true;
         }
     }
 }

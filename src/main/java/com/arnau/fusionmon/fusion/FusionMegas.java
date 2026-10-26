@@ -1,21 +1,22 @@
 package com.arnau.fusionmon.fusion;
 
+import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.Fusionmon;
+import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.api.moves.Move;
+import com.cobblemon.mod.common.api.scheduling.SchedulingFunctionsKt;
 import com.cobblemon.mod.common.api.pokemon.feature.StringSpeciesFeature;
 import com.cobblemon.mod.common.battles.ShowdownMoveset;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
-import net.minecraft.core.registries.Registries;
+import kotlin.Unit;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
+import java.lang.reflect.Field;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -46,12 +47,17 @@ public final class FusionMegas {
     private static final String IS_MEGA = "is_mega";
     /** La característica (species feature) con la que Mega Showdown cambia a la forma mega; "none" la deshace. */
     private static final String MEGA_FEATURE = "mega_evolution";
-    private static final TagKey<Item> MEGA_STONES =
-            TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("mega_showdown", "mega_stone"));
     /** Rayquaza megaevoluciona sin piedra si sabe Ascenso Draco, con esta característica (como en Mega Showdown). */
     private static final String RAYQUAZA = "Rayquaza";
     private static final String DRAGON_ASCENT = "dragonascent";
     private static final List<String> RAYQUAZA_MEGA = List.of("mega_evolution=mega");
+    /**
+     * Marca que pone Mega Showdown en persistentData mientras dura la animación de un cambio de forma (mega, objeto),
+     * junto con sus datos para deshacerlo (REVERT_DATA). La quita la propia animación al acabar, que va programada en
+     * la entidad. Mientras está puesta no deja volver a la Poké Ball ni deshacer la mega.
+     */
+    private static final String FORM_CHANGING = "form_changing";
+    private static final String REVERT_DATA = "aspects";
 
     private FusionMegas() {
     }
@@ -76,9 +82,63 @@ public final class FusionMegas {
         return true;
     }
 
-    /** Le quita la megapiedra si lleva una (y la devuelve); si lleva otra cosa o nada, no toca nada y devuelve vacío. */
-    public static ItemStack takeStone(Pokemon pokemon) {
-        return pokemon.heldItem().is(MEGA_STONES) ? pokemon.removeHeldItem() : ItemStack.EMPTY;
+    /**
+     * Quita la marca de animación de Mega Showdown a medias (FORM_CHANGING) de los datos de un Pokémon que no se está
+     * animando: una copia guardada de una parte, o un Pokémon sin entidad. Si se fusionaba durante la animación (dar o
+     * quitar un objeto y fusionar unos segundos después), la copia se guardaba con la marca y nadie la quitaba nunca:
+     * al separar, esa parte (y las fusiones que se hicieran con ella) no volvía a la Poké Ball y su mega no se podía
+     * deshacer, así que el jugador no podía hacer ninguna otra. True si la había.
+     */
+    public static boolean clearFormChanging(CompoundTag persistentData) {
+        if (persistentData == null || !persistentData.getBoolean(FORM_CHANGING)) {
+            return false;
+        }
+        // Lo mismo que hace Mega Showdown al acabar la animación (resetFormChangingState)
+        persistentData.remove(FORM_CHANGING);
+        persistentData.remove(REVERT_DATA);
+        return true;
+    }
+
+    /**
+     * Al entrar el jugador: ningún Pokémon suyo tiene entidad todavía, así que una marca de animación es de una que se
+     * cortó (la entidad desapareció antes de acabar). Arregla también las partidas que ya tienen alguno atascado.
+     */
+    public static void clearStuckAnimations(ServerPlayer player) {
+        int cleared = 0;
+        for (Pokemon pokemon : Cobblemon.INSTANCE.getStorage().getParty(player)) {
+            cleared += clearIfIdle(pokemon) ? 1 : 0;
+        }
+        for (Pokemon pokemon : Cobblemon.INSTANCE.getStorage().getPC(player)) {
+            cleared += clearIfIdle(pokemon) ? 1 : 0;
+        }
+        if (cleared > 0) {
+            Fusionmon.LOGGER.info("Fusionmon: quitadas {} animaciones de Mega Showdown a medias de los Pokémon de {}",
+                    cleared, player.getName().getString());
+        }
+    }
+
+    /**
+     * Si el Pokémon está a mitad de una animación de cambio de forma de Mega Showdown (mega, objeto). Su forma cambia al
+     * final de la animación, unos segundos después de pulsar: si se fusionaba, separaba o invertía en medio, la forma
+     * llegaba a la fusión cuando ya estaba hecha (una mega sin su marca, que ya no se podía hacer ni deshacer). Sin
+     * entidad no hay animación: la marca es de una que se cortó y se quita.
+     */
+    public static boolean isChangingForm(Pokemon pokemon) {
+        CompoundTag data = pokemon.getPersistentData();
+        if (data == null || !data.getBoolean(FORM_CHANGING)) {
+            return false;
+        }
+        return !clearIfIdle(pokemon);
+    }
+
+    /** clearFormChanging en un Pokémon, solo si no tiene entidad (si la tiene, su animación puede seguir en marcha). */
+    static boolean clearIfIdle(Pokemon pokemon) {
+        if (pokemon.getEntity() != null || !clearFormChanging(pokemon.getPersistentData())) {
+            return false;
+        }
+        // Para que Cobblemon lo guarde
+        pokemon.onChange(null);
+        return true;
     }
 
     /**
@@ -109,16 +169,52 @@ public final class FusionMegas {
             return false;
         }
         MegaPlan plan = plan(pokemon);
-        if (plan == null || plan.part() != FusionPart.BODY || !megaBody(owner, pokemon, plan.aspects())) {
+        if (plan == null || plan.part() != FusionPart.BODY) {
             return false;
         }
+        // Como Mega Showdown: la marca ya (no se puede hacer otra mega mientras dura la animación) y la forma en el
+        // destello de la animación, no antes
         markMega(pokemon);
-        MegaShowdown.playMegaEffect(pokemon);
-        // persistentData solo llega al cliente con el Pokémon entero (el resumen calcula los stats con ella)
-        FusionService.resendToClient(owner, pokemon);
-        Fusionmon.LOGGER.info("Fusionmon: el cuerpo de la fusión de {} ha megaevolucionado ({})",
-                owner.getName().getString(), FusionData.bodyForm(pokemon).getName());
+        float delay = MegaShowdown.playMegaEffect(pokemon);
+        Runnable change = () -> finishBodyMega(owner, pokemon, plan.aspects());
+        if (delay > 0) {
+            afterOnServer(delay, change);
+        } else {
+            change.run();
+        }
         return true;
+    }
+
+    /**
+     * El final de megaEvolveBody, en el destello de la animación. Si mientras tanto se ha deshecho la mega (empezar un
+     * combate, quitarle la piedra) o ha cambiado lo que toca, no se hace; si no se puede, se quita la marca.
+     */
+    private static void finishBodyMega(ServerPlayer owner, Pokemon fusion, List<String> aspects) {
+        try {
+            MegaPlan plan = plan(fusion);
+            if (!FusionData.isFusion(fusion) || !isMega(fusion) || FusionData.hasBodyMega(fusion) || plan == null
+                    || plan.part() != FusionPart.BODY || !plan.aspects().equals(aspects)) {
+                return;
+            }
+            if (!megaBody(owner, fusion, aspects)) {
+                revert(fusion);
+                return;
+            }
+            // persistentData solo llega al cliente con el Pokémon entero (el resumen calcula los stats con ella)
+            FusionService.resendToClient(owner, fusion);
+            Fusionmon.LOGGER.info("Fusionmon: el cuerpo de la fusión de {} ha megaevolucionado ({})",
+                    owner.getName().getString(), FusionData.bodyForm(fusion).getName());
+        } catch (RuntimeException | LinkageError e) {
+            FusionSafety.failed("mega del cuerpo", e);
+        }
+    }
+
+    /** Programa algo en el hilo del servidor dentro de unos segundos (el planificador de Cobblemon). */
+    static void afterOnServer(float seconds, Runnable action) {
+        SchedulingFunctionsKt.afterOnServer(seconds, () -> {
+            action.run();
+            return Unit.INSTANCE;
+        });
     }
 
     /**
@@ -249,10 +345,10 @@ public final class FusionMegas {
     }
 
     /**
-     * Pone las características de la piedra ("mega_evolution=mega_x"), como lo hace Mega Showdown. True si la forma ha
-     * cambiado (si no, la piedra no era de esta especie o la forma mega no existe).
+     * Pone las características de la piedra o del objeto ("mega_evolution=mega_x", "multitype=fire"), como lo hace
+     * Mega Showdown. True si la forma ha cambiado (si no, no era de esta especie o esa forma no existe).
      */
-    private static boolean applyStone(Pokemon pokemon, List<String> aspects) {
+    static boolean applyStone(Pokemon pokemon, List<String> aspects) {
         FormData before = pokemon.getForm();
         for (String aspect : aspects) {
             int equals = aspect.indexOf('=');
@@ -267,6 +363,26 @@ public final class FusionMegas {
     private static void markMega(Pokemon pokemon) {
         pokemon.getPersistentData().putBoolean(IS_MEGA, true);
         pokemon.setTradeable(false);
+    }
+
+    /**
+     * Después de cambiarle el objeto a una fusión (HELD_ITEM_POST): si se le ha quitado la megapiedra de su cuerpo en
+     * mega, la mega se deshace. Mega Showdown lo hace al quitar la piedra (megaToggle), pero solo si la piedra es de la
+     * especie visible (la cabeza): con la del cuerpo la mega se quedaba puesta sin piedra, el objeto nuevo (Griseous
+     * Core...) cambiaba la cabeza encima y no se podía volver a megaevolucionar. True si ha cambiado algo.
+     */
+    public static boolean revertBodyIfStoneRemoved(Pokemon fusion, ItemStack returned, ItemStack received) {
+        // La misma piedra otra vez: nada (como Mega Showdown)
+        if (!FusionData.hasBodyMega(fusion) || returned.isEmpty() || ItemStack.isSameItem(returned, received)) {
+            return false;
+        }
+        MegaShowdown.Stone stone = MegaShowdown.stone(returned);
+        FormData body = FusionData.bodyForm(fusion);
+        if (stone == null || body == null || !stone.pokemons().contains(body.getSpecies().getName())) {
+            return false;
+        }
+        // Sin su animación, como al fusionar: quita la capa del cuerpo y la marca de mega
+        return revert(fusion);
     }
 
     /** Al principio de MegaGimmick.unmegaEvolve: si la mega era del cuerpo, se quita (Mega Showdown hace el resto). */
@@ -284,11 +400,19 @@ public final class FusionMegas {
      * Cobblemon 1.7.3): así Fusionmon no depende de Mega Showdown para compilar ni para arrancar. Si una versión suya
      * los cambia, falla aquí, quien llama lo avisa en el log (FusionSafety) y el cuerpo simplemente no megaevoluciona.
      */
-    private static final class MegaShowdown {
+    static final class MegaShowdown {
 
         private static final String PACKAGE = "com.github.yajatkaul.mega_showdown.";
 
         record Stone(List<?> pokemons, List<String> applyAspects) {
+        }
+
+        /** Un objeto que cambia la forma al llevarlo: a qué especies sirve, qué pone, qué la deshace y su efecto. */
+        record ItemForm(List<?> pokemons, List<String> applyAspects, List<String> revertAspects, String effect) {
+
+            boolean fits(Pokemon pokemon) {
+                return pokemons.contains(pokemon.getSpecies().getName());
+            }
         }
 
         private static final Class<?> MEGA_GIMMICK;
@@ -301,6 +425,27 @@ public final class FusionMegas {
         private static final MethodHandle ASPECTS;
         private static final MethodHandle GET_EFFECT;
         private static final MethodHandle APPLY_EFFECTS;
+        private static final MethodHandle REVERT_EFFECTS;
+        // Cuándo cambia la forma en la animación (segundos desde el principio): Effect.snowStorm().apply_after()
+        private static final MethodHandle SNOWSTORM;
+        private static final MethodHandle APPLY_AFTER;
+        private static final MethodHandle REVERT_AFTER;
+        // Ultraexplosión (FusionUltra): el cristal Z que lleva y los datos con los que Mega Showdown la deshace
+        private static final Class<?> Z_CRYSTAL;
+        private static final MethodHandle Z_ITEM_ID;
+        private static final MethodHandle APPEND_REVERT;
+        // Formas por objeto: los objetos con código propio (placas, máscaras...) guardan sus datos en campos privados;
+        // las de datos (HeldItemFormChange) son un componente del objeto, como las megapiedras
+        private static final Class<?> FORM_CHANGE_ITEM;
+        private static final Field ITEM_POKEMONS;
+        private static final Field ITEM_APPLY_ASPECT;
+        private static final Field ITEM_REVERT_ASPECT;
+        private static final Field ITEM_EFFECT;
+        private static final MethodHandle ASPECT_REVERT;
+        private static final Class<?> HELD_ITEM_FORM_CHANGE;
+        private static final MethodHandle HELD_POKEMONS;
+        private static final MethodHandle HELD_ASPECT_CONDITIONS;
+        private static final MethodHandle HELD_EFFECT;
 
         static {
             try {
@@ -327,6 +472,32 @@ public final class FusionMegas {
                 GET_EFFECT = lookup.findStatic(effect, "getEffect", MethodType.methodType(effect, String.class));
                 APPLY_EFFECTS = lookup.findVirtual(effect, "applyEffects", MethodType.methodType(void.class,
                         Pokemon.class, List.class, Optional.class, PokemonEntity.class));
+                REVERT_EFFECTS = lookup.findVirtual(effect, "revertEffects", MethodType.methodType(void.class,
+                        Pokemon.class, List.class, Optional.class, PokemonEntity.class));
+                Class<?> snowStorm = Class.forName(PACKAGE + "api.codec.particles.SnowStormParticle", false, loader);
+                SNOWSTORM = lookup.findVirtual(effect, "snowStorm", MethodType.methodType(Optional.class));
+                APPLY_AFTER = lookup.findVirtual(snowStorm, "apply_after", MethodType.methodType(Optional.class));
+                REVERT_AFTER = lookup.findVirtual(snowStorm, "revert_after", MethodType.methodType(Optional.class));
+                Z_CRYSTAL = Class.forName(PACKAGE + "api.codec.ZCrystal", false, loader);
+                Z_ITEM_ID = lookup.findVirtual(Z_CRYSTAL, "showdown_item_id", MethodType.methodType(String.class));
+                Class<?> aspectUtils = Class.forName(PACKAGE + "utils.AspectUtils", false, loader);
+                APPEND_REVERT = lookup.findStatic(aspectUtils, "appendRevertDataPokemon", MethodType.methodType(
+                        void.class, effect, List.class, Optional.class, Pokemon.class, String.class));
+
+                FORM_CHANGE_ITEM = Class.forName(PACKAGE + "item.custom.form_change.FormChangeHeldItem", false,
+                        loader);
+                ITEM_POKEMONS = privateField(FORM_CHANGE_ITEM, "pokemons");
+                ITEM_APPLY_ASPECT = privateField(FORM_CHANGE_ITEM, "applyAspect");
+                ITEM_REVERT_ASPECT = privateField(FORM_CHANGE_ITEM, "revertAspect");
+                ITEM_EFFECT = privateField(FORM_CHANGE_ITEM, "effectId");
+                ASPECT_REVERT = lookup.findVirtual(aspectConditions, "aspectRevert", MethodType.methodType(conditions));
+                HELD_ITEM_FORM_CHANGE = Class.forName(PACKAGE + "api.codec.HeldItemFormChange", false, loader);
+                HELD_POKEMONS = lookup.findVirtual(HELD_ITEM_FORM_CHANGE, "pokemons",
+                        MethodType.methodType(List.class));
+                HELD_ASPECT_CONDITIONS = lookup.findVirtual(HELD_ITEM_FORM_CHANGE, "aspect_conditions",
+                        MethodType.methodType(aspectConditions));
+                HELD_EFFECT = lookup.findVirtual(HELD_ITEM_FORM_CHANGE, "effect",
+                        MethodType.methodType(Optional.class));
             } catch (ReflectiveOperationException e) {
                 throw new IllegalStateException("Mega Showdown ha cambiado: no se encuentran sus métodos de mega", e);
             }
@@ -339,6 +510,44 @@ public final class FusionMegas {
                         && !(boolean) HAS_MEGA.invoke(player);
             } catch (Throwable e) {
                 throw new IllegalStateException("No se ha podido comprobar el Mega Aro con Mega Showdown", e);
+            }
+        }
+
+        /** Si lleva el Aro Z (o lo que Mega Showdown acepte para los movimientos Z), como pide la Ultraexplosión. */
+        static boolean hasZRing(ServerPlayer player) {
+            try {
+                return (boolean) HAS_GIMMICK.invoke(ShowdownMoveset.Gimmick.Z_POWER, (LivingEntity) player);
+            } catch (Throwable e) {
+                throw new IllegalStateException("No se ha podido comprobar el Aro Z con Mega Showdown", e);
+            }
+        }
+
+        /** El id de Showdown del cristal Z que lleva ("ultranecroziumz"...), o null si no es un cristal Z. */
+        static String zCrystal(ItemStack held) {
+            if (held.isEmpty()) {
+                return null;
+            }
+            try {
+                Object crystal = GET_COMPONENT.invoke(Z_CRYSTAL, held);
+                return crystal == null ? null : (String) Z_ITEM_ID.invoke(crystal);
+            } catch (Throwable e) {
+                throw new IllegalStateException("No se ha podido leer el cristal Z de Mega Showdown", e);
+            }
+        }
+
+        /**
+         * Lo que guarda Mega Showdown al hacer la Ultraexplosión para deshacerla al empezar un combate (revertAspects
+         * bajo key, con el efecto effectId), como en UltraGimmick.ultraBurst.
+         */
+        static void appendRevertData(Pokemon pokemon, String effectId, List<String> revertAspects, String key) {
+            try {
+                Object effect = GET_EFFECT.invoke(effectId);
+                if (effect != null) {
+                    APPEND_REVERT.invoke(effect, revertAspects, Optional.empty(), pokemon, key);
+                }
+            } catch (Throwable e) {
+                // Solo se pierde que Mega Showdown la deshaga al empezar un combate
+                Fusionmon.LOGGER.warn("Fusionmon: no se han podido guardar los datos para deshacer {}", effectId, e);
             }
         }
 
@@ -357,16 +566,71 @@ public final class FusionMegas {
             }
         }
 
-        /** La animación de megaevolucionar de Mega Showdown (destello, sonido), sin cambiarle nada al Pokémon. */
-        static void playMegaEffect(Pokemon pokemon) {
+        private static Field privateField(Class<?> owner, String name) throws NoSuchFieldException {
+            Field field = owner.getDeclaredField(name);
+            field.setAccessible(true);
+            return field;
+        }
+
+        /** La forma que da el objeto al llevarlo, o null si no cambia ninguna forma. */
+        @SuppressWarnings("unchecked")
+        static ItemForm itemForm(ItemStack held) {
+            if (held.isEmpty()) {
+                return null;
+            }
             try {
-                Object effect = GET_EFFECT.invoke("mega_showdown:mega_evolution");
-                if (effect != null) {
-                    APPLY_EFFECTS.invoke(effect, pokemon, List.of(), Optional.empty(), (PokemonEntity) null);
+                Object item = held.getItem();
+                if (FORM_CHANGE_ITEM.isInstance(item)) {
+                    return new ItemForm((List<?>) ITEM_POKEMONS.get(item),
+                            List.of((String) ITEM_APPLY_ASPECT.get(item)),
+                            List.of((String) ITEM_REVERT_ASPECT.get(item)), (String) ITEM_EFFECT.get(item));
                 }
+                Object change = GET_COMPONENT.invoke(HELD_ITEM_FORM_CHANGE, held);
+                if (change == null) {
+                    return null;
+                }
+                Object conditions = HELD_ASPECT_CONDITIONS.invoke(change);
+                Object apply = ASPECT_APPLY.invoke(conditions);
+                Object revert = ASPECT_REVERT.invoke(conditions);
+                Optional<?> effect = (Optional<?>) HELD_EFFECT.invoke(change);
+                return new ItemForm((List<?>) HELD_POKEMONS.invoke(change), (List<String>) ASPECTS.invoke(apply),
+                        (List<String>) ASPECTS.invoke(revert), effect.map(Object::toString).orElse(null));
             } catch (Throwable e) {
-                // Solo es la animación: la mega ya está hecha
-                Fusionmon.LOGGER.warn("Fusionmon: no se ha podido mostrar la animación de mega del cuerpo", e);
+                throw new IllegalStateException("No se ha podido leer la forma del objeto de Mega Showdown", e);
+            }
+        }
+
+        /** La animación de megaevolucionar de Mega Showdown (destello, sonido), sin cambiarle nada al Pokémon. */
+        static float playMegaEffect(Pokemon pokemon) {
+            return playEffect(pokemon, "mega_showdown:mega_evolution", true);
+        }
+
+        /**
+         * Una animación de Mega Showdown por su id (la de poner la forma, o la de quitarla), sin cambiarle nada al
+         * Pokémon. Devuelve los segundos hasta el momento de la animación en el que Mega Showdown cambia la forma (el
+         * destello; 0 si no hay animación porque el Pokémon no está fuera). Mientras, Mega Showdown le pone su marca
+         * de cambio de forma (no vuelve a la Poké Ball, no se fusiona). Si falla, solo se pierde la animación: 0.
+         */
+        static float playEffect(Pokemon pokemon, String id, boolean apply) {
+            try {
+                Object effect = GET_EFFECT.invoke(id);
+                if (effect == null) {
+                    return 0;
+                }
+                (apply ? APPLY_EFFECTS : REVERT_EFFECTS).invoke(effect, pokemon, List.of(), Optional.empty(),
+                        (PokemonEntity) null);
+                if (pokemon.getEntity() == null) {
+                    return 0;
+                }
+                Optional<?> snowStorm = (Optional<?>) SNOWSTORM.invoke(effect);
+                if (snowStorm.isEmpty()) {
+                    return 0;
+                }
+                Optional<?> delay = (Optional<?>) (apply ? APPLY_AFTER : REVERT_AFTER).invoke(snowStorm.get());
+                return delay.map(seconds -> ((Number) seconds).floatValue()).orElse(0f);
+            } catch (Throwable e) {
+                Fusionmon.LOGGER.warn("Fusionmon: no se ha podido mostrar la animación {} del cuerpo", id, e);
+                return 0;
             }
         }
     }

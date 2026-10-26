@@ -1,6 +1,8 @@
 package com.arnau.fusionmon.mixin;
 
+import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.fusion.FusionData;
+import com.arnau.fusionmon.fusion.FusionUltra;
 import com.cobblemon.mod.common.api.moves.MoveTemplate;
 import com.cobblemon.mod.common.api.pokemon.moves.Learnset;
 import com.cobblemon.mod.common.api.pokemon.moves.LearnsetQuery;
@@ -11,6 +13,8 @@ import com.llamalad7.mixinextras.sugar.Local;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Mega Showdown (mod opcional) trae su propia copia de Pokemon.updateMovesOnFormChange para megaevolucionar y otros
@@ -35,5 +39,20 @@ public abstract class MegaShowdownAspectUtilsMixin {
             return true;
         }
         return original.call(query, move, learnset);
+    }
+
+    /**
+     * Al empezar un combate (y otras veces) Mega Showdown deshace lo que solo es de fuera de combate: la mega pasa por
+     * unmegaEvolve (MegaShowdownMegaGimmickMixin), pero la Ultraexplosión la deshace con sus datos guardados, que la
+     * del cuerpo no tiene. Aquí se quita la del cuerpo (FusionUltra).
+     */
+    @Inject(method = "revertPokemonsIfRequired(Lcom/cobblemon/mod/common/pokemon/Pokemon;Z)V", require = 0,
+            at = @At("HEAD"))
+    private static void fusionmon$revertBodyUltra(Pokemon pokemon, boolean battle, CallbackInfo ci) {
+        try {
+            FusionUltra.revertBodyForBattle(pokemon);
+        } catch (RuntimeException | LinkageError e) {
+            FusionSafety.failed("Ultraexplosión del cuerpo (al deshacer formas)", e);
+        }
     }
 }

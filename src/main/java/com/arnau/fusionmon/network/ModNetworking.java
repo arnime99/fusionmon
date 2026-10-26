@@ -1,7 +1,9 @@
 package com.arnau.fusionmon.network;
 
 import com.arnau.fusionmon.FusionConfig;
+import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.fusion.FusionDiscovery;
+import com.arnau.fusionmon.fusion.FusionMegas;
 import com.arnau.fusionmon.fusion.FusionSelection;
 import com.arnau.fusionmon.fusion.FusionWorldAnimation;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -37,6 +39,12 @@ public final class ModNetworking {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             // Las fusiones creadas antes de que existiera el registro cuentan como descubiertas (una vez por jugador)
             FusionDiscovery.registerExisting(handler.getPlayer());
+            try {
+                // Pokémon que no volvían a la Poké Ball por una animación de Mega Showdown que se cortó
+                FusionMegas.clearStuckAnimations(handler.getPlayer());
+            } catch (RuntimeException e) {
+                FusionSafety.failed("animaciones de Mega Showdown a medias", e);
+            }
             // Las opciones del servidor que el cliente necesita (un cliente con una versión vieja no lo conoce)
             if (ServerPlayNetworking.canSend(handler.getPlayer(), FusionRulesPayload.TYPE)) {
                 sender.sendPacket(new FusionRulesPayload(FusionConfig.configuredStatBonusPercent(),

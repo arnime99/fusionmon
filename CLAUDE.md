@@ -56,7 +56,7 @@ una instancia de CurseForge con 1.8.2 (`CF 1.8.2`) y en la de Cobbleverse.
 - `item/FusionInjectorItem` — el **Fusion Injector** / Inyector de Fusión (`fusionmon:fusion_injector`; hasta el 2026-10-10 era el Fusion Crystal, `fusion_crystal`: se renombró con el sprite del usuario, antes de publicar). Clic derecho → `FusionSelection.start`; agachado → Fusion Album (solo servidor).
 - `fusion/FusionSelection` — flujo: selector de equipo de Cobblemon (`PartySelectCallbacks`). Elegir una fusión → pantalla de separar (Separar / **Invertir** / Cancelar; sin sitio para el cuerpo, Separar sale desactivado); elegir un normal → 2.º selector → pantalla de fusión. Invertir abre la **misma pantalla de fusión** (`reverse = true`) con las partes de la fusión, el cuerpo como cabeza. Guarda la selección pendiente por jugador (`PENDING_FUSIONS/UNFUSES/REVERSES`) y **revalida todo** al recibir la respuesta del cliente.
 - `fusion/FusionService` — `fuse` / `unfuse` / `reverse` (`combine` = la parte común que convierte la cabeza en la fusión sin tocar el equipo): objetos al inventario, medias de nivel/IV/EV, naturaleza y habilidad elegidas (habilidad del cuerpo como *forced*), movimientos de ambos a *benched moves*, % de PS, reparto de EXP al separar o invertir. `readParts` (leer partes con aviso) / `prepareUnfuse` (+ sitio) **antes** de gastar el inyector.
-- `fusion/FusionData` — datos en `pokemon.persistentData["fusionmon"]`: `version` (2), `head`/`body` (NBT completo de los originales), `headSpecies`/`headForm`/`bodySpecies`/`bodyForm`, `bodyAspects`, `bodyMega` (mega del cuerpo, ver "Megas"), `startExperience`. Al cambiarlos llama a `updateAspects()`.
+- `fusion/FusionData` — datos en `pokemon.persistentData["fusionmon"]`: `version` (2), `head`/`body` (NBT completo de los originales), `headSpecies`/`headForm`/`bodySpecies`/`bodyForm`, `bodyAspects`, `bodyMega` (forma temporal del cuerpo: mega, objeto o Ultra, ver "Megas"), `startExperience`. Al cambiarlos llama a `updateAspects()`.
 - `fusion/FusionAspects` — `AspectProvider` de Cobblemon: las fusiones llevan los aspects `fusionmon-fusion`, `fusionmon-body-<especie>` y `fusionmon-bodyaspect-<aspect del cuerpo>`. Cobblemon los sincroniza solo al cliente (entidad, equipo, PC) y los resolvers los usan para elegir modelo/textura (también sirven para resource packs).
 - `fusion/FusionCalculator` — fórmulas puras (stats base ponderados 2/3, regla de tipos, nombre partido). Aquí se retoca el algoritmo.
 - `fusion/FusionStatProvider` — envuelve `Cobblemon.statProvider` para los stats de fusiones.
@@ -195,8 +195,29 @@ su cabeza, el resumen sin añadido) y se avisa en el log.
   la normal y la activa. Así también se apuntan las parejas que salen al **evolucionar** una fusión (antes no). El
   Album pinta la forma con sus aspects (Cobblemon define las megas con el aspect `mega`) y añade la forma al nombre
   ("Charken (Mega-Y)", "Charizard (Mega-Y) + Blaziken"), también las regionales.
-  **Pendiente:** formas por objeto (placas, orbes, máscaras: el mismo sistema) y fase 3, mega en combate (registrar la
-  fusión mega en Showdown). Mega Showdown 1.3.1 está en
+  **Formas por objeto (hecho y probado, 2026-10-26):** `fusion/FusionItemForms` (placas, Memorias, Discos, Griseous
+  Core, máscaras: `FormChangeHeldItem` y el componente `HeldItemFormChange`): si el objeto no le sirve a la cabeza y sí
+  al cuerpo, capa `bodyMega` de tipo `item` (`kind`: `mega`/`item`/`ultra`). Tipos, stats y Showdown de la cabeza salen
+  de su forma **actual** (`FusionData.activeHeadForm`; antes la guardada: la placa de Arceus de cabeza no cambiaba el
+  tipo). **Regla de objetos** (decisión del usuario): si solo una parte lleva objeto, la fusión se lo queda con su
+  forma o su mega; si llevan los dos, vuelven los dos; al invertir hereda el de la fusión; al separar va a la parte a
+  la que le da forma (`keepMega`/`giveToPart`), si no al jugador. Al fusionar/separar/invertir los objetos se mueven
+  **en silencio** (`swapHeldItem(..., false, true)`, sin eventos) y las formas se ponen y quitan en el acto.
+  **Ultraexplosión** (`fusion/FusionUltra`, `mixin/MegaShowdownUltraGimmickMixin`): Necrozma Melena/Alas de cuerpo con
+  Ultranecrozium Z y Aro Z, capa `ultra`; se deshace con el botón, al quitar el cristal o en `revertPokemonsIfRequired`
+  (empezar combate); se conserva como las megas. Rayquaza mega de cabeza + Necrozma Ultra de cuerpo a la vez: probado.
+  **Animaciones de Mega Showdown (trampas):** cambia la forma **al final** de su animación (`apply_after` del efecto:
+  mega 6,3 s, Origen 4 s) y mientras pone `form_changing` en persistentData (no deja volver a la Poké Ball ni hacer o
+  deshacer la mega; lo quita la animación, programada en la entidad). Por eso: no se fusiona/separa/invierte durante
+  una (`FusionMegas.isChangingForm`, mensaje `form_changing`; si no, la forma llegaba después a la fusión: mega sin
+  marca, imposible de hacer o deshacer); las copias de las partes se guardan sin esa marca (`clearFormChanging`; una
+  copia atascada no volvía nunca a la Poké Ball) y al entrar se limpia en equipo y PC (`clearStuckAnimations`); los
+  cambios del cuerpo (mega, objeto, Ultra) se aplican en el destello (`MegaShowdown.playEffect` devuelve el retraso,
+  `FusionMegas.afterOnServer`) y se vuelven a comprobar entonces. Al quitar la piedra de la mega del **cuerpo** Mega
+  Showdown no la deshace (solo mira la especie visible): `revertBodyIfStoneRemoved`. Su rueda (cliente) solo pone sus
+  botones si el Pokémon del equipo del cliente tiene la entidad: `FusionService.resendToClient` manda también
+  `PokemonStateUpdatePacket` (si no, el botón no salía hasta guardarlo y sacarlo).
+  **Pendiente:** fase 3, mega y Ultra en combate (registrar la fusión mega en Showdown). Mega Showdown 1.3.1 está en
   `run/mods` y `run/server/mods`, y AllTheMons R5.0 apartado en `run/fusionmon/packs-desactivados/` (se declara
   incompatible con Mega Showdown).
 - Cobblemon comprueba evoluciones cada segundo (`PlayerPartyStore.onSecondPassed` → `getLockedEvolutions()`); `setSpecies`/`setForm` vacían las pendientes. El envío completo del Pokémon (`SetPartyPokemonPacket`) incluye las evoluciones pendientes.

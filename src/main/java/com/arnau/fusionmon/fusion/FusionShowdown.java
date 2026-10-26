@@ -61,7 +61,7 @@ public final class FusionShowdown {
         for (BattleActor actor : battle.getActors()) {
             for (BattlePokemon battlePokemon : actor.getPokemonList()) {
                 Pokemon pokemon = battlePokemon.getEffectedPokemon();
-                FormData head = FusionData.headForm(pokemon);
+                FormData head = FusionData.activeHeadForm(pokemon);
                 FormData body = FusionData.bodyForm(pokemon);
                 if (head == null || body == null) {
                     continue;

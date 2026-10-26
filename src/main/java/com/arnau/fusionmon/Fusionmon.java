@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import com.arnau.fusionmon.command.FusionCommands;
 import com.arnau.fusionmon.fusion.FusionAspects;
 import com.arnau.fusionmon.fusion.FusionDiscovery;
+import com.arnau.fusionmon.fusion.FusionItemForms;
 import com.arnau.fusionmon.fusion.FusionLevelUp;
 import com.arnau.fusionmon.fusion.FusionStatProvider;
 import com.arnau.fusionmon.fusion.FusionWorldAnimation;
@@ -41,6 +42,8 @@ public class Fusionmon implements ModInitializer {
 		Cobblemon.INSTANCE.setStatProvider(new FusionStatProvider(Cobblemon.INSTANCE.getStatProvider()));
 		// Al subir de nivel, la fusión también aprende los movimientos del cuerpo
 		FusionLevelUp.register();
+		// Formas por objeto equipado del cuerpo (placas, máscaras... de Mega Showdown)
+		FusionItemForms.register();
 		// Etiquetas (aspects) que dicen al cliente que un Pokémon es una fusión y quién es su cuerpo
 		AspectProvider.Companion.register(new FusionAspects());
 		// Registro de fusiones descubiertas de cada jugador (dato guardado con su partida)

@@ -9,6 +9,7 @@
 		"MegaShowdownAspectUtilsMixin",
 		"MegaShowdownInteractionWheelMixin",
 		"MegaShowdownMegaGimmickMixin",
+		"MegaShowdownUltraGimmickMixin",
 		"PlayerPartyStoreMixin",
 		"PokemonEntityMixin",
 		"PokemonMixin",
