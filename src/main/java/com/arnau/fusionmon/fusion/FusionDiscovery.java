@@ -1,11 +1,15 @@
 package com.arnau.fusionmon.fusion;
 
+import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.Fusionmon;
 import com.arnau.fusionmon.network.OpenFusionAlbumPayload;
 import com.cobblemon.mod.common.Cobblemon;
+import com.cobblemon.mod.common.api.Priority;
+import com.cobblemon.mod.common.api.events.CobblemonEvents;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.mojang.serialization.Codec;
+import kotlin.Unit;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -18,7 +22,8 @@ import java.util.Locale;
 
 /**
  * Registro de fusiones descubiertas de cada jugador: las parejas cabeza + cuerpo que ha creado él (al fusionar o
- * invertir). Una pareja sin descubrir sale en la pantalla de fusionar como silueta, sin nombre, tipos ni stats: se ve
+ * invertir) y las formas que han tenido después (una mega de la fusión cuenta como otra fusión: ver initialize). Una
+ * pareja sin descubrir sale en la pantalla de fusionar como silueta, sin nombre, tipos ni stats: se ve
  * por primera vez en la animación (decisión del usuario: descubrir las fusiones jugando).
  *
  * Se guarda pegado al jugador con los "data attachments" de Fabric API: se guarda con su partida (en el servidor) y
@@ -46,8 +51,43 @@ public final class FusionDiscovery {
     private FusionDiscovery() {
     }
 
-    /** Fuerza a cargar la clase al iniciar el mod: el tipo de dato tiene que estar registrado antes de cargar un mundo. */
+    /**
+     * Al iniciar el mod: carga la clase (el tipo de dato tiene que estar registrado antes de cargar un mundo) y escucha
+     * los cambios de aspects. Una fusión que cambia de forma (megaevoluciona, por la cabeza o por el cuerpo, o evoluciona
+     * una de sus partes) es otra fusión: se apunta con las formas que tiene ahora (activeKey). Cobblemon avisa de
+     * cualquier cambio de aspects, así que también sirve para las formas que vengan después (formas por objeto).
+     */
     public static void initialize() {
+        CobblemonEvents.POKEMON_ASPECTS_CHANGED.subscribe(Priority.NORMAL, event -> {
+            try {
+                Pokemon pokemon = event.getPokemon();
+                ServerPlayer owner = FusionData.isFusion(pokemon) ? pokemon.getOwnerPlayer() : null;
+                if (owner != null) {
+                    registerActive(owner, pokemon);
+                }
+            } catch (RuntimeException e) {
+                // Solo faltaría en su Fusion Album: que nunca impida cambiar de forma
+                FusionSafety.failed("Fusion Album (cambio de forma)", e);
+            }
+            return Unit.INSTANCE;
+        });
+    }
+
+    /**
+     * Clave de la fusión con las formas que tiene ahora: la de la cabeza es la del Pokémon visible (en mega, la mega) y
+     * la del cuerpo, FusionData.bodyForm (con su mega si la tiene). Null si no es una fusión.
+     */
+    public static String activeKey(Pokemon fusion) {
+        FormData body = FusionData.bodyForm(fusion);
+        return body == null ? null : key(fusion.getForm(), body);
+    }
+
+    /** Apunta la fusión con sus formas de ahora (ver activeKey). */
+    public static void registerActive(ServerPlayer player, Pokemon fusion) {
+        String key = activeKey(fusion);
+        if (key != null) {
+            register(player, key);
+        }
     }
 
     /**
@@ -127,6 +167,8 @@ public final class FusionDiscovery {
         FormData body = FusionData.bodyForm(pokemon);
         if (head != null && body != null) {
             register(player, key(head, body));
+            // Y como está ahora, si no es igual (en mega)
+            registerActive(player, pokemon);
         }
     }
 

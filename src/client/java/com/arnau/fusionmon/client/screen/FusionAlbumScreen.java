@@ -168,7 +168,7 @@ public class FusionAlbumScreen extends Screen {
                 FusionScreenLayout.WHITE);
         y += FusionScreenLayout.LINE;
         Component parts = Component.translatable("gui.fusionmon.album.parts",
-                selected.head.getSpecies().getTranslatedName(), selected.body.getSpecies().getTranslatedName());
+                partName(selected.head), partName(selected.body));
         graphics.drawCenteredString(font, parts, detailCenter, y, FusionScreenLayout.GRAY);
         y += FusionScreenLayout.LINE + 4;
         List<Integer> stats = new ArrayList<>();
@@ -198,8 +198,26 @@ public class FusionAlbumScreen extends Screen {
         RenderablePokemon model = new RenderablePokemon(head.getSpecies(), aspects, ItemStack.EMPTY);
         String headName = head.getSpecies().getTranslatedName().getString();
         String bodyName = body.getSpecies().getTranslatedName().getString();
-        String name = FusionCalculator.name(headName, bodyName);
+        // Una mega (o una forma regional) es otra entrada con el mismo nombre de fusión: la forma la distingue
+        List<String> forms = new ArrayList<>();
+        for (FormData form : List.of(head, body)) {
+            if (!isStandard(form)) {
+                forms.add(form.getName());
+            }
+        }
+        String name = FusionCalculator.name(headName, bodyName)
+                + (forms.isEmpty() ? "" : " (" + String.join(" / ", forms) + ")");
         return new Entry(head, body, name, model, normalize(name + " " + headName + " " + bodyName));
+    }
+
+    private static boolean isStandard(FormData form) {
+        return form == form.getSpecies().getStandardForm();
+    }
+
+    /** "Charizard", o "Charizard (Mega-Y)" si la parte no está en su forma normal. */
+    private static Component partName(FormData form) {
+        Component species = form.getSpecies().getTranslatedName();
+        return isStandard(form) ? species : species.copy().append(" (" + form.getName() + ")");
     }
 
     /** "cobblemon:raichu/alola" → la forma de Alola de Raichu (la normal si ya no la tiene). */

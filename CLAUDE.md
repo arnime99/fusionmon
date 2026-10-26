@@ -73,7 +73,7 @@ una instancia de CurseForge con 1.8.2 (`CF 1.8.2`) y en la de Cobbleverse.
 - `fusion/FusionShowdown` + `mixin/BattleRegistryMixin` — antes de cada combate registra en Showdown la especie de fusión (`fusionmon<cabeza>x<cuerpo>`).
 - `mixin/PokemonMixin` — tipos, nombre visible, `showdownId()` y `getEvolutions()` de las fusiones.
 - `fusion/FusionEvolutions` — evoluciones de una fusión = las de cabeza y cuerpo guardados, envueltas en `FusionLevelUpEvolution` / `FusionItemEvolution` / `FusionTradeEvolution` (heredan de las de Cobblemon; id `fusionmon_<parte>_<id>`). Cobblemon las comprueba y muestra solo; al aceptar, `evolvePart` evoluciona la parte guardada (`FusionData.writePart`), y si es la cabeza también la especie visible. `mixin/ServerEvolutionControllerMixin` bloquea cualquier evolución no envuelta en una fusión.
-- `fusion/FusionDiscovery` — registro de fusiones **descubiertas** por jugador (data attachment de Fabric API `fusionmon:discovered_fusions`, persistente y `copyOnDeath`): claves `especie/forma>especie/forma` (el orden cuenta). Se apunta al **crear** la fusión (fusionar o invertir, en `FusionService`). En la pantalla de fusionar, una pareja sin descubrir (`FusionPreview.discovered`) sale en **silueta** negra (`ModelViewport.render(..., silhouette)`: color 0 en `drawProfilePokemon`), con "???" y stats ocultos; la animación la revela. Decisión del usuario (2026-10-09): silueta, solo al crearla, por jugador, stats ocultos. Se ven en el Fusion Album (`FusionAlbumScreen`).
+- `fusion/FusionDiscovery` — registro de fusiones **descubiertas** por jugador (data attachment de Fabric API `fusionmon:discovered_fusions`, persistente y `copyOnDeath`): claves `especie/forma>especie/forma` (el orden cuenta). Se apunta al **crear** la fusión (fusionar o invertir, en `FusionService`) y cada vez que cambia de forma (mega, evolución: ver "Megas"). En la pantalla de fusionar, una pareja sin descubrir (`FusionPreview.discovered`) sale en **silueta** negra (`ModelViewport.render(..., silhouette)`: color 0 en `drawProfilePokemon`), con "???" y stats ocultos; la animación la revela. Decisión del usuario (2026-10-09): silueta, solo al crearla, por jugador, stats ocultos. Se ven en el Fusion Album (`FusionAlbumScreen`).
 - `fusion/FusionMoves` — dar movimientos a la fusión después de crearla (sin emitir paquetes; el llamador sincroniza: Pokémon completo o `MoveSet/BenchedMoves.update()`).
 - `fusion/FusionLevelUp` — `EXPERIENCE_GAINED_EVENT_POST`: Cobblemon solo enseña los movimientos por nivel de la cabeza; aquí se añaden los del cuerpo entre el nivel anterior y el nuevo.
 - `network/*` — payloads de Fabric (servidor↔cliente) de las pantallas de fusionar/separar.
@@ -171,22 +171,32 @@ su cabeza, el resumen sin añadido) y se avisa en el log.
   `mega_showdown:mega_stone`, y unos pocos métodos suyos con `MethodHandle` en `FusionMegas.MegaShowdown`): las copias
   de las partes se guardan siempre en forma normal (`fuse` deshace la mega antes de `combine`; también al leer las
   partes) y la fusión se queda con la megapiedra (la de la cabeza si llevan las dos, salvo que el cuerpo estuviera en
-  mega; al invertir, la de la fusión). **Fase 2 (hecha y probada, 2026-10-26):** megaevoluciona la parte a la que le
-  sirve la piedra que lleva la fusión, cabeza o cuerpo (`partFor`: la cabeza si le vale, si no el cuerpo). La mega de la
+  mega; al invertir, la de la fusión). **Fase 2 (hecha y probada, 2026-10-26):** megaevoluciona la parte que toca según
+  `plan`, en este orden (decisión del usuario): **primero la piedra** que lleva la fusión (la cabeza si le sirve, si no
+  el cuerpo), **luego Rayquaza con Ascenso Draco** (cabeza o cuerpo; `mega_evolution=mega`, sin piedra). La mega de la
   cabeza es la de siempre (la forma del Pokémon visible); la del cuerpo es una capa `bodyMega` (forma + aspects) encima
   de `bodyForm`/`bodyAspects` sin tocar la copia `body`, así que todo lo que sale de la forma del cuerpo (modelo,
   tipos, stats con la forma mega en la fórmula, tamaño, montura) la usa, y al separar el cuerpo sale normal.
-  `mixin/MegaShowdownMegaGimmickMixin` (`@Pseudo`): `canMega` también acepta la especie del cuerpo, `megaEvolve` hace
-  la del cuerpo (`megaEvolveBody`, con su animación) y `unmegaEvolve` —por donde pasa toda mega que se deshace: combate,
-  quitar la piedra, volver a pulsar— quita la capa. `mixin/MegaShowdownInteractionWheelMixin`: su rueda solo enseñaba
+  `mixin/MegaShowdownMegaGimmickMixin` (`@Pseudo`): al final de `canMega`, si dijo que no, vale si toca la del cuerpo
+  (`canMegaBody`, con sus condiciones: Mega Aro y ninguna otra mega, `GimmickTurnCheck.hasGimmick`/`hasMega`). No en
+  su comparación de especie: con Rayquaza de cabeza decide por Ascenso Draco antes de mirar la piedra y no llegaba.
+  `megaEvolve` hace la del cuerpo (`megaEvolveBody`, con su animación; deja `Fusionmon: el cuerpo de la fusión de X ha
+  megaevolucionado` en el log, y el enganche avisa una vez al usarse) y `unmegaEvolve` —por donde pasa toda mega que
+  se deshace: combate, quitar la piedra, volver a pulsar— quita la capa. `mixin/MegaShowdownInteractionWheelMixin`: su rueda solo enseñaba
   el botón si la especie visible tiene megas (`shouldMega`); ahora también si `canMega`. Una parte en mega se queda así
   en el selector y la vista previa; al fusionar o invertir, la fusión vuelve a megaevolucionar **en silencio** y
   **antes** de mandarla al cliente (`megaEvolveAgain`): con la animación salía dos veces, y al invertir, un cambio de
   forma de un Pokémon que el cliente aún no tenía lo desconectaba (`FormUpdatePacket` busca el Pokémon al leerlo, en el
-  hilo de red). La pantalla de invertir pone la mega a la copia de la parte que lo está (`previewMega`); la de separar
-  enseña las partes normales (así vuelven). El Fusion Album apunta la pareja con las formas normales (`normalForm`).
-  **Pendiente:** el Fusion Album con las megas como fusiones distintas, formas por objeto (placas, orbes, máscaras: el
-  mismo sistema), y fase 3, mega en combate (registrar la fusión mega en Showdown). Mega Showdown 1.3.1 está en
+  hilo de red). Las pantallas de separar e invertir ponen la mega a la copia de la parte que lo está (`previewMega`), y
+  al **separar** esa parte sale con su piedra y en mega (`keepMega`): la mega se conserva al fusionar, invertir y
+  separar. **Fusion Album:** una mega es otra fusión (`charizard/mega-y>blaziken/normal`, en silueta en la vista
+  previa si nunca se ha visto): `FusionDiscovery` escucha `POKEMON_ASPECTS_CHANGED` y apunta la fusión con sus formas
+  de ahora (`activeKey`: la del Pokémon visible y `FusionData.bodyForm` con su capa); al fusionar o invertir se apuntan
+  la normal y la activa. Así también se apuntan las parejas que salen al **evolucionar** una fusión (antes no). El
+  Album pinta la forma con sus aspects (Cobblemon define las megas con el aspect `mega`) y añade la forma al nombre
+  ("Charken (Mega-Y)", "Charizard (Mega-Y) + Blaziken"), también las regionales.
+  **Pendiente:** formas por objeto (placas, orbes, máscaras: el mismo sistema) y fase 3, mega en combate (registrar la
+  fusión mega en Showdown). Mega Showdown 1.3.1 está en
   `run/mods` y `run/server/mods`, y AllTheMons R5.0 apartado en `run/fusionmon/packs-desactivados/` (se declara
   incompatible con Mega Showdown).
 - Cobblemon comprueba evoluciones cada segundo (`PlayerPartyStore.onSecondPassed` → `getLockedEvolutions()`); `setSpecies`/`setForm` vacían las pendientes. El envío completo del Pokémon (`SetPartyPokemonPacket`) incluye las evoluciones pendientes.

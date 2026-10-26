@@ -258,6 +258,8 @@ public final class FusionSelection {
         if (parts == null) {
             return;
         }
+        // Si está en mega, la parte que lo está se enseña en mega: así sale al separar (y al invertir)
+        FusionMegas.previewMega(fused, parts);
         PENDING_UNFUSES.put(player.getUUID(), fusedId);
         // La fusión con sus tipos y nombre de fusión (PokemonMixin) y su aspecto de fusión (los aspects)
         ServerPlayNetworking.send(player, new OpenUnfuseScreenPayload(
@@ -380,9 +382,9 @@ public final class FusionSelection {
                 (head.getLevel() + body.getLevel()) / 2,
                 baseStats,
                 model,
-                // Con las formas normales: la pareja se apunta así al fusionar, aunque alguna parte esté en mega
-                FusionDiscovery.isDiscovered(player,
-                        FusionDiscovery.key(FusionMegas.normalForm(head), FusionMegas.normalForm(body))));
+                // Con las formas que tienen ahora: si una parte está en mega, la fusión saldrá en mega, que en el Fusion
+                // Album es otra fusión (en silueta si nunca se ha visto)
+                FusionDiscovery.isDiscovered(player, FusionDiscovery.key(head, body)));
     }
 
     /** El Pokémon con ese UUID si sigue en el equipo y no es una fusión; si no, null. */

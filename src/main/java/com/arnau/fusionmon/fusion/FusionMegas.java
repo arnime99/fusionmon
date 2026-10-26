@@ -1,7 +1,9 @@
 package com.arnau.fusionmon.fusion;
 
 import com.arnau.fusionmon.Fusionmon;
+import com.cobblemon.mod.common.api.moves.Move;
 import com.cobblemon.mod.common.api.pokemon.feature.StringSpeciesFeature;
+import com.cobblemon.mod.common.battles.ShowdownMoveset;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
@@ -10,6 +12,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -32,9 +35,10 @@ import java.util.Optional;
  * parte que cambia es siempre la de la piedra que lleva la fusión, sea cabeza o cuerpo (partFor).
  *
  * Mega del cuerpo: Mega Showdown solo mira la especie visible (la cabeza), así que una piedra del cuerpo no hacía
- * nada. MegaShowdownMegaGimmickMixin le dice que sí puede (bodyFits) y, al megaevolucionar, en vez de cambiar la
- * cabeza cambiamos la forma del cuerpo (megaEvolveBody), guardada aparte en FusionData (bodyMega). Si la piedra
- * sirve para las dos partes, gana la cabeza, como siempre.
+ * nada. MegaShowdownMegaGimmickMixin le dice que sí puede (canMegaBody) y, al megaevolucionar, en vez de cambiar la
+ * cabeza cambiamos la forma del cuerpo (megaEvolveBody), guardada aparte en FusionData (bodyMega). Qué parte cambia
+ * lo decide plan: primero la piedra (la cabeza si le sirve, si no el cuerpo), luego Rayquaza con Ascenso Draco. Al
+ * separar, la parte que estaba en mega sale con su piedra y en mega (keepMega).
  */
 public final class FusionMegas {
 
@@ -44,6 +48,10 @@ public final class FusionMegas {
     private static final String MEGA_FEATURE = "mega_evolution";
     private static final TagKey<Item> MEGA_STONES =
             TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("mega_showdown", "mega_stone"));
+    /** Rayquaza megaevoluciona sin piedra si sabe Ascenso Draco, con esta característica (como en Mega Showdown). */
+    private static final String RAYQUAZA = "Rayquaza";
+    private static final String DRAGON_ASCENT = "dragonascent";
+    private static final List<String> RAYQUAZA_MEGA = List.of("mega_evolution=mega");
 
     private FusionMegas() {
     }
@@ -74,57 +82,58 @@ public final class FusionMegas {
     }
 
     /**
-     * Para canMega de Mega Showdown, cuando la piedra no sirve para la cabeza: si sirve para el cuerpo de una fusión.
-     *
-     * @param pokemons las especies de la piedra (nombres, "Charizard"), tal como las compara Mega Showdown
+     * Para canMega de Mega Showdown, cuando él ha dicho que no: si la fusión puede megaevolucionar por el cuerpo. Las
+     * mismas condiciones que pide él (llevar el Mega Aro y no tener ya otra mega), con nuestra regla de partes (plan).
+     * La cabeza la sigue decidiendo Mega Showdown.
      */
-    public static boolean bodyFits(Pokemon pokemon, List<?> pokemons) {
-        if (!FusionData.isFusion(pokemon) || FusionData.hasBodyMega(pokemon)) {
+    public static boolean canMegaBody(Pokemon fusion) {
+        if (!FusionData.isFusion(fusion)) {
             return false;
         }
-        FormData body = FusionData.bodyForm(pokemon);
-        return body != null && pokemons.contains(body.getSpecies().getName());
+        ServerPlayer owner = fusion.getOwnerPlayer();
+        if (owner == null || !MegaShowdown.canUseMega(owner)) {
+            return false;
+        }
+        MegaPlan plan = plan(fusion);
+        return plan != null && plan.part() == FusionPart.BODY;
     }
 
     /**
-     * En lugar de MegaGimmick.megaEvolve (la rueda de Mega Showdown): si la piedra de la fusión es del cuerpo (y no de
-     * la cabeza), megaevoluciona el cuerpo y hace lo demás que haría Mega Showdown (marca, no intercambiable,
-     * animación). True si lo ha hecho; false para dejar que Mega Showdown siga como siempre.
+     * En lugar de MegaGimmick.megaEvolve (la rueda de Mega Showdown): si la mega que toca es la del cuerpo (plan),
+     * megaevoluciona el cuerpo y hace lo demás que haría Mega Showdown (marca, no intercambiable, animación). True si
+     * lo ha hecho; false para dejar que Mega Showdown siga como siempre (la mega de la cabeza es suya).
      */
     public static boolean megaEvolveBody(Pokemon pokemon) {
         ServerPlayer owner = pokemon.getOwnerPlayer();
         if (owner == null || !FusionData.isFusion(pokemon)) {
             return false;
         }
-        MegaShowdown.Stone stone = MegaShowdown.stone(pokemon.heldItem());
-        if (stone == null || partFor(pokemon, stone) != FusionPart.BODY || !megaBody(owner, pokemon, stone)) {
+        MegaPlan plan = plan(pokemon);
+        if (plan == null || plan.part() != FusionPart.BODY || !megaBody(owner, pokemon, plan.aspects())) {
             return false;
         }
         markMega(pokemon);
         MegaShowdown.playMegaEffect(pokemon);
         // persistentData solo llega al cliente con el Pokémon entero (el resumen calcula los stats con ella)
         FusionService.resendToClient(owner, pokemon);
+        Fusionmon.LOGGER.info("Fusionmon: el cuerpo de la fusión de {} ha megaevolucionado ({})",
+                owner.getName().getString(), FusionData.bodyForm(pokemon).getName());
         return true;
     }
 
     /**
-     * Después de fusionar o invertir partes que estaban en mega: la fusión vuelve a megaevolucionar con la piedra que
-     * lleva, en silencio (sin la animación de Mega Showdown: ya se ha visto la de fusionar). La parte que cambia es la
-     * de la piedra (partFor). Hay que llamarlo ANTES de mandar la fusión al cliente con el Pokémon entero: así llega
-     * ya en mega, y al invertir el cliente nunca recibe un cambio de forma de un Pokémon que aún no tiene (eso lo
-     * desconectaba: FormUpdatePacket busca el Pokémon al leerlo). Si no lleva megapiedra o falla, se queda sin mega:
-     * nunca impide la fusión.
+     * Después de fusionar o invertir partes que estaban en mega: la fusión vuelve a megaevolucionar, en silencio (sin la
+     * animación de Mega Showdown: ya se ha visto la de fusionar), con la regla de siempre (plan). Hay que llamarlo ANTES
+     * de mandar la fusión al cliente con el Pokémon entero: así llega ya en mega, y al invertir el cliente nunca recibe
+     * un cambio de forma de un Pokémon que aún no tiene (eso lo desconectaba: FormUpdatePacket busca el Pokémon al
+     * leerlo). Si no puede o falla, se queda sin mega: nunca impide la fusión.
      */
     public static void megaEvolveAgain(ServerPlayer player, Pokemon fusion) {
-        if (!fusion.heldItem().is(MEGA_STONES)) {
-            return;
-        }
         try {
-            MegaShowdown.Stone stone = MegaShowdown.stone(fusion.heldItem());
-            FusionPart part = stone == null ? null : partFor(fusion, stone);
-            boolean done = part == FusionPart.HEAD
-                    ? applyStone(fusion, stone.applyAspects())
-                    : part == FusionPart.BODY && megaBody(player, fusion, stone);
+            MegaPlan plan = plan(fusion);
+            boolean done = plan != null && (plan.part() == FusionPart.HEAD
+                    ? applyStone(fusion, plan.aspects())
+                    : megaBody(player, fusion, plan.aspects()));
             if (done) {
                 markMega(fusion);
             }
@@ -134,47 +143,105 @@ public final class FusionMegas {
     }
 
     /**
-     * Para la vista previa de invertir: las partes leídas de la fusión son copias en forma normal; si la fusión está en
-     * mega, se le pone a la copia de la parte que lo está, como quedará la fusión nueva (megaEvolveAgain). Las copias
-     * son solo para la pantalla: al aceptar se vuelven a leer.
+     * Para las pantallas de separar e invertir: las partes leídas de la fusión son copias en forma normal; si la fusión
+     * está en mega, se le pone a la copia de la parte que lo está, como quedará (al invertir, megaEvolveAgain; al
+     * separar, keepMega). Las copias son solo para la pantalla: al aceptar se vuelven a leer.
      */
     public static void previewMega(Pokemon fused, FusionService.Parts parts) {
-        CompoundTag data = fused.getPersistentData();
-        if (data == null || !data.getBoolean(IS_MEGA)) {
+        if (!isMega(fused)) {
             return;
         }
         try {
-            MegaShowdown.Stone stone = MegaShowdown.stone(fused.heldItem());
             Pokemon part = FusionData.hasBodyMega(fused) ? parts.body() : parts.head();
-            if (stone != null && applyStone(part, stone.applyAspects())) {
+            if (megaPart(part, fused.heldItem())) {
                 markMega(part);
             }
         } catch (RuntimeException | LinkageError e) {
-            Fusionmon.LOGGER.warn("Fusionmon: no se ha podido enseñar la mega en la vista previa de invertir", e);
+            Fusionmon.LOGGER.warn("Fusionmon: no se ha podido enseñar la mega en la pantalla", e);
         }
     }
 
-    /** A qué parte de la fusión le sirve la piedra: la cabeza si le vale (como siempre), si no el cuerpo; o null. */
-    private static FusionPart partFor(Pokemon fusion, MegaShowdown.Stone stone) {
-        if (stone.pokemons().contains(fusion.getSpecies().getName())) {
-            return FusionPart.HEAD;
+    /**
+     * Al separar una fusión en mega: la parte que lo estaba sale con su piedra y en mega (sin animación, antes de
+     * ponerla en el equipo), como se veía en la pantalla. Si no puede, sale normal con la piedra.
+     */
+    public static void keepMega(Pokemon part, ItemStack stone) {
+        try {
+            if (!stone.isEmpty()) {
+                part.swapHeldItem(stone, false, true);
+            }
+            if (megaPart(part, part.heldItem())) {
+                markMega(part);
+            }
+        } catch (RuntimeException | LinkageError e) {
+            Fusionmon.LOGGER.warn("Fusionmon: la parte separada no ha podido seguir en mega", e);
         }
+    }
+
+    public static boolean isMega(Pokemon pokemon) {
+        CompoundTag data = pokemon.getPersistentData();
+        return data != null && data.getBoolean(IS_MEGA);
+    }
+
+    /** Qué parte de una fusión megaevoluciona y con qué características ("mega_evolution=mega_x"). */
+    private record MegaPlan(FusionPart part, List<String> aspects) {
+    }
+
+    /**
+     * La mega que puede hacer la fusión, por este orden (decisión del usuario): primero la piedra que lleva, para la
+     * parte a la que le sirva (la cabeza si le vale, si no el cuerpo); si no, Rayquaza con Ascenso Draco, sea cabeza o
+     * cuerpo (es lo que pide Mega Showdown: Rayquaza no usa piedra). Null si ninguna.
+     */
+    private static MegaPlan plan(Pokemon fusion) {
         FormData body = FusionData.bodyForm(fusion);
-        if (body != null && !FusionData.hasBodyMega(fusion) && stone.pokemons().contains(body.getSpecies().getName())) {
-            return FusionPart.BODY;
+        String bodyName = body == null ? null : body.getSpecies().getName();
+        MegaShowdown.Stone stone = MegaShowdown.stone(fusion.heldItem());
+        if (stone != null) {
+            if (stone.pokemons().contains(fusion.getSpecies().getName())) {
+                return new MegaPlan(FusionPart.HEAD, stone.applyAspects());
+            }
+            if (bodyName != null && stone.pokemons().contains(bodyName)) {
+                return new MegaPlan(FusionPart.BODY, stone.applyAspects());
+            }
+        }
+        if (knows(fusion, DRAGON_ASCENT)) {
+            if (RAYQUAZA.equals(fusion.getSpecies().getName())) {
+                return new MegaPlan(FusionPart.HEAD, RAYQUAZA_MEGA);
+            }
+            if (RAYQUAZA.equals(bodyName)) {
+                return new MegaPlan(FusionPart.BODY, RAYQUAZA_MEGA);
+            }
         }
         return null;
     }
 
+    /** Megaevoluciona un Pokémon que no es fusión (una parte): con su piedra si le sirve, o Rayquaza. */
+    private static boolean megaPart(Pokemon part, ItemStack held) {
+        MegaShowdown.Stone stone = MegaShowdown.stone(held);
+        if (stone != null && stone.pokemons().contains(part.getSpecies().getName())) {
+            return applyStone(part, stone.applyAspects());
+        }
+        return RAYQUAZA.equals(part.getSpecies().getName()) && applyStone(part, RAYQUAZA_MEGA);
+    }
+
+    private static boolean knows(Pokemon pokemon, String move) {
+        for (Move known : pokemon.getMoveSet().getMoves()) {
+            if (known.getName().equals(move)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
-     * Megaevoluciona el cuerpo: una copia suya, fuera de todo almacén (no manda nada al cliente), con las
-     * características de la piedra, guardada como capa encima del cuerpo (FusionData.setBodyMega).
+     * Megaevoluciona el cuerpo: una copia suya, fuera de todo almacén (no manda nada al cliente), con esas
+     * características, guardada como capa encima del cuerpo (FusionData.setBodyMega).
      */
-    private static boolean megaBody(ServerPlayer owner, Pokemon fusion, MegaShowdown.Stone stone) {
+    private static boolean megaBody(ServerPlayer owner, Pokemon fusion, List<String> aspects) {
         Pokemon megaBody = FusionData.readBody(fusion, owner.registryAccess());
-        if (!applyStone(megaBody, stone.applyAspects())) {
-            Fusionmon.LOGGER.warn("Fusionmon: la piedra {} no cambia la forma de {}; no se megaevoluciona el cuerpo",
-                    fusion.heldItem(), megaBody.getSpecies().getName());
+        if (!applyStone(megaBody, aspects)) {
+            Fusionmon.LOGGER.warn("Fusionmon: {} no cambia la forma de {}; no se megaevoluciona el cuerpo",
+                    aspects, megaBody.getSpecies().getName());
             return false;
         }
         FusionData.setBodyMega(fusion, megaBody);
@@ -202,15 +269,6 @@ public final class FusionMegas {
         pokemon.setTradeable(false);
     }
 
-    /**
-     * La forma normal de un Pokémon que puede estar en mega (para la clave del Fusion Album en la vista previa: al
-     * fusionar se apunta con la forma normal). Las megas salen de la forma estándar de la especie.
-     */
-    public static FormData normalForm(Pokemon pokemon) {
-        CompoundTag data = pokemon.getPersistentData();
-        return data != null && data.getBoolean(IS_MEGA) ? pokemon.getSpecies().getStandardForm() : pokemon.getForm();
-    }
-
     /** Al principio de MegaGimmick.unmegaEvolve: si la mega era del cuerpo, se quita (Mega Showdown hace el resto). */
     public static void revertBody(Pokemon pokemon) {
         if (FusionData.clearBodyMega(pokemon)) {
@@ -234,6 +292,8 @@ public final class FusionMegas {
         }
 
         private static final Class<?> MEGA_GIMMICK;
+        private static final MethodHandle HAS_MEGA;
+        private static final MethodHandle HAS_GIMMICK;
         private static final MethodHandle GET_COMPONENT;
         private static final MethodHandle POKEMONS;
         private static final MethodHandle ASPECT_CONDITIONS;
@@ -251,7 +311,12 @@ public final class FusionMegas {
                 Class<?> aspectConditions = Class.forName(PACKAGE + "api.codec.AspectConditions", false, loader);
                 Class<?> conditions = Class.forName(PACKAGE + "api.codec.Conditions", false, loader);
                 Class<?> effect = Class.forName(PACKAGE + "api.codec.Effect", false, loader);
+                Class<?> turnCheck = Class.forName(PACKAGE + "gimmick.GimmickTurnCheck", false, loader);
 
+                HAS_MEGA = lookup.findStatic(MEGA_GIMMICK, "hasMega",
+                        MethodType.methodType(boolean.class, ServerPlayer.class));
+                HAS_GIMMICK = lookup.findStatic(turnCheck, "hasGimmick",
+                        MethodType.methodType(boolean.class, ShowdownMoveset.Gimmick.class, LivingEntity.class));
                 GET_COMPONENT = lookup.findStatic(locator, "getComponent",
                         MethodType.methodType(Object.class, Class.class, ItemStack.class));
                 POKEMONS = lookup.findVirtual(MEGA_GIMMICK, "pokemons", MethodType.methodType(List.class));
@@ -264,6 +329,16 @@ public final class FusionMegas {
                         Pokemon.class, List.class, Optional.class, PokemonEntity.class));
             } catch (ReflectiveOperationException e) {
                 throw new IllegalStateException("Mega Showdown ha cambiado: no se encuentran sus métodos de mega", e);
+            }
+        }
+
+        /** Lo mismo que mira canMega antes de la piedra: que lleve el Mega Aro y que no tenga ya otra mega. */
+        static boolean canUseMega(ServerPlayer player) {
+            try {
+                return (boolean) HAS_GIMMICK.invoke(ShowdownMoveset.Gimmick.MEGA_EVOLUTION, (LivingEntity) player)
+                        && !(boolean) HAS_MEGA.invoke(player);
+            } catch (Throwable e) {
+                throw new IllegalStateException("No se ha podido comprobar el Mega Aro con Mega Showdown", e);
             }
         }
 

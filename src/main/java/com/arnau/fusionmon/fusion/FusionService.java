@@ -66,7 +66,9 @@ public final class FusionService {
         PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
         party.remove(body);
         resendToClient(player, party, head);
+        // La pareja normal y, si ha quedado en mega, también la mega (en el Fusion Album es otra fusión)
         FusionDiscovery.register(player, discovered);
+        FusionDiscovery.registerActive(player, head);
 
         Fusionmon.LOGGER.info("{} ha fusionado {} + {}",
                 player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
@@ -115,6 +117,7 @@ public final class FusionService {
         // Colocar un Pokémon manda al cliente el Pokémon entero (con persistentData): no hace falta resendToClient
         party.set(slot, head);
         FusionDiscovery.register(player, discovered);
+        FusionDiscovery.registerActive(player, head);
 
         Fusionmon.LOGGER.info("{} ha invertido su fusión: ahora {} + {}",
                 player.getName().getString(), head.getSpecies().getName(), body.getSpecies().getName());
@@ -288,11 +291,17 @@ public final class FusionService {
         // Lo desbloqueado como fusión (Cable Link usado sobre ella...) vuelve a su parte: no se pierde el objeto
         FusionEvolutions.carryOutOfFusion(fused, head, body);
 
-        // Cualquier objeto que se le haya dado a la fusión vuelve al jugador (si estaba en mega, se deshace antes: ver
-        // reverse; y a la Poké Ball antes, como allí)
+        // A la Poké Ball antes de quitarle objetos, como en reverse. Si estaba en mega, la parte que lo estaba sale con
+        // su piedra y en mega (como la enseña la pantalla); cualquier otro objeto vuelve al jugador
         fused.recall();
-        FusionMegas.revert(fused);
+        boolean bodyWasMega = FusionData.hasBodyMega(fused);
+        boolean wasMega = FusionMegas.revert(fused);
+        ItemStack stone = wasMega ? FusionMegas.takeStone(fused) : ItemStack.EMPTY;
         returnHeldItem(player, fused);
+        // Antes de ponerlas en el equipo: entran ya en mega (ver FusionMegas.megaEvolveAgain)
+        if (wasMega) {
+            FusionMegas.keepMega(bodyWasMega ? body : head, stone);
+        }
 
         // El cuerpo se coloca ANTES de quitar la fusión: si no hubiera sitio, la fusión se queda como estaba en vez
         // de perderse el cuerpo. Si el equipo está lleno, Cobblemon lo manda al PC (y avisa al jugador)
