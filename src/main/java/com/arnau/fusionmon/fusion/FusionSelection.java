@@ -115,21 +115,11 @@ public final class FusionSelection {
             return;
         }
 
-        // Se fusionan en su forma normal (ver FusionMegas): ya ahora, para que la vista previa, la habilidad y el
-        // Fusion Album no vean la mega
-        revertMega(player, first);
-        revertMega(player, second);
-
+        // Una parte en mega se queda así mientras se elige (la vista previa la enseña en mega): la mega se deshace al
+        // fusionar y la fusión vuelve a megaevolucionar (ver FusionMegas)
         PENDING_REVERSES.remove(player.getUUID());
         PENDING_FUSIONS.put(player.getUUID(), new PendingFusion(firstId, secondId));
         ServerPlayNetworking.send(player, fusionScreen(player, first, second, false));
-    }
-
-    private static void revertMega(ServerPlayer player, Pokemon pokemon) {
-        if (FusionMegas.revert(pokemon)) {
-            player.sendSystemMessage(Component.translatable("message.fusionmon.mega_reverted",
-                    pokemon.getDisplayName(false)));
-        }
     }
 
     /** La pantalla de fusión con first como cabeza y second como cuerpo (Intercambiar los cambia en el cliente). */
@@ -159,6 +149,8 @@ public final class FusionSelection {
             return;
         }
         FusionService.giveFusionExperience(fused, parts);
+        // Las copias están en forma normal: si la fusión está en mega, la vista previa la enseña como quedará
+        FusionMegas.previewMega(fused, parts);
         PENDING_FUSIONS.remove(player.getUUID());
         PENDING_REVERSES.put(player.getUUID(), fused.getUuid());
         ServerPlayNetworking.send(player, fusionScreen(player, parts.body(), parts.head(), true));
@@ -388,7 +380,9 @@ public final class FusionSelection {
                 (head.getLevel() + body.getLevel()) / 2,
                 baseStats,
                 model,
-                FusionDiscovery.isDiscovered(player, FusionDiscovery.key(head, body)));
+                // Con las formas normales: la pareja se apunta así al fusionar, aunque alguna parte esté en mega
+                FusionDiscovery.isDiscovered(player,
+                        FusionDiscovery.key(FusionMegas.normalForm(head), FusionMegas.normalForm(body))));
     }
 
     /** El Pokémon con ese UUID si sigue en el equipo y no es una fusión; si no, null. */

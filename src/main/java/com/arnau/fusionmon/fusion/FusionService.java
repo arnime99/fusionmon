@@ -48,13 +48,20 @@ public final class FusionService {
 
     public static void fuse(ServerPlayer player, Pokemon head, Pokemon body,
                             boolean natureFromBody, boolean abilityFromBody) {
-        // Ya se hizo al abrir la pantalla, pero pudieron volver a megaevolucionar mientras estaba abierta. Antes de la
-        // clave del Fusion Album: así no se apunta la forma mega
-        FusionMegas.revert(head);
-        FusionMegas.revert(body);
+        // Las partes se fusionan en su forma normal (ver FusionMegas) y, si alguna estaba en mega, la fusión vuelve a
+        // megaevolucionar al final. Antes de la clave del Fusion Album: así no se apunta la forma mega (las copias
+        // guardadas tampoco la llevan)
+        boolean headMega = FusionMegas.revert(head);
+        boolean bodyMega = FusionMegas.revert(body);
         // La clave antes de fusionar: después, la cabeza ya es la fusión
         String discovered = FusionDiscovery.key(head, body);
-        combine(player, head, body, natureFromBody, abilityFromBody, ItemStack.EMPTY);
+        // Si los dos estaban en mega, se queda la del cuerpo (su piedra) y la de la cabeza vuelve al jugador
+        combine(player, head, body, natureFromBody, abilityFromBody, ItemStack.EMPTY, bodyMega);
+        // La mega se mantiene: la fusión vuelve a megaevolucionar con la piedra que se ha quedado (la de la cabeza o
+        // la del cuerpo; FusionMegas decide cuál de las dos partes cambia). Antes de mandarla: llega ya en mega
+        if (headMega || bodyMega) {
+            FusionMegas.megaEvolveAgain(player, head);
+        }
 
         PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
         party.remove(body);
@@ -90,13 +97,18 @@ public final class FusionService {
         // con animación, sobre una fusión que ya no existe). Una megapiedra pasa a la fusión nueva; cualquier otro
         // objeto que se le haya dado a la fusión vuelve al jugador
         fused.recall();
-        FusionMegas.revert(fused);
+        boolean wasMega = FusionMegas.revert(fused);
         ItemStack stone = FusionMegas.takeStone(fused);
         returnHeldItem(player, fused);
 
         // Se monta la fusión nueva antes de tocar el equipo: si algo fallase, la fusión de antes sigue en su sitio
         String discovered = FusionDiscovery.key(head, body);
-        combine(player, head, body, natureFromBody, abilityFromBody, stone);
+        combine(player, head, body, natureFromBody, abilityFromBody, stone, false);
+        // Como al fusionar: si estaba en mega, la fusión nueva vuelve a megaevolucionar con la misma piedra. Aún fuera
+        // del equipo: así entra ya en mega y el cliente no recibe cambios de forma de un Pokémon que no tiene
+        if (wasMega) {
+            FusionMegas.megaEvolveAgain(player, head);
+        }
         PlayerPartyStore party = Cobblemon.INSTANCE.getStorage().getParty(player);
         int slot = slotOf(party, fused);
         party.remove(fused);
@@ -127,19 +139,22 @@ public final class FusionService {
      * % de vida. No toca el equipo (lo hace quien llama).
      *
      * @param inheritedStone megapiedra que llevaba la fusión de antes (al invertir), o vacío
+     * @param bodyStoneFirst si llevan megapiedra los dos, se queda la del cuerpo (estaba en mega)
      */
-    private static void combine(ServerPlayer player, Pokemon head, Pokemon body,
-                                boolean natureFromBody, boolean abilityFromBody, ItemStack inheritedStone) {
+    private static void combine(ServerPlayer player, Pokemon head, Pokemon body, boolean natureFromBody,
+                                boolean abilityFromBody, ItemStack inheritedStone, boolean bodyStoneFirst) {
         // El cuerpo vuelve a su Poké Ball ANTES de quitarle nada: si le quitamos un objeto que cambia su forma (cristal
         // Z de Necrozma, placas...) con él fuera, Mega Showdown deshace el cambio con animación, unos ticks después,
         // cuando el cuerpo ya no está en el equipo; Cobblemon manda igualmente el cambio de forma y el cliente, que no
         // lo encuentra, se desconecta. Sin entidad lo deshace en el acto (y la copia guardada ya sale bien)
         body.recall();
 
-        // La fusión se queda con una megapiedra (la de la cabeza si llevan las dos) para poder megaevolucionar
-        ItemStack stone = FusionMegas.takeStone(head);
+        // La fusión se queda con una megapiedra (la de la cabeza si llevan las dos, salvo bodyStoneFirst) para poder
+        // megaevolucionar; la otra vuelve al jugador con returnHeldItem, más abajo
+        Pokemon first = bodyStoneFirst ? body : head;
+        ItemStack stone = FusionMegas.takeStone(first);
         if (stone.isEmpty()) {
-            stone = FusionMegas.takeStone(body);
+            stone = FusionMegas.takeStone(first == head ? body : head);
         }
         if (stone.isEmpty()) {
             stone = inheritedStone;
