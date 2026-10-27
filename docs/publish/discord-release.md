@@ -1,5 +1,112 @@
 # Mensajes de Discord para el lanzamiento
 
+## 0.2.0-beta (megas)
+
+Antes de subir: probar `build\libs\fusionmon-0.2.0-beta.jar` en la instancia de **Cobbleverse** (Cobblemon 1.7.3: que
+arranque, fusionar, separar, una mega si trae Mega Showdown) y en **`CF 1.8.2`**. Después, subirlo a CurseForge como la
+0.1.3: Display name `Fusionmon 0.2.0-beta`, 1.21.1 + Fabric, dependencias Cobblemon y Fabric API (Mega Showdown como
+**opcional**), changelog en modo **Markdown**. En la descripción de la página, cambiar lo que diga que las fusiones no
+megaevolucionan.
+
+### Changelog de CurseForge
+
+```
+## 0.2.0-beta: Mega Evolution
+
+Fusions can now **Mega Evolve**, in and out of battle (needs [Mega Showdown](https://www.curseforge.com/minecraft/mc-mods/cobblemon-mega-showdown), optional).
+
+### New: Mega Evolution
+- **Head or body:** the Mega Stone the fusion holds decides which part mega evolves. Charizardite Y on a Charizard head megas the head; Blazikenite on a Blaziken body megas the body. Rayquaza (head or body) mega evolves with Dragon Ascent, like normal.
+- **Out of battle:** use the Mega button of Mega Showdown's interaction wheel. The fusion gets the mega form's model, types, stats, size and riding.
+- **In battle:** fusions can Mega Evolve with the battle's Mega button. They get the mega's types, stats and ability (also shown in the party menu), and go back to normal when the battle ends.
+- **Kept when fusing:** a mega evolved Pokémon stays mega when you fuse it, reverse the fusion or unfuse it. No double animation.
+- **Fusion Album:** a mega fusion is a different fusion, with its own entry and silhouette.
+- **Ultra Burst:** a fusion with a Dusk Mane or Dawn Wings Necrozma (head or body) can Ultra Burst with Ultranecrozium Z, in and out of battle.
+
+### New: item forms
+- Items that change a Pokémon's form work on fusions too: Arceus plates, Silvally memories, Genesect drives, Giratina's Griseous Core, Ogerpon masks and more. The form goes to the part the item fits, head or body.
+- **Held items when fusing:** if only one of the two holds an item, the fusion keeps it, along with its form or mega. If both hold one, both go back to your inventory. Reversing keeps the fusion's item, and unfusing gives it to the part it gives a form to.
+
+### New: server options
+- `unfuseConsumesInjector` and `reverseConsumesInjector` in `config/fusionmon.json` (both `true` by default): set them to `false` so unfusing or reversing doesn't use up a Fusion Injector (you still need one in your inventory).
+
+### Fixes
+- **Disconnected when joining a server:** a fusion with a pending evolution could randomly kick you while logging in ("Cannot resolve species"). Fusions now keep their pending evolutions properly.
+- **Lost moves:** fusions no longer lose their body's moves when another mod checks their moveset (for example when boxing them).
+- **Stuck megas:** fusing a Pokémon in the middle of a Mega Showdown animation could leave it stuck in mega form, unable to go back into its Poké Ball. Fusing now waits for the animation to finish, and stuck Pokémon are fixed when you join.
+- **Arceus plates on the head** now change the fusion's type.
+- Fusing a Pokémon holding a form item (like Ultranecrozium Z) could disconnect you.
+
+Still **one file** for Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse). Thanks to the CobbleFusion F2P server and everyone who reported bugs!
+```
+
+### #changelog (Discord)
+
+```
+# 📜 Fusionmon 0.2.0-beta: Mega Evolution
+
+💎 **Fusions can Mega Evolve!** (with Mega Showdown)
+• The Mega Stone decides the part: head or body
+• Out of battle with the interaction wheel, and **in battle** with the Mega button: mega types, stats and ability
+• Rayquaza with Dragon Ascent, and Ultra Burst for Necrozma fusions
+• Megas stay when you fuse, reverse or unfuse, and count as new fusions in your Fusion Album
+
+🔮 **Item forms:** Arceus plates, memories, drives, Griseous Core, Ogerpon masks... work on the head or the body
+🎒 **Held items:** if only one of the two holds an item, the fusion keeps it (with its form or mega). If both do, both go back to your inventory.
+⚙️ **Servers:** `unfuseConsumesInjector` / `reverseConsumesInjector` options
+
+🛠️ **Fixes**
+• No more random kicks when joining with a fusion that has a pending evolution
+• Fusions no longer lose their body's moves
+• No more Pokémon stuck in mega form after fusing mid-animation
+• Arceus plates on the head change the type
+
+Same single file for every Cobblemon version. Thanks to CobbleFusion F2P and everyone who reported bugs 💜
+```
+
+### Anuncio (#announcements)
+
+```
+@Updates 💎 **Fusionmon 0.2.0-beta is out: Mega Evolution!**
+
+Your fusions can now Mega Evolve, **in and out of battle** (with Mega Showdown). The Mega Stone decides which part changes: head or body. Charizard Y head? Blaziken body with Speed Boost? Mega Rayquaza? All of them work, and the mega gets its own entry in your Fusion Album 👀
+
+🔮 Form items (Arceus plates, Griseous Core, masks...) work on fusions too
+🛠️ Fixed the random kick when joining a server with a fusion that has a pending evolution
+
+⬇️ **CurseForge:** https://www.curseforge.com/minecraft/mc-mods/fusionmon
+Full list in #changelog. Same single file for Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse): just update it in your mods folder (servers: update the server **and** every player).
+
+Something wrong? <#1559939680672419962> · Need help? <#1559939634375430184>
+```
+
+### Cambios en el #faq
+
+[Sustituir la respuesta "Can fusions mega evolve?" que se añadió con la 0.1.2-beta.]
+
+```
+**Can fusions mega evolve?**
+Yes, with Mega Showdown installed (0.2.0-beta or newer). Give the fusion a Mega Stone for its head or its body and use the Mega button, out of battle (interaction wheel) or in battle. Rayquaza needs Dragon Ascent, as usual. Form items like Arceus plates also work on either part.
+```
+
+### Mensaje para Uope (admin de CobbleFusion)
+
+```
+Hey Uope! Thanks for the report about players getting kicked when joining, it was a tricky one and your details helped a lot 🎯
+
+What happened: when a fusion was loaded, Cobblemon read its pending evolutions **before** knowing it was a fusion, so the fusion's evolution got lost. A second after joining, Cobblemon found it again and sent it to the player. If that message arrived before the list of species the server sends on join, the game didn't know the species yet ("Cannot resolve species") and disconnected. That's why it only happened sometimes.
+
+It's fixed in **0.2.0-beta**: fusions now keep their pending evolutions when they're loaded, so nothing extra is sent when you join. Please update the server **and** the client pack.
+⬇️ https://www.curseforge.com/minecraft/mc-mods/fusionmon
+
+This update also brings what we talked about:
+• **Mega Evolution for fusions**, in and out of battle (head or body, whichever part the Mega Stone fits), plus Rayquaza with Dragon Ascent and Ultra Burst for Necrozma fusions. Megas stay through fusing, reversing and unfusing.
+• **Your injector request:** set `"unfuseConsumesInjector": false` and/or `"reverseConsumesInjector": false` in `config/fusionmon.json` so unfusing or reversing doesn't use up an injector (players still need one in their inventory).
+• Form items (Arceus plates, Griseous Core, masks...) on either part, and a few fixes (lost moves, Pokémon stuck in mega form).
+
+If anything else shows up on the server, send it my way! 🧬✨
+```
+
 ## 0.1.3-beta (arreglo rápido)
 
 Subir `build\libs\fusionmon-0.1.3-beta.jar` (no el `-sources`) como en la 0.1.2: Display name `Fusionmon 0.1.3-beta`,
