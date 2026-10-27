@@ -2,6 +2,7 @@ package com.arnau.fusionmon.mixin;
 
 import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.fusion.FusionData;
+import com.arnau.fusionmon.fusion.FusionMegas;
 import com.arnau.fusionmon.fusion.FusionUltra;
 import com.cobblemon.mod.common.api.moves.MoveTemplate;
 import com.cobblemon.mod.common.api.pokemon.moves.Learnset;
@@ -42,14 +43,16 @@ public abstract class MegaShowdownAspectUtilsMixin {
     }
 
     /**
-     * Al empezar un combate (y otras veces) Mega Showdown deshace lo que solo es de fuera de combate: la mega pasa por
-     * unmegaEvolve (MegaShowdownMegaGimmickMixin), pero la Ultraexplosión la deshace con sus datos guardados, que la
-     * del cuerpo no tiene. Aquí se quita la del cuerpo (FusionUltra).
+     * Al empezar y al acabar un combate (y otras veces) Mega Showdown deshace lo que no debe seguir: la mega de fuera
+     * de combate pasa por unmegaEvolve (MegaShowdownMegaGimmickMixin), pero la Ultraexplosión y las megas hechas en
+     * combate las deshace con sus datos guardados, que las del cuerpo no tienen. Aquí se quitan las del cuerpo
+     * (FusionUltra, FusionMegas.revertBattleBody).
      */
     @Inject(method = "revertPokemonsIfRequired(Lcom/cobblemon/mod/common/pokemon/Pokemon;Z)V", require = 0,
             at = @At("HEAD"))
     private static void fusionmon$revertBodyUltra(Pokemon pokemon, boolean battle, CallbackInfo ci) {
         try {
+            FusionMegas.revertBattle(pokemon);
             FusionUltra.revertBodyForBattle(pokemon);
         } catch (RuntimeException | LinkageError e) {
             FusionSafety.failed("Ultraexplosión del cuerpo (al deshacer formas)", e);

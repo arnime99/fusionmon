@@ -77,7 +77,7 @@ public final class FusionShowdown {
                 }
                 // Cada fusión por separado: una que falle no deja sin registrar a las demás
                 try {
-                    species.put(id, speciesJson(head, body, id, false));
+                    species.put(id, speciesJson(head, body, id, null));
                     FAILED.remove(id);
                 } catch (RuntimeException e) {
                     FAILED.add(id);
@@ -117,7 +117,7 @@ public final class FusionShowdown {
             }
             String megaId = speciesId(mega.head(), mega.body());
             if (!species.containsKey(megaId)) {
-                species.put(megaId, speciesJson(mega.head(), mega.body(), megaId, true));
+                species.put(megaId, speciesJson(mega.head(), mega.body(), megaId, mega.part()));
             }
             JsonObject entry = new JsonObject();
             entry.addProperty("target", megaId);
@@ -131,22 +131,30 @@ public final class FusionShowdown {
     /**
      * Datos de especie para Showdown: los de la cabeza, con nombre, tipos y stats base de la fusión.
      *
-     * @param mega la fusión ya megaevolucionada (la especie a la que cambia en combate): forma "Mega", para que
-     *             Showdown la trate como tal (no se puede teracristalizar...), y su piedra (requiredItem, el mensaje)
+     * @param megaPart si es la fusión ya megaevolucionada (la especie a la que cambia en combate), la parte que lo
+     *                 está; null si no. Lleva forma "Mega", para que Showdown la trate como tal (no se puede
+     *                 teracristalizar...), y de la forma mega de esa parte las habilidades (al megaevolucionar,
+     *                 Showdown pone la primera: Sequía, Impulso...) y la piedra (requiredItem, el mensaje)
      */
-    private static String speciesJson(FormData head, FormData body, String id, boolean mega) {
+    private static String speciesJson(FormData head, FormData body, String id, FusionPart megaPart) {
         JsonObject headJson = showdownJson(head);
         JsonObject bodyJson = showdownJson(body);
 
         JsonObject fused = headJson.deepCopy();
-        JsonElement requiredItem = fused.get("requiredItem");
+        JsonObject megaJson = megaPart == FusionPart.BODY ? bodyJson : headJson;
         REMOVED_FIELDS.forEach(fused::remove);
         fused.addProperty("name", id);
         fused.addProperty("baseSpecies", id);
-        fused.addProperty("forme", mega ? "Mega" : "");
+        fused.addProperty("forme", megaPart != null ? "Mega" : "");
         fused.addProperty("nfe", false);
-        if (mega && requiredItem != null) {
-            fused.add("requiredItem", requiredItem);
+        if (megaPart != null) {
+            if (megaJson.has("abilities")) {
+                fused.add("abilities", megaJson.get("abilities").deepCopy());
+            }
+            JsonElement requiredItem = megaJson.get("requiredItem");
+            if (requiredItem != null) {
+                fused.add("requiredItem", requiredItem.deepCopy());
+            }
         }
 
         JsonArray types = new JsonArray();

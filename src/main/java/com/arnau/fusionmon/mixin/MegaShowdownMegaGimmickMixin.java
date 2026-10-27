@@ -3,6 +3,7 @@ package com.arnau.fusionmon.mixin;
 import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.Fusionmon;
 import com.arnau.fusionmon.fusion.FusionMegas;
+import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -60,6 +61,33 @@ public abstract class MegaShowdownMegaGimmickMixin {
             }
         } catch (RuntimeException | LinkageError e) {
             FusionSafety.failed("mega del cuerpo (megaEvolve)", e);
+        }
+    }
+
+    /**
+     * En combate (Showdown ya ha cambiado la fusión a su especie en mega, ver FusionShowdownMegas): si la mega es la
+     * del cuerpo, la ponemos en el cuerpo; si no, Mega Showdown megaevoluciona la cabeza como siempre.
+     */
+    @Inject(method = "megaEvolveInBattle", require = 0, at = @At("HEAD"), cancellable = true)
+    private static void fusionmon$megaEvolveBodyInBattle(Pokemon pokemon, BattlePokemon battlePokemon,
+                                                         CallbackInfo ci) {
+        try {
+            if (FusionMegas.megaEvolveBodyInBattle(pokemon, battlePokemon)) {
+                ci.cancel();
+            }
+        } catch (RuntimeException | LinkageError e) {
+            FusionSafety.failed("mega del cuerpo (megaEvolveInBattle)", e);
+        }
+    }
+
+    /** Al acabar megaEvolveInBattle (la mega de la cabeza, de Mega Showdown): la habilidad de su forma mega. */
+    @Inject(method = "megaEvolveInBattle", require = 0, at = @At("RETURN"))
+    private static void fusionmon$headMegaAbilityInBattle(Pokemon pokemon, BattlePokemon battlePokemon,
+                                                          CallbackInfo ci) {
+        try {
+            FusionMegas.afterHeadMegaInBattle(pokemon);
+        } catch (RuntimeException | LinkageError e) {
+            FusionSafety.failed("habilidad de la mega de la cabeza en combate", e);
         }
     }
 

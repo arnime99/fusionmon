@@ -226,8 +226,15 @@ su cabeza, el resumen sin añadido) y se avisa en el log.
   calcula `canMegaEvo` al crear los Pokémon del combate, así que la tabla va antes (`startShowdown`). Lo visual de la
   cabeza lo hace Mega Showdown (`megaEvolveInBattle` sobre la especie visible). Cambiar de piedra a mitad de combate
   (Truco) no cuenta: la tabla se hace con la del principio.
-  **Pendiente:** paso 2, mega del cuerpo en combate (enganchar `megaEvolveInBattle`, capa del cuerpo y quitarla al
-  acabar); paso 3, Rayquaza con Ascenso Draco y Ultraexplosión en combate. Mega Showdown 1.3.1 está en
+  Paso 2 (hecho y probado, 2026-10-27): mega del **cuerpo** en combate. La especie mega lleva las habilidades y la
+  piedra de la forma mega de la parte que megaevoluciona (Showdown pone la primera al megaevolucionar).
+  `MegaShowdownMegaGimmickMixin` engancha `megaEvolveInBattle`: con la del cuerpo, su animación de combate
+  (`applyEffectsBattle`) y en el destello la capa del cuerpo, marcada `fusionmon_battle_mega`, y `updatePackets`.
+  **Habilidad en el menú:** la de una fusión va forzada, así que Cobblemon no la cambia al cambiar de forma; durante
+  el combate se le pone la de la mega (`setBattleAbility`, también con la mega de cabeza, al final de
+  `megaEvolveInBattle`) y la suya se guarda en `fusionmon_battle_ability`. Al acabar (y al empezar el siguiente, por
+  si se cortó), `revertPokemonsIfRequired` → `FusionMegas.revertBattle` quita la capa y devuelve la habilidad.
+  **Pendiente:** paso 3, Rayquaza con Ascenso Draco y Ultraexplosión en combate. Mega Showdown 1.3.1 está en
   `run/mods` y `run/server/mods`, y AllTheMons R5.0 apartado en `run/fusionmon/packs-desactivados/` (se declara
   incompatible con Mega Showdown).
 - Cobblemon comprueba evoluciones cada segundo (`PlayerPartyStore.onSecondPassed` → `getLockedEvolutions()`); `setSpecies`/`setForm` vacían las pendientes. El envío completo del Pokémon (`SetPartyPokemonPacket`) incluye las evoluciones pendientes.

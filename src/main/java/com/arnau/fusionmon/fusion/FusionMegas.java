@@ -3,10 +3,16 @@ package com.arnau.fusionmon.fusion;
 import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.Fusionmon;
 import com.cobblemon.mod.common.Cobblemon;
+import com.cobblemon.mod.common.api.Priority;
+import com.cobblemon.mod.common.api.abilities.Abilities;
+import com.cobblemon.mod.common.api.abilities.Ability;
+import com.cobblemon.mod.common.api.abilities.AbilityTemplate;
 import com.cobblemon.mod.common.api.moves.Move;
 import com.cobblemon.mod.common.api.scheduling.SchedulingFunctionsKt;
 import com.cobblemon.mod.common.api.pokemon.feature.StringSpeciesFeature;
 import com.cobblemon.mod.common.battles.ShowdownMoveset;
+import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
+import com.cobblemon.mod.common.util.DistributionUtilsKt;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
@@ -24,6 +30,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Megaevoluciones de Mega Showdown (mod opcional) en las fusiones. Sin compilar contra sus clases: su marca en
@@ -61,6 +68,13 @@ public final class FusionMegas {
      * la entidad. Mientras está puesta no deja volver a la Poké Ball ni deshacer la mega.
      */
     private static final String FORM_CHANGING = "form_changing";
+    /** Marca nuestra: la mega del cuerpo se hizo en combate y se quita al acabarlo (revertBattleBody). */
+    private static final String BATTLE_MEGA = "fusionmon_battle_mega";
+    /** La habilidad de la fusión mientras lleva la de su mega en combate (setBattleAbility), para devolvérsela. */
+    private static final String BATTLE_ABILITY = "fusionmon_battle_ability";
+    private static final String ABILITY_NAME = "name";
+    private static final String ABILITY_FORCED = "forced";
+    private static final String ABILITY_PRIORITY = "priority";
     private static final String REVERT_DATA = "aspects";
 
     private FusionMegas() {
@@ -291,29 +305,145 @@ public final class FusionMegas {
      * La mega que una fusión puede hacer en combate (FusionShowdown): las formas de cabeza y cuerpo de la fusión en
      * mega (su especie de Showdown) y el id de Showdown de la piedra con la que la hace.
      */
-    public record BattleMega(FormData head, FormData body, String item) {
+    public record BattleMega(FusionPart part, FormData head, FormData body, String item) {
     }
 
     /**
      * Antes de un combate: la mega que puede hacer la fusión, con la misma regla que fuera de combate (plan), o null.
-     * Por ahora solo la de la cabeza con su piedra (paso 1 de las megas en combate).
+     * La de la cabeza o la del cuerpo con su piedra (Rayquaza con Ascenso Draco, todavía no).
      */
     public static BattleMega battleMega(Pokemon fusion, RegistryAccess registryAccess) {
         if (!ENABLED || !FusionData.isFusion(fusion) || isMega(fusion)) {
             return null;
         }
         MegaPlan plan = plan(fusion);
-        if (plan == null || plan.part() != FusionPart.HEAD || plan.aspects() == RAYQUAZA_MEGA) {
+        if (plan == null || plan.aspects() == RAYQUAZA_MEGA) {
             return null;
         }
         String item = MegaShowdown.stoneShowdownId(fusion.heldItem());
-        // La forma mega de la cabeza: una copia de la cabeza guardada, megaevolucionada (como megaBody con el cuerpo)
-        Pokemon head = FusionData.readHead(fusion, registryAccess);
-        FormData body = FusionData.bodyForm(fusion);
-        if (item == null || body == null || !applyStone(head, plan.aspects())) {
+        if (item == null) {
             return null;
         }
-        return new BattleMega(head.getForm(), body, item);
+        // La forma mega de la parte: una copia suya guardada, megaevolucionada (como megaBody)
+        boolean head = plan.part() == FusionPart.HEAD;
+        Pokemon part = head ? FusionData.readHead(fusion, registryAccess) : FusionData.readBody(fusion, registryAccess);
+        if (!applyStone(part, plan.aspects())) {
+            return null;
+        }
+        FormData headForm = head ? part.getForm() : FusionData.activeHeadForm(fusion);
+        FormData bodyForm = head ? FusionData.bodyForm(fusion) : part.getForm();
+        return headForm == null || bodyForm == null ? null
+                : new BattleMega(plan.part(), headForm, bodyForm, item);
+    }
+
+    /**
+     * En lugar de MegaGimmick.megaEvolveInBattle (Showdown ya ha megaevolucionado la fusión, ver FusionShowdownMegas):
+     * si la mega es la del cuerpo, la animación de Mega Showdown y, en su destello, la capa del cuerpo, marcada para
+     * quitarla al acabar el combate (revertBattleBody). True si lo ha hecho; la de la cabeza la sigue haciendo él.
+     */
+    public static boolean megaEvolveBodyInBattle(Pokemon fusion, BattlePokemon battlePokemon) {
+        if (!FusionData.isFusion(fusion)) {
+            return false;
+        }
+        MegaPlan plan = plan(fusion);
+        if (plan == null || plan.part() != FusionPart.BODY || plan.aspects() == RAYQUAZA_MEGA) {
+            return false;
+        }
+        fusion.getPersistentData().putBoolean(BATTLE_MEGA, true);
+        float delay = MegaShowdown.playBattleMegaEffect(fusion, battlePokemon);
+        Runnable change = () -> {
+            try {
+                if (!FusionData.isFusion(fusion) || FusionData.hasBodyLayer(fusion)
+                        || !megaBody(DistributionUtilsKt.server().registryAccess(), fusion, plan.aspects())) {
+                    return;
+                }
+                setBattleAbility(fusion, FusionData.bodyForm(fusion));
+                // La interfaz del combate (forma, nombre, habilidad) y el Pokémon entero (el resumen)
+                MegaShowdown.updateBattlePackets(battlePokemon);
+                ServerPlayer owner = fusion.getOwnerPlayer();
+                if (owner != null) {
+                    FusionService.resendToClient(owner, fusion);
+                }
+                Fusionmon.LOGGER.info("Fusionmon: el cuerpo de la fusión {} ha megaevolucionado en combate ({})",
+                        fusion.getSpecies().getName(), FusionData.bodyForm(fusion).getName());
+            } catch (RuntimeException | LinkageError e) {
+                FusionSafety.failed("mega del cuerpo en combate", e);
+            }
+        };
+        if (delay > 0) {
+            afterOnServer(delay, change);
+        } else {
+            change.run();
+        }
+        return true;
+    }
+
+    /**
+     * Después de MegaGimmick.megaEvolveInBattle, cuando la mega es la de la cabeza (la hace Mega Showdown): la
+     * habilidad de su forma mega, como con la del cuerpo (setBattleAbility).
+     */
+    public static void afterHeadMegaInBattle(Pokemon fusion) {
+        if (!FusionData.isFusion(fusion)) {
+            return;
+        }
+        MegaPlan plan = plan(fusion);
+        if (plan == null || plan.part() != FusionPart.HEAD || plan.aspects() == RAYQUAZA_MEGA) {
+            return;
+        }
+        Pokemon head = FusionData.readHead(fusion, DistributionUtilsKt.server().registryAccess());
+        if (applyStone(head, plan.aspects())) {
+            setBattleAbility(fusion, head.getForm());
+        }
+    }
+
+    /**
+     * Al megaevolucionar en combate Showdown pone la habilidad de la forma mega (Sequía, Impulso...), pero la fusión
+     * de Cobblemon seguía con la suya, que es la que enseña el menú del equipo: la de una fusión va forzada (la del
+     * cuerpo, si no Cobblemon la cambiaría), así que no cambia al cambiar de forma como en un Pokémon normal. Se le
+     * pone la de la mega durante el combate y la suya se guarda para devolvérsela al acabar (revertBattle).
+     */
+    private static void setBattleAbility(Pokemon fusion, FormData megaForm) {
+        Ability mega = megaForm.getAbilities().select(megaForm.getSpecies(), Set.of()).getFirst();
+        if (mega == null) {
+            return;
+        }
+        CompoundTag data = fusion.getPersistentData();
+        if (!data.contains(BATTLE_ABILITY)) {
+            Ability own = fusion.getAbility();
+            CompoundTag saved = new CompoundTag();
+            saved.putString(ABILITY_NAME, own.getName());
+            saved.putBoolean(ABILITY_FORCED, own.getForced());
+            saved.putString(ABILITY_PRIORITY, own.getPriority().name());
+            data.put(BATTLE_ABILITY, saved);
+        }
+        fusion.updateAbility(mega.getTemplate().create(true, Priority.NORMAL));
+    }
+
+    /**
+     * Al acabar el combate (AspectUtils.revertPokemonsIfRequired, también al empezar el siguiente): la mega del cuerpo
+     * hecha en combate se quita, como Mega Showdown hace con la de la cabeza, y la fusión recupera su habilidad.
+     */
+    public static void revertBattle(Pokemon pokemon) {
+        CompoundTag data = pokemon.getPersistentData();
+        if (data == null || !data.getBoolean(BATTLE_MEGA) && !data.contains(BATTLE_ABILITY)) {
+            return;
+        }
+        boolean changed = data.getBoolean(BATTLE_MEGA) && FusionData.clearBodyMega(pokemon);
+        data.remove(BATTLE_MEGA);
+        if (data.contains(BATTLE_ABILITY)) {
+            CompoundTag saved = data.getCompound(BATTLE_ABILITY);
+            data.remove(BATTLE_ABILITY);
+            AbilityTemplate own = Abilities.get(saved.getString(ABILITY_NAME));
+            if (own != null) {
+                pokemon.updateAbility(own.create(saved.getBoolean(ABILITY_FORCED),
+                        Priority.valueOf(saved.getString(ABILITY_PRIORITY))));
+                changed = true;
+            }
+        }
+        ServerPlayer owner = pokemon.getOwnerPlayer();
+        if (changed && owner != null) {
+            FusionService.resendToClient(owner, pokemon);
+        }
     }
 
     /**
@@ -367,7 +497,11 @@ public final class FusionMegas {
      * características, guardada como capa encima del cuerpo (FusionData.setBodyMega).
      */
     private static boolean megaBody(ServerPlayer owner, Pokemon fusion, List<String> aspects) {
-        Pokemon megaBody = FusionData.readBody(fusion, owner.registryAccess());
+        return megaBody(owner.registryAccess(), fusion, aspects);
+    }
+
+    private static boolean megaBody(RegistryAccess registryAccess, Pokemon fusion, List<String> aspects) {
+        Pokemon megaBody = FusionData.readBody(fusion, registryAccess);
         if (!applyStone(megaBody, aspects)) {
             Fusionmon.LOGGER.warn("Fusionmon: {} no cambia la forma de {}; no se megaevoluciona el cuerpo",
                     aspects, megaBody.getSpecies().getName());
@@ -468,6 +602,9 @@ public final class FusionMegas {
         private static final Class<?> Z_CRYSTAL;
         private static final MethodHandle Z_ITEM_ID;
         private static final MethodHandle APPEND_REVERT;
+        // En combate: su animación (Effect.applyEffectsBattle) y avisar a la interfaz del combate (updatePackets)
+        private static final MethodHandle APPLY_EFFECTS_BATTLE;
+        private static final MethodHandle UPDATE_PACKETS;
         // Formas por objeto: los objetos con código propio (placas, máscaras...) guardan sus datos en campos privados;
         // las de datos (HeldItemFormChange) son un componente del objeto, como las megapiedras
         private static final Class<?> FORM_CHANGE_ITEM;
@@ -519,6 +656,11 @@ public final class FusionMegas {
                 Class<?> aspectUtils = Class.forName(PACKAGE + "utils.AspectUtils", false, loader);
                 APPEND_REVERT = lookup.findStatic(aspectUtils, "appendRevertDataPokemon", MethodType.methodType(
                         void.class, effect, List.class, Optional.class, Pokemon.class, String.class));
+                APPLY_EFFECTS_BATTLE = lookup.findVirtual(effect, "applyEffectsBattle", MethodType.methodType(
+                        void.class, Pokemon.class, List.class, Optional.class, PokemonEntity.class,
+                        BattlePokemon.class));
+                UPDATE_PACKETS = lookup.findStatic(aspectUtils, "updatePackets",
+                        MethodType.methodType(void.class, BattlePokemon.class));
 
                 FORM_CHANGE_ITEM = Class.forName(PACKAGE + "item.custom.form_change.FormChangeHeldItem", false,
                         loader);
@@ -648,6 +790,41 @@ public final class FusionMegas {
                         (List<String>) ASPECTS.invoke(revert), effect.map(Object::toString).orElse(null));
             } catch (Throwable e) {
                 throw new IllegalStateException("No se ha podido leer la forma del objeto de Mega Showdown", e);
+            }
+        }
+
+        /**
+         * La animación de megaevolucionar en combate (la que pone megaEvolveInBattle, con su pausa del combate), sin
+         * cambiarle nada al Pokémon. Devuelve los segundos hasta su destello (0 sin animación o si falla).
+         */
+        static float playBattleMegaEffect(Pokemon pokemon, BattlePokemon battlePokemon) {
+            try {
+                Object effect = GET_EFFECT.invoke("mega_showdown:mega_evolution");
+                if (effect == null) {
+                    return 0;
+                }
+                APPLY_EFFECTS_BATTLE.invoke(effect, pokemon, List.of(), Optional.empty(), (PokemonEntity) null,
+                        battlePokemon);
+                if (pokemon.getEntity() == null) {
+                    return 0;
+                }
+                Optional<?> snowStorm = (Optional<?>) SNOWSTORM.invoke(effect);
+                Optional<?> delay = snowStorm.isEmpty() ? Optional.empty()
+                        : (Optional<?>) APPLY_AFTER.invoke(snowStorm.get());
+                return delay.map(seconds -> ((Number) seconds).floatValue()).orElse(0f);
+            } catch (Throwable e) {
+                Fusionmon.LOGGER.warn("Fusionmon: no se ha podido mostrar la animación de mega del cuerpo", e);
+                return 0;
+            }
+        }
+
+        /** Lo que hace Mega Showdown tras un cambio de forma en combate: la interfaz del combate ve la forma nueva. */
+        static void updateBattlePackets(BattlePokemon battlePokemon) {
+            try {
+                UPDATE_PACKETS.invoke(battlePokemon);
+            } catch (Throwable e) {
+                // Solo la interfaz del combate se queda con la forma de antes hasta el próximo cambio
+                Fusionmon.LOGGER.warn("Fusionmon: no se ha podido avisar al combate del cambio de forma", e);
             }
         }
 
