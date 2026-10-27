@@ -16,6 +16,7 @@ import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.spongepowered.asm.mixin.Mixin;
@@ -125,6 +126,24 @@ public abstract class PokemonMixin {
     private boolean fusionmon$keepBenchedMoves(LearnsetQuery query, MoveTemplate move, Learnset learnset,
                                                Operation<Boolean> original) {
         if (FusionData.isFusion((Pokemon) (Object) this)) {
+            return true;
+        }
+        return original.call(query, move, learnset);
+    }
+
+    /**
+     * Lo mismo en validateMoveset, que quita de los activos y de los recordables lo que la especie no aprende (y la
+     * especie de una fusión es la de su cabeza). Cobblemon no la usa por su cuenta: la llaman scripts MoLang y otros
+     * mods (al guardar en el PC, por ejemplo); un usuario perdía los movimientos del cuerpo al guardarla. El trabajo
+     * lo hace un lambda de Kotlin (static, con el Pokémon como argumento), igual en Cobblemon 1.7.3, 1.8.1 y 1.8.2.
+     * require = 0: si cambia de nombre, solo se pierde esta protección.
+     */
+    @WrapOperation(method = "validateMoveset$lambda$0$0", require = 0, at = @At(value = "INVOKE",
+            target = "Lcom/cobblemon/mod/common/api/pokemon/moves/LearnsetQuery;canLearn(Lcom/cobblemon/mod/common/api/moves/MoveTemplate;Lcom/cobblemon/mod/common/api/pokemon/moves/Learnset;)Z"))
+    private static boolean fusionmon$keepValidatedMoves(LearnsetQuery query, MoveTemplate move, Learnset learnset,
+                                                        Operation<Boolean> original,
+                                                        @Local(argsOnly = true) Pokemon pokemon) {
+        if (FusionData.isFusion(pokemon)) {
             return true;
         }
         return original.call(query, move, learnset);
