@@ -11,6 +11,8 @@ import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import kotlin.Unit;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
@@ -51,6 +53,8 @@ public final class FusionMegas {
     private static final String RAYQUAZA = "Rayquaza";
     private static final String DRAGON_ASCENT = "dragonascent";
     private static final List<String> RAYQUAZA_MEGA = List.of("mega_evolution=mega");
+    /** Sin Mega Showdown no hay megas (y su clase MegaShowdown, abajo, no se puede cargar). */
+    private static final boolean ENABLED = FabricLoader.getInstance().isModLoaded("mega_showdown");
     /**
      * Marca que pone Mega Showdown en persistentData mientras dura la animación de un cambio de forma (mega, objeto),
      * junto con sus datos para deshacerlo (REVERT_DATA). La quita la propia animación al acabar, que va programada en
@@ -284,6 +288,35 @@ public final class FusionMegas {
     }
 
     /**
+     * La mega que una fusión puede hacer en combate (FusionShowdown): las formas de cabeza y cuerpo de la fusión en
+     * mega (su especie de Showdown) y el id de Showdown de la piedra con la que la hace.
+     */
+    public record BattleMega(FormData head, FormData body, String item) {
+    }
+
+    /**
+     * Antes de un combate: la mega que puede hacer la fusión, con la misma regla que fuera de combate (plan), o null.
+     * Por ahora solo la de la cabeza con su piedra (paso 1 de las megas en combate).
+     */
+    public static BattleMega battleMega(Pokemon fusion, RegistryAccess registryAccess) {
+        if (!ENABLED || !FusionData.isFusion(fusion) || isMega(fusion)) {
+            return null;
+        }
+        MegaPlan plan = plan(fusion);
+        if (plan == null || plan.part() != FusionPart.HEAD || plan.aspects() == RAYQUAZA_MEGA) {
+            return null;
+        }
+        String item = MegaShowdown.stoneShowdownId(fusion.heldItem());
+        // La forma mega de la cabeza: una copia de la cabeza guardada, megaevolucionada (como megaBody con el cuerpo)
+        Pokemon head = FusionData.readHead(fusion, registryAccess);
+        FormData body = FusionData.bodyForm(fusion);
+        if (item == null || body == null || !applyStone(head, plan.aspects())) {
+            return null;
+        }
+        return new BattleMega(head.getForm(), body, item);
+    }
+
+    /**
      * La mega que puede hacer la fusión, por este orden (decisión del usuario): primero la piedra que lleva, para la
      * parte a la que le sirva (la cabeza si le vale, si no el cuerpo); si no, Rayquaza con Ascenso Draco, sea cabeza o
      * cuerpo (es lo que pide Mega Showdown: Rayquaza no usa piedra). Null si ninguna.
@@ -420,6 +453,7 @@ public final class FusionMegas {
         private static final MethodHandle HAS_GIMMICK;
         private static final MethodHandle GET_COMPONENT;
         private static final MethodHandle POKEMONS;
+        private static final MethodHandle STONE_SHOWDOWN_ID;
         private static final MethodHandle ASPECT_CONDITIONS;
         private static final MethodHandle ASPECT_APPLY;
         private static final MethodHandle ASPECTS;
@@ -465,6 +499,8 @@ public final class FusionMegas {
                 GET_COMPONENT = lookup.findStatic(locator, "getComponent",
                         MethodType.methodType(Object.class, Class.class, ItemStack.class));
                 POKEMONS = lookup.findVirtual(MEGA_GIMMICK, "pokemons", MethodType.methodType(List.class));
+                STONE_SHOWDOWN_ID = lookup.findVirtual(MEGA_GIMMICK, "showdown_id",
+                        MethodType.methodType(String.class));
                 ASPECT_CONDITIONS = lookup.findVirtual(MEGA_GIMMICK, "aspect_conditions",
                         MethodType.methodType(aspectConditions));
                 ASPECT_APPLY = lookup.findVirtual(aspectConditions, "aspectApply", MethodType.methodType(conditions));
@@ -548,6 +584,21 @@ public final class FusionMegas {
             } catch (Throwable e) {
                 // Solo se pierde que Mega Showdown la deshaga al empezar un combate
                 Fusionmon.LOGGER.warn("Fusionmon: no se han podido guardar los datos para deshacer {}", effectId, e);
+            }
+        }
+
+        /** El id de Showdown de la megapiedra ("charizarditey", como item.id allí), o null si no es una megapiedra. */
+        static String stoneShowdownId(ItemStack held) {
+            try {
+                Object gimmick = GET_COMPONENT.invoke(MEGA_GIMMICK, held);
+                if (gimmick == null) {
+                    return null;
+                }
+                // Como toID de Showdown: minúsculas, solo letras y números
+                return ((String) STONE_SHOWDOWN_ID.invoke(gimmick)).toLowerCase(java.util.Locale.ROOT)
+                        .replaceAll("[^a-z0-9]", "");
+            } catch (Throwable e) {
+                throw new IllegalStateException("No se ha podido leer el id de Showdown de la megapiedra", e);
             }
         }
 

@@ -217,7 +217,17 @@ su cabeza, el resumen sin añadido) y se avisa en el log.
   Showdown no la deshace (solo mira la especie visible): `revertBodyIfStoneRemoved`. Su rueda (cliente) solo pone sus
   botones si el Pokémon del equipo del cliente tiene la entidad: `FusionService.resendToClient` manda también
   `PokemonStateUpdatePacket` (si no, el botón no salía hasta guardarlo y sacarlo).
-  **Pendiente:** fase 3, mega y Ultra en combate (registrar la fusión mega en Showdown). Mega Showdown 1.3.1 está en
+  **Fase 3, megas en combate.** Paso 1 (hecho y probado, 2026-10-27): mega de la **cabeza** con su piedra.
+  `FusionShowdown.registerFusions` pide `FusionMegas.battleMega` (la misma regla, `plan`) y registra también la fusión
+  en mega (`forme: "Mega"`, su `requiredItem`; se quitan `battleOnly`/`changesFrom`); `fusion/FusionShowdownMegas` pasa
+  a Showdown la tabla especie → {target, item} y la primera vez envuelve **en memoria** `BattleActions.prototype.
+  canMegaEvo` (JavaScript ejecutado con `GraalShowdownService.getContext().eval`, por reflexión; nada en los archivos
+  de `showdown/`): la regla queda solo en Java (decisión del usuario: el mismo sistema que fuera de combate). Showdown
+  calcula `canMegaEvo` al crear los Pokémon del combate, así que la tabla va antes (`startShowdown`). Lo visual de la
+  cabeza lo hace Mega Showdown (`megaEvolveInBattle` sobre la especie visible). Cambiar de piedra a mitad de combate
+  (Truco) no cuenta: la tabla se hace con la del principio.
+  **Pendiente:** paso 2, mega del cuerpo en combate (enganchar `megaEvolveInBattle`, capa del cuerpo y quitarla al
+  acabar); paso 3, Rayquaza con Ascenso Draco y Ultraexplosión en combate. Mega Showdown 1.3.1 está en
   `run/mods` y `run/server/mods`, y AllTheMons R5.0 apartado en `run/fusionmon/packs-desactivados/` (se declara
   incompatible con Mega Showdown).
 - Cobblemon comprueba evoluciones cada segundo (`PlayerPartyStore.onSecondPassed` → `getLockedEvolutions()`); `setSpecies`/`setForm` vacían las pendientes. El envío completo del Pokémon (`SetPartyPokemonPacket`) incluye las evoluciones pendientes.
