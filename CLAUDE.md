@@ -225,7 +225,11 @@ su cabeza, el resumen sin añadido) y se avisa en el log.
   de `showdown/`): la regla queda solo en Java (decisión del usuario: el mismo sistema que fuera de combate). Showdown
   calcula `canMegaEvo` al crear los Pokémon del combate, así que la tabla va antes (`startShowdown`). Lo visual de la
   cabeza lo hace Mega Showdown (`megaEvolveInBattle` sobre la especie visible). Cambiar de piedra a mitad de combate
-  (Truco) no cuenta: la tabla se hace con la del principio.
+  (Truco) no cuenta: la tabla se hace con la del principio. **Cobbleverse (0.2.1-beta, 2026-10-27):** su Mega Showdown
+  (1.8.4, para Cobblemon 1.7.3) trae sus propios archivos de Showdown y mete su `canMegaEvo` en `Scripts.actions`, que
+  `BattleActions` copia encima en cada combate (`Object.assign(this, Scripts.actions)`): tapaba el nuestro y no salía
+  el botón. Por eso el envoltorio es una propiedad get/set en el prototipo (el set guarda la suya aparte y el get
+  devuelve la nuestra, que la llama si la tabla no dice nada). Probado en Cobbleverse.
   Paso 2 (hecho y probado, 2026-10-27): mega del **cuerpo** en combate. La especie mega lleva las habilidades y la
   piedra de la forma mega de la parte que megaevoluciona (Showdown pone la primera al megaevolucionar).
   `MegaShowdownMegaGimmickMixin` engancha `megaEvolveInBattle`: con la del cuerpo, su animación de combate

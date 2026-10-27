@@ -29,6 +29,12 @@ public final class FusionShowdownMegas {
      * y marcan que ya están envueltas) y añade las entradas. require usa la caché de módulos: es la misma BattleActions
      * que usa Showdown. Una entrada vale si la fusión lleva su objeto (item) o sabe su movimiento (move: Rayquaza con
      * Ascenso Draco, con las mismas excepciones que el canMegaEvo original: dinamax, teracristal, cristal Z).
+     *
+     * No basta con cambiar la función del prototipo: al crear las acciones de cada combate Showdown copia encima las
+     * de los scripts (Object.assign(this, Scripts.actions)), y Mega Showdown para Cobblemon 1.7.3 (Cobbleverse) mete
+     * ahí su propio canMegaEvo, que tapaba el nuestro: en combate no salía el botón. Por eso es una propiedad con
+     * get/set en el prototipo: Object.assign pasa por el set, que guarda la suya aparte, y el get devuelve la nuestra,
+     * que mira la tabla y si no llama a la que haya (la de los scripts, o la original).
      */
     private static final String SCRIPT = """
             (function (megas, ultras) {
@@ -39,16 +45,28 @@ public final class FusionShowdownMegas {
                   && !pokemon.getItem().zMove && !pokemon.terastallized;
               };
               const wrap = function (BattleActions, name, table) {
-                const original = BattleActions.prototype[name];
+                const proto = BattleActions.prototype;
+                const original = proto[name];
                 if (typeof original !== 'function') return;
-                BattleActions.prototype[name] = function (pokemon) {
-                  try {
-                    const entry = globalThis[table][pokemon.species.id];
-                    if (matches(pokemon, entry)) return entry.target;
-                  } catch (e) {
+                const replaced = '__fusionmon_' + name;
+                Object.defineProperty(proto, name, {
+                  configurable: true,
+                  get: function () {
+                    const self = this;
+                    const inner = Object.prototype.hasOwnProperty.call(self, replaced) ? self[replaced] : original;
+                    return function (pokemon) {
+                      try {
+                        const entry = globalThis[table][pokemon.species.id];
+                        if (matches(pokemon, entry)) return entry.target;
+                      } catch (e) {
+                      }
+                      return inner.call(self, pokemon);
+                    };
+                  },
+                  set: function (fn) {
+                    Object.defineProperty(this, replaced, { value: fn, writable: true, configurable: true });
                   }
-                  return original.call(this, pokemon);
-                };
+                });
               };
               if (!globalThis.fusionmonMegas) {
                 globalThis.fusionmonMegas = {};

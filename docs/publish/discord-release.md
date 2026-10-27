@@ -1,5 +1,31 @@
 # Mensajes de Discord para el lanzamiento
 
+## 0.2.1-beta (arreglo rápido)
+
+Subir `build\libs\fusionmon-0.2.1-beta.jar` como la 0.2.0 (mismas dependencias, Mega Showdown opcional). Antes, una
+mega en combate en `Fusionmon Adventure` (Cobblemon 1.8.2): el cambio toca también esa versión.
+
+### Changelog de CurseForge
+
+```
+## 0.2.1-beta
+
+### Fix
+- **Cobbleverse (Cobblemon 1.7.3): fusions can now Mega Evolve in battle.** The Mega button didn't show up in battle, because that version of Mega Showdown replaced the check Fusionmon uses at the start of every battle. Mega evolving out of battle already worked.
+
+Still **one file** for Cobblemon 1.8.2, 1.8.1 and 1.7.3 (Cobbleverse).
+```
+
+### #changelog (Discord)
+
+```
+# 📜 Fusionmon 0.2.1-beta
+
+🛠️ **Fix:** on **Cobbleverse** (Cobblemon 1.7.3), fusions can now Mega Evolve **in battle** too. The Mega button was missing there because that version of Mega Showdown replaced Fusionmon's check at the start of every battle.
+
+Same single file for every Cobblemon version 💜
+```
+
 ## 0.2.0-beta (megas)
 
 Antes de subir: probar `build\libs\fusionmon-0.2.0-beta.jar` en la instancia de **Cobbleverse** (Cobblemon 1.7.3: que
