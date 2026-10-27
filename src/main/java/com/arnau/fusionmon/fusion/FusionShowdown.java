@@ -17,6 +17,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.minecraft.core.RegistryAccess;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -61,8 +62,10 @@ public final class FusionShowdown {
     /** Se llama justo antes de que Cobblemon arranque el combate en Showdown. */
     public static void registerFusions(PokemonBattle battle) {
         Map<String, String> species = new LinkedHashMap<>();
-        // Fusiones que pueden megaevolucionar en este combate: su especie → {target: la fusión en mega, item: piedra}
+        // Fusiones que pueden megaevolucionar en este combate: su especie → {target: la fusión en mega, item: piedra o
+        // move: Ascenso Draco}; y las que pueden hacer la Ultraexplosión (Showdown la mira aparte, canUltraBurst)
         Map<String, JsonObject> megas = new LinkedHashMap<>();
+        Map<String, JsonObject> ultras = new LinkedHashMap<>();
         for (BattleActor actor : battle.getActors()) {
             for (BattlePokemon battlePokemon : actor.getPokemonList()) {
                 Pokemon pokemon = battlePokemon.getEffectedPokemon();
@@ -85,7 +88,7 @@ public final class FusionShowdown {
                             id, e);
                     continue;
                 }
-                addMega(pokemon, id, species, megas);
+                addMega(pokemon, id, species, megas, ultras);
             }
         }
 
@@ -101,42 +104,59 @@ public final class FusionShowdown {
             Fusionmon.LOGGER.error("No se han podido registrar las fusiones en Showdown: {}", species.keySet(), e);
             return;
         }
-        FusionShowdownMegas.send(megas);
+        FusionShowdownMegas.send(megas, ultras);
     }
 
     /**
-     * Si la fusión puede megaevolucionar en combate (FusionMegas.battleMega), registra también su especie en mega y su
-     * entrada para FusionShowdownMegas. Si falla, solo se queda sin mega.
+     * Si la fusión puede megaevolucionar o hacer la Ultraexplosión en combate (FusionMegas.battleMega,
+     * FusionUltra.battleUltra), registra también esa especie y su entrada para FusionShowdownMegas. Si falla, solo se
+     * queda sin ella.
      */
     private static void addMega(Pokemon pokemon, String id, Map<String, String> species,
-                                Map<String, JsonObject> megas) {
+                                Map<String, JsonObject> megas, Map<String, JsonObject> ultras) {
         try {
-            FusionMegas.BattleMega mega = FusionMegas.battleMega(pokemon, DistributionUtilsKt.server().registryAccess());
-            if (mega == null) {
-                return;
-            }
-            String megaId = speciesId(mega.head(), mega.body());
-            if (!species.containsKey(megaId)) {
-                species.put(megaId, speciesJson(mega.head(), mega.body(), megaId, mega.part()));
-            }
-            JsonObject entry = new JsonObject();
-            entry.addProperty("target", megaId);
-            entry.addProperty("item", mega.item());
-            megas.put(id, entry);
+            RegistryAccess registryAccess = DistributionUtilsKt.server().registryAccess();
+            addEntry(FusionMegas.battleMega(pokemon, registryAccess), id, species, megas);
+            addEntry(FusionUltra.battleUltra(pokemon, registryAccess), id, species, ultras);
         } catch (RuntimeException | LinkageError e) {
             FusionSafety.failed("megas de las fusiones en combate", e);
         }
+    }
+
+    private static void addEntry(FusionMegas.BattleMega mega, String id, Map<String, String> species,
+                                 Map<String, JsonObject> entries) {
+        if (mega == null) {
+            return;
+        }
+        String targetId = speciesId(mega.head(), mega.body());
+        if (!species.containsKey(targetId)) {
+            species.put(targetId, speciesJson(mega.head(), mega.body(), targetId, mega.part(),
+                    mega.ultra() ? "Ultra" : "Mega"));
+        }
+        JsonObject entry = new JsonObject();
+        entry.addProperty("target", targetId);
+        if (mega.item() != null) {
+            entry.addProperty("item", mega.item());
+        }
+        if (mega.move() != null) {
+            entry.addProperty("move", mega.move());
+        }
+        entries.put(id, entry);
     }
 
     /**
      * Datos de especie para Showdown: los de la cabeza, con nombre, tipos y stats base de la fusión.
      *
      * @param megaPart si es la fusión ya megaevolucionada (la especie a la que cambia en combate), la parte que lo
-     *                 está; null si no. Lleva forma "Mega", para que Showdown la trate como tal (no se puede
-     *                 teracristalizar...), y de la forma mega de esa parte las habilidades (al megaevolucionar,
+     *                 está; null si no. Lleva su forma ("Mega", "Ultra"), para que Showdown la trate como tal (no se
+     *                 puede teracristalizar...), y de la forma mega de esa parte las habilidades (al megaevolucionar,
      *                 Showdown pone la primera: Sequía, Impulso...) y la piedra (requiredItem, el mensaje)
      */
     private static String speciesJson(FormData head, FormData body, String id, FusionPart megaPart) {
+        return speciesJson(head, body, id, megaPart, "Mega");
+    }
+
+    private static String speciesJson(FormData head, FormData body, String id, FusionPart megaPart, String forme) {
         JsonObject headJson = showdownJson(head);
         JsonObject bodyJson = showdownJson(body);
 
@@ -145,7 +165,7 @@ public final class FusionShowdown {
         REMOVED_FIELDS.forEach(fused::remove);
         fused.addProperty("name", id);
         fused.addProperty("baseSpecies", id);
-        fused.addProperty("forme", megaPart != null ? "Mega" : "");
+        fused.addProperty("forme", megaPart != null ? forme : "");
         fused.addProperty("nfe", false);
         if (megaPart != null) {
             if (megaJson.has("abilities")) {

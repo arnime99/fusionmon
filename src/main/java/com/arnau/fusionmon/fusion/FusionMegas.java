@@ -305,23 +305,29 @@ public final class FusionMegas {
      * La mega que una fusión puede hacer en combate (FusionShowdown): las formas de cabeza y cuerpo de la fusión en
      * mega (su especie de Showdown) y el id de Showdown de la piedra con la que la hace.
      */
-    public record BattleMega(FusionPart part, FormData head, FormData body, String item) {
+    /**
+     * @param item  el id de Showdown del objeto que la hace (la piedra, el Ultranecrozium Z), o null
+     * @param move  el movimiento que la hace en vez de un objeto (Rayquaza: "dragonascent"), o null
+     * @param ultra si es la Ultraexplosión (forma "Ultra" en Showdown) en vez de una mega
+     */
+    public record BattleMega(FusionPart part, FormData head, FormData body, String item, String move, boolean ultra) {
     }
 
     /**
      * Antes de un combate: la mega que puede hacer la fusión, con la misma regla que fuera de combate (plan), o null.
-     * La de la cabeza o la del cuerpo con su piedra (Rayquaza con Ascenso Draco, todavía no).
+     * La de la cabeza o la del cuerpo, con su piedra o (Rayquaza) con Ascenso Draco.
      */
     public static BattleMega battleMega(Pokemon fusion, RegistryAccess registryAccess) {
         if (!ENABLED || !FusionData.isFusion(fusion) || isMega(fusion)) {
             return null;
         }
         MegaPlan plan = plan(fusion);
-        if (plan == null || plan.aspects() == RAYQUAZA_MEGA) {
+        if (plan == null) {
             return null;
         }
-        String item = MegaShowdown.stoneShowdownId(fusion.heldItem());
-        if (item == null) {
+        boolean dragonAscent = plan.aspects() == RAYQUAZA_MEGA;
+        String item = dragonAscent ? null : MegaShowdown.stoneShowdownId(fusion.heldItem());
+        if (!dragonAscent && item == null) {
             return null;
         }
         // La forma mega de la parte: una copia suya guardada, megaevolucionada (como megaBody)
@@ -333,7 +339,7 @@ public final class FusionMegas {
         FormData headForm = head ? part.getForm() : FusionData.activeHeadForm(fusion);
         FormData bodyForm = head ? FusionData.bodyForm(fusion) : part.getForm();
         return headForm == null || bodyForm == null ? null
-                : new BattleMega(plan.part(), headForm, bodyForm, item);
+                : new BattleMega(plan.part(), headForm, bodyForm, item, dragonAscent ? DRAGON_ASCENT : null, false);
     }
 
     /**
@@ -346,11 +352,11 @@ public final class FusionMegas {
             return false;
         }
         MegaPlan plan = plan(fusion);
-        if (plan == null || plan.part() != FusionPart.BODY || plan.aspects() == RAYQUAZA_MEGA) {
+        if (plan == null || plan.part() != FusionPart.BODY) {
             return false;
         }
         fusion.getPersistentData().putBoolean(BATTLE_MEGA, true);
-        float delay = MegaShowdown.playBattleMegaEffect(fusion, battlePokemon);
+        float delay = MegaShowdown.playBattleEffect(fusion, battlePokemon, "mega_showdown:mega_evolution");
         Runnable change = () -> {
             try {
                 if (!FusionData.isFusion(fusion) || FusionData.hasBodyLayer(fusion)
@@ -387,7 +393,7 @@ public final class FusionMegas {
             return;
         }
         MegaPlan plan = plan(fusion);
-        if (plan == null || plan.part() != FusionPart.HEAD || plan.aspects() == RAYQUAZA_MEGA) {
+        if (plan == null || plan.part() != FusionPart.HEAD) {
             return;
         }
         Pokemon head = FusionData.readHead(fusion, DistributionUtilsKt.server().registryAccess());
@@ -402,7 +408,7 @@ public final class FusionMegas {
      * cuerpo, si no Cobblemon la cambiaría), así que no cambia al cambiar de forma como en un Pokémon normal. Se le
      * pone la de la mega durante el combate y la suya se guarda para devolvérsela al acabar (revertBattle).
      */
-    private static void setBattleAbility(Pokemon fusion, FormData megaForm) {
+    static void setBattleAbility(Pokemon fusion, FormData megaForm) {
         Ability mega = megaForm.getAbilities().select(megaForm.getSpecies(), Set.of()).getFirst();
         if (mega == null) {
             return;
@@ -794,12 +800,12 @@ public final class FusionMegas {
         }
 
         /**
-         * La animación de megaevolucionar en combate (la que pone megaEvolveInBattle, con su pausa del combate), sin
-         * cambiarle nada al Pokémon. Devuelve los segundos hasta su destello (0 sin animación o si falla).
+         * Una animación de Mega Showdown en combate (la de megaEvolveInBattle o ultraBurstInBattle, con su pausa del
+         * combate), sin cambiarle nada al Pokémon. Devuelve los segundos hasta su destello (0 sin animación o si falla).
          */
-        static float playBattleMegaEffect(Pokemon pokemon, BattlePokemon battlePokemon) {
+        static float playBattleEffect(Pokemon pokemon, BattlePokemon battlePokemon, String id) {
             try {
-                Object effect = GET_EFFECT.invoke("mega_showdown:mega_evolution");
+                Object effect = GET_EFFECT.invoke(id);
                 if (effect == null) {
                     return 0;
                 }
@@ -813,7 +819,7 @@ public final class FusionMegas {
                         : (Optional<?>) APPLY_AFTER.invoke(snowStorm.get());
                 return delay.map(seconds -> ((Number) seconds).floatValue()).orElse(0f);
             } catch (Throwable e) {
-                Fusionmon.LOGGER.warn("Fusionmon: no se ha podido mostrar la animación de mega del cuerpo", e);
+                Fusionmon.LOGGER.warn("Fusionmon: no se ha podido mostrar la animación {} del cuerpo", id, e);
                 return 0;
             }
         }

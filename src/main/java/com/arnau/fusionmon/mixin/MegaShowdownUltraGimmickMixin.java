@@ -2,6 +2,7 @@ package com.arnau.fusionmon.mixin;
 
 import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.fusion.FusionUltra;
+import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -59,6 +60,33 @@ public abstract class MegaShowdownUltraGimmickMixin {
             }
         } catch (RuntimeException | LinkageError e) {
             FusionSafety.failed("Ultraexplosión del cuerpo (ultraBurst)", e);
+        }
+    }
+
+    /**
+     * En combate (Showdown ya ha hecho la Ultraexplosión de la fusión, ver FusionShowdownMegas): si es la del cuerpo,
+     * la ponemos en el cuerpo; si no, Mega Showdown cambia la cabeza como siempre.
+     */
+    @Inject(method = "ultraBurstInBattle", require = 0, at = @At("HEAD"), cancellable = true)
+    private static void fusionmon$ultraBurstBodyInBattle(Pokemon pokemon, BattlePokemon battlePokemon,
+                                                         CallbackInfo ci) {
+        try {
+            if (FusionUltra.ultraBurstBodyInBattle(pokemon, battlePokemon)) {
+                ci.cancel();
+            }
+        } catch (RuntimeException | LinkageError e) {
+            FusionSafety.failed("Ultraexplosión del cuerpo (ultraBurstInBattle)", e);
+        }
+    }
+
+    /** Al acabar ultraBurstInBattle (la de la cabeza, de Mega Showdown): la habilidad de la forma Ultra. */
+    @Inject(method = "ultraBurstInBattle", require = 0, at = @At("RETURN"))
+    private static void fusionmon$headUltraAbilityInBattle(Pokemon pokemon, BattlePokemon battlePokemon,
+                                                           CallbackInfo ci) {
+        try {
+            FusionUltra.afterHeadUltraInBattle(pokemon);
+        } catch (RuntimeException | LinkageError e) {
+            FusionSafety.failed("habilidad de la Ultraexplosión de la cabeza en combate", e);
         }
     }
 

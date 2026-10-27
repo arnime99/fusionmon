@@ -234,7 +234,13 @@ su cabeza, el resumen sin añadido) y se avisa en el log.
   el combate se le pone la de la mega (`setBattleAbility`, también con la mega de cabeza, al final de
   `megaEvolveInBattle`) y la suya se guarda en `fusionmon_battle_ability`. Al acabar (y al empezar el siguiente, por
   si se cortó), `revertPokemonsIfRequired` → `FusionMegas.revertBattle` quita la capa y devuelve la habilidad.
-  **Pendiente:** paso 3, Rayquaza con Ascenso Draco y Ultraexplosión en combate. Mega Showdown 1.3.1 está en
+  Paso 3 (hecho y probado, 2026-10-27): **Rayquaza** con Ascenso Draco (entrada `move` en la tabla, con las
+  excepciones del original: dinamax, teracristal, cristal Z) y **Ultraexplosión** (`FusionUltra.battleUltra`, especie
+  con forma "Ultra", segunda tabla para `canUltraBurst`; `MegaShowdownUltraGimmickMixin` engancha
+  `ultraBurstInBattle`; se quita al acabar con `revertBodyForBattle`). Cabeza Rayquaza + cuerpo Necrozma con el
+  Ultranecrozium Z: en combate solo la Ultraexplosión (como en Showdown: una transformación por Pokémon y Rayquaza no
+  megaevoluciona con un cristal Z); fuera de combate se ven las dos. Decisión del usuario: se deja así.
+  Mega Showdown 1.3.1 está en
   `run/mods` y `run/server/mods`, y AllTheMons R5.0 apartado en `run/fusionmon/packs-desactivados/` (se declara
   incompatible con Mega Showdown).
 - Cobblemon comprueba evoluciones cada segundo (`PlayerPartyStore.onSecondPassed` → `getLockedEvolutions()`); `setSpecies`/`setForm` vacían las pendientes. El envío completo del Pokémon (`SetPartyPokemonPacket`) incluye las evoluciones pendientes.

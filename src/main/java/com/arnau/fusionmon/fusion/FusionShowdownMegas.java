@@ -25,27 +25,42 @@ import java.util.Map;
 public final class FusionShowdownMegas {
 
     /**
-     * Envuelve canMegaEvo la primera vez (globalThis.fusionmonMegas guarda la tabla y marca que ya está envuelta) y
-     * añade las entradas. require usa la caché de módulos: es la misma BattleActions que usa Showdown.
+     * Envuelve canMegaEvo y canUltraBurst la primera vez (globalThis.fusionmonMegas/fusionmonUltras guardan las tablas
+     * y marcan que ya están envueltas) y añade las entradas. require usa la caché de módulos: es la misma BattleActions
+     * que usa Showdown. Una entrada vale si la fusión lleva su objeto (item) o sabe su movimiento (move: Rayquaza con
+     * Ascenso Draco, con las mismas excepciones que el canMegaEvo original: dinamax, teracristal, cristal Z).
      */
     private static final String SCRIPT = """
-            (function (entries) {
-              if (!globalThis.fusionmonMegas) {
-                globalThis.fusionmonMegas = {};
-                const BattleActions = require('./sim/battle-actions').BattleActions;
-                const original = BattleActions.prototype.canMegaEvo;
-                BattleActions.prototype.canMegaEvo = function (pokemon) {
+            (function (megas, ultras) {
+              const matches = function (pokemon, entry) {
+                if (!entry) return false;
+                if (entry.item) return pokemon.getItem().id === entry.item;
+                return !!entry.move && pokemon.baseMoves.includes(entry.move) && !pokemon.volatiles['dynamax']
+                  && !pokemon.getItem().zMove && !pokemon.terastallized;
+              };
+              const wrap = function (BattleActions, name, table) {
+                const original = BattleActions.prototype[name];
+                if (typeof original !== 'function') return;
+                BattleActions.prototype[name] = function (pokemon) {
                   try {
-                    const mega = globalThis.fusionmonMegas[pokemon.species.id];
-                    if (mega && pokemon.getItem().id === mega.item) return mega.target;
+                    const entry = globalThis[table][pokemon.species.id];
+                    if (matches(pokemon, entry)) return entry.target;
                   } catch (e) {
                   }
                   return original.call(this, pokemon);
                 };
+              };
+              if (!globalThis.fusionmonMegas) {
+                globalThis.fusionmonMegas = {};
+                globalThis.fusionmonUltras = {};
+                const BattleActions = require('./sim/battle-actions').BattleActions;
+                wrap(BattleActions, 'canMegaEvo', 'fusionmonMegas');
+                wrap(BattleActions, 'canUltraBurst', 'fusionmonUltras');
               }
-              Object.assign(globalThis.fusionmonMegas, entries);
+              Object.assign(globalThis.fusionmonMegas, megas);
+              Object.assign(globalThis.fusionmonUltras, ultras);
               return true;
-            })(%s)
+            })(%s, %s)
             """;
 
     private FusionShowdownMegas() {
@@ -56,14 +71,16 @@ public final class FusionShowdownMegas {
      * registrar las especies (la de destino tiene que existir) y antes de empezar el combate (Showdown calcula
      * canMegaEvo al crear cada Pokémon del combate).
      */
-    static boolean send(Map<String, JsonObject> megas) {
-        if (megas.isEmpty()) {
+    static boolean send(Map<String, JsonObject> megas, Map<String, JsonObject> ultras) {
+        if (megas.isEmpty() && ultras.isEmpty()) {
             return true;
         }
         try {
-            JsonObject entries = new JsonObject();
-            megas.forEach(entries::add);
-            evalJs(SCRIPT.formatted(entries));
+            JsonObject megaEntries = new JsonObject();
+            megas.forEach(megaEntries::add);
+            JsonObject ultraEntries = new JsonObject();
+            ultras.forEach(ultraEntries::add);
+            evalJs(SCRIPT.formatted(megaEntries, ultraEntries));
             return true;
         } catch (Exception | LinkageError e) {
             // Sin mega en combate para las fusiones: pelean como siempre

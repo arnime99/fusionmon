@@ -3,8 +3,12 @@ package com.arnau.fusionmon.fusion;
 import com.arnau.fusionmon.FusionSafety;
 import com.arnau.fusionmon.Fusionmon;
 import com.arnau.fusionmon.fusion.FusionMegas.MegaShowdown;
+import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
 import com.cobblemon.mod.common.pokemon.FormData;
 import com.cobblemon.mod.common.pokemon.Pokemon;
+import com.cobblemon.mod.common.util.DistributionUtilsKt;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -36,6 +40,8 @@ public final class FusionUltra {
     /** Lo que guarda Mega Showdown en persistentData para deshacerla: la forma de antes y sus datos de efecto. */
     private static final String NECROZMA_FORM = "necrozma_form";
     private static final String REVERT_ASPECTS = "revert_aspects";
+    /** Sin Mega Showdown no hay Ultraexplosión (y su clase MegaShowdown no se puede cargar). */
+    private static final boolean ENABLED = FabricLoader.getInstance().isModLoaded("mega_showdown");
 
     private FusionUltra() {
     }
@@ -114,6 +120,78 @@ public final class FusionUltra {
         }
         clearBody(fusion);
         return true;
+    }
+
+    /**
+     * Antes de un combate (FusionShowdown): la Ultraexplosión que puede hacer la fusión en combate, de la cabeza (si es
+     * Necrozma en forma de fusión) o del cuerpo, con el Ultranecrozium Z; o null. Como battleMega.
+     */
+    public static FusionMegas.BattleMega battleUltra(Pokemon fusion, RegistryAccess registryAccess) {
+        if (!ENABLED || !FusionData.isFusion(fusion) || isBodyUltra(fusion) || fusion.getAspects().contains(ULTRA)
+                || !holdsCrystal(fusion)) {
+            return null;
+        }
+        boolean head = headCanUltra(fusion);
+        if (!head && !bodyCanUltra(fusion)) {
+            return null;
+        }
+        // La forma Ultra de la parte: una copia suya guardada, cambiada (como ultraBody)
+        Pokemon part = head ? FusionData.readHead(fusion, registryAccess) : FusionData.readBody(fusion, registryAccess);
+        if (!FusionMegas.applyStone(part, ULTRA_FEATURE)) {
+            return null;
+        }
+        FormData headForm = head ? part.getForm() : FusionData.activeHeadForm(fusion);
+        FormData bodyForm = head ? FusionData.bodyForm(fusion) : part.getForm();
+        return headForm == null || bodyForm == null ? null : new FusionMegas.BattleMega(
+                head ? FusionPart.HEAD : FusionPart.BODY, headForm, bodyForm, CRYSTAL, null, true);
+    }
+
+    /**
+     * En lugar de UltraGimmick.ultraBurstInBattle (Showdown ya ha hecho la Ultraexplosión, ver FusionShowdownMegas):
+     * si es la del cuerpo, la animación de Mega Showdown y, en su destello, la capa del cuerpo y la habilidad de la
+     * forma Ultra. Se quita al acabar el combate (revertBodyForBattle; la habilidad, FusionMegas.revertBattle). True si
+     * lo ha hecho; la de la cabeza la sigue haciendo él.
+     */
+    public static boolean ultraBurstBodyInBattle(Pokemon fusion, BattlePokemon battlePokemon) {
+        if (!FusionData.isFusion(fusion) || headCanUltra(fusion) || !bodyCanUltra(fusion) || !holdsCrystal(fusion)) {
+            return false;
+        }
+        float delay = MegaShowdown.playBattleEffect(fusion, battlePokemon, EFFECT);
+        Runnable change = () -> {
+            try {
+                if (!FusionData.isFusion(fusion) || FusionData.hasBodyLayer(fusion)
+                        || !ultraBody(DistributionUtilsKt.server().registryAccess(), fusion)) {
+                    return;
+                }
+                FusionMegas.setBattleAbility(fusion, FusionData.bodyForm(fusion));
+                MegaShowdown.updateBattlePackets(battlePokemon);
+                ServerPlayer owner = fusion.getOwnerPlayer();
+                if (owner != null) {
+                    FusionService.resendToClient(owner, fusion);
+                }
+                Fusionmon.LOGGER.info("Fusionmon: el cuerpo de la fusión {} ha hecho la Ultraexplosión en combate",
+                        fusion.getSpecies().getName());
+            } catch (RuntimeException | LinkageError e) {
+                FusionSafety.failed("Ultraexplosión del cuerpo en combate", e);
+            }
+        };
+        if (delay > 0) {
+            FusionMegas.afterOnServer(delay, change);
+        } else {
+            change.run();
+        }
+        return true;
+    }
+
+    /** Después de UltraGimmick.ultraBurstInBattle con la cabeza (la hace Mega Showdown): la habilidad de su forma. */
+    public static void afterHeadUltraInBattle(Pokemon fusion) {
+        if (!FusionData.isFusion(fusion) || !headCanUltra(fusion)) {
+            return;
+        }
+        Pokemon head = FusionData.readHead(fusion, DistributionUtilsKt.server().registryAccess());
+        if (FusionMegas.applyStone(head, ULTRA_FEATURE)) {
+            FusionMegas.setBattleAbility(fusion, head.getForm());
+        }
     }
 
     /** Al principio de AspectUtils.revertPokemonsIfRequired (al empezar un combate...): fuera la del cuerpo. */
@@ -206,7 +284,11 @@ public final class FusionUltra {
 
     /** La forma Ultra del cuerpo: una copia suya cambiada, como capa encima (FusionData.setBodyUltra). */
     private static boolean ultraBody(ServerPlayer owner, Pokemon fusion) {
-        Pokemon body = FusionData.readBody(fusion, owner.registryAccess());
+        return ultraBody(owner.registryAccess(), fusion);
+    }
+
+    private static boolean ultraBody(RegistryAccess registryAccess, Pokemon fusion) {
+        Pokemon body = FusionData.readBody(fusion, registryAccess);
         if (!FusionMegas.applyStone(body, ULTRA_FEATURE)) {
             Fusionmon.LOGGER.warn("Fusionmon: {} no cambia la forma de {}; no se hace la Ultraexplosión del cuerpo",
                     ULTRA_FEATURE, body.getSpecies().getName());
