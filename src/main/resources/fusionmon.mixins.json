@@ -13,6 +13,7 @@
 		"PlayerPartyStoreMixin",
 		"PokemonEntityMixin",
 		"PokemonMixin",
+		"PokemonP2Mixin",
 		"RidingControllerMixin",
 		"ServerEvolutionControllerMixin"
 	],
